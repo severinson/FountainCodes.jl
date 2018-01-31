@@ -90,3 +90,21 @@ function test_decoder_3()
     return true
 end
 @test test_decoder_3()
+
+function test_decoder_4()
+    p, d, C = init(1024)
+    for i in 1:1030
+        s = RaptorCodes.r10_lt_encode(C, i, p)
+        RaptorCodes.add!(d, s)
+    end
+    output = RaptorCodes.decode!(d)
+    for i in 1:p.K
+        if output[i] != C[i].value
+            error(
+                "decoding failure. source[$i] is $(output[i]). should be $(C[i].value)."
+            )
+        end
+    end
+    return true
+end
+@test test_decoder_4()
