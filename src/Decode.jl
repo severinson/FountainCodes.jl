@@ -67,7 +67,7 @@ function select_row(d)
     deg_min = d.p.L + 1
     for i in (d.num_decoded+1):length(d.csymbols)
         cs = d.csymbols[d.cperm[i]]
-        deg = active_degree(d, cs)
+        deg = active_degree(d, cs) # TODO: slow
         if 0 < deg < deg_min
             selected = i
             deg_min = deg
@@ -92,7 +92,7 @@ function active_degree(d, cs)
 end
 
 doc"Neighbours that are not decoded or inactivated."
-function active_neighbours(d, cs)
+function active_neighbours(d, cs) # TODO: slow
     return [
         i for i in cs.neighbours
         if d.num_decoded < d.iperminv[i] <= (length(d.iperm)-d.num_inactivated)
@@ -108,10 +108,10 @@ doc"subtract csymbols[i] from csymbols[j]. update the isymbols accordingly.."
 function subtract!(d::Decoder, i::Int, j::Int)
     cs1 = d.csymbols[i]
     cs2 = d.csymbols[j]
-    neighbours = setxor(cs1.neighbours, cs2.neighbours)
+    neighbours = setxor(cs1.neighbours, cs2.neighbours) # TODO: slow
     value = xor(cs1.value, cs2.value)
     for k in neighbours
-        push!(d.isymbols[k].neighbours, j)
+        push!(d.isymbols[k].neighbours, j)# TODO: slow
     end
     for k in intersect(cs1.neighbours, cs2.neighbours)
         delete!(d.isymbols[k].neighbours, j)
@@ -124,7 +124,7 @@ function has_neighbour(cs::R10Symbol, i::Int) :: Bool
     return i in cs.neighbours
 end
 
-function print_matrix(d)
+function print_state(d)
     println("------------------------------")
     println("I=", d.num_decoded, " u=", d.num_inactivated)
     for i in 1:length(d.iperm)
@@ -152,12 +152,7 @@ end
 
 doc"Solve for the inactivated intermediate symbols using GE."
 function gaussian_elimination!(d::Decoder)
-    println("Gaussian elimination")
     for i in 1:d.num_inactivated
-        print_matrix(d)
-
-        # the first row of the system left to solve.
-        # first_row = d.num_decoded + i
 
         # find any coded symbol of non-zero degree neighbouring only inactivated
         # intermediate symbols. swap this row with the first row.
@@ -170,27 +165,22 @@ function gaussian_elimination!(d::Decoder)
             row += 1
             cs = d.csymbols[d.cperm[row]]
         end
-        println("selected row $row")
         current_row = d.num_decoded + i
         swap_rows!(d, current_row, row)
-        println("swapped rows $row, $current_row")
 
         cols = neighbours(cs)
         col = d.iperminv[cols[1]]
         current_col = current_row
         swap_cols!(d, current_col, col)
-        println("swapped cols $col, $current_col ")
 
         # subtract this row from all other rows in the system.
         for j in (d.num_decoded+1):length(d.csymbols)
             if j == d.num_decoded + i
-                println("skipping row $j")
                 continue
             end
             k = d.cperm[j]
             if has_neighbour(d.csymbols[k], cols[1])
                 d.csymbols[k] = subtract!(d, d.cperm[current_row], k)
-                println("xored into symbol $k at row $j")
             end
         end
     end
@@ -198,19 +188,14 @@ end
 
 doc"Backsolve using the symbols decoded via GE."
 function backsolve!(d::Decoder)
-    println("backsolve")
     for i in 1:d.num_inactivated
         row = d.cperm[d.num_decoded+i]
         cs = d.csymbols[row]
-        println("selected cs ", cs)
-        # col = d.iperm[neighbours(cs)[1]]
         col = neighbours(cs)[1]
-        println("selected col ", col)
         for j in 1:d.num_decoded
             k = d.cperm[j]
             if has_neighbour(d.csymbols[k], col)
                 d.csymbols[k] = subtract!(d, row, k)
-                println("xored into symbol $k at row $j")
             end
         end
     end
@@ -221,7 +206,6 @@ function get_source(d::Decoder)
     C = Array{Int,1}(d.p.K)
     for i in 1:d.p.K
         is = d.isymbols[i]
-        println("processing is $is")
         if degree(is) != 1
             error("source symbol with index $i not decoded")
         end
@@ -238,48 +222,34 @@ end
 doc"Carry out the decoding."
 function decode!(d::Decoder)
     while d.num_decoded + d.num_inactivated < d.p.L
-        print_matrix(d)
-        row = select_row(d)
+        row = select_row(d) # TODO: slow
         if row == -1
             error("decoding stage 1 failed")
         end
         cs = d.csymbols[d.cperm[row]]
-        println("selected row $row")
         first_row_in_v = d.num_decoded + 1
         swap_rows!(d, row, first_row_in_v)
-        println("swapped row $row with $first_row_in_v")
-        println("cs ", cs)
         cols = active_neighbours(d, cs)
-        println("active_neighbours ", cols)
         first_col_in_v = first_row_in_v
         col = d.iperminv[cols[1]]
         swap_cols!(d, col, first_col_in_v)
-        println("swapped col $col with $first_col_in_v")
         for i in 2:length(cols)
             j = length(d.isymbols) - d.num_inactivated
             col = d.iperminv[cols[i]]
             if col <= j
                 swap_cols!(d, col, j)
-                println("swapped col $col with $j")
                 d.num_inactivated += 1
             end
         end
         for i in (first_row_in_v+1):length(d.csymbols)
             j = d.cperm[i]
             if has_neighbour(d.csymbols[j], cols[1])
-                d.csymbols[j] = subtract!(d, d.cperm[first_row_in_v], j)
-                println("xored into symbol $j at row $i")
+                d.csymbols[j] = subtract!(d, d.cperm[first_row_in_v], j) # TODO: slow
             end
         end
         d.num_decoded += 1
     end
     gaussian_elimination!(d)
-    print_matrix(d)
     backsolve!(d)
-    println("done")
-    print_matrix(d)
-    s = get_source(d)
-    println("source")
-    println(s)
-    return s
+    return get_source(d)
 end
