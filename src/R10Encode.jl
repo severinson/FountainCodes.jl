@@ -32,27 +32,6 @@ function r10_ldpc_encode!(C::Array{R10Symbol,1}, p::R10Parameters)
     end
 end
 
-# doc"Generate R10 precode LDPC symbols in-place at indices (K+1) to (K+S)."
-# function r10_ldpc_encode!(C::Array, p::R10Parameters)
-#     if length(C) != p.L
-#         error("C must have length p.L = $p.L")
-#     end
-#     for i in 0:p.K-1
-#         v = C[i+1]
-#         a = 1 + Int64((floor(i/p.S) % (p.S-1)))
-#         b = i % p.S
-#         j = p.K+b+1
-#         C[j] = xor(C[j], v)
-#         b = (b + a) % p.S
-#         j = p.K+b+1
-#         C[j] = xor(C[j], v)
-#         b = (b + a) % p.S
-#         j = p.K+b+1
-#         C[j] = xor(C[j], v)
-#     end
-#     return C
-# end
-
 doc"Generate R10 precode HDPC symbols in-place at indices (K+S+1) to (K+S+H)."
 function r10_hdpc_encode!(C::Array{R10Symbol,1}, p::R10Parameters)
     if length(C) != p.L
@@ -75,24 +54,6 @@ function r10_hdpc_encode!(C::Array{R10Symbol,1}, p::R10Parameters)
     end
 end
 
-# doc"Generate R10 precode HDPC symbols in-place at indices (K+S# +1) to (K+S+H)."
-# function r10_hdpc_encode!(C::Array, p::R10Parameters)
-#     if length(C) != p.L
-#         error("C must have length p.L = $p.L")
-#     end
-#     for h in 0:p.H-1
-#         j = 0
-#         for g in gray(p.K+p.S-1, p.Hp)
-#             if g & (1 << h) != 0
-#                 i = h + p.K + p.S + 1
-#                 C[i] = xor(C[i], C[j+1])
-#             end
-#             j += 1
-#         end
-#     end
-#     return C
-# end
-
 doc"R10 standardized rand function."
 function r10_rand(X::Int, i::Int, m::Int) :: Int
     if X < 0
@@ -110,6 +71,7 @@ function r10_rand(X::Int, i::Int, m::Int) :: Int
     ) % m
 end
 
+doc"Map a uniformly distributed random number v to a degree."
 function r10_deg(v::Int) :: Int
     d = [1, 2, 3, 4, 10, 11, 40]
     f = [10241, 491582, 712794, 831695, 948446, 1032189, 1048576]
