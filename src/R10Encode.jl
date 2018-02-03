@@ -8,7 +8,7 @@
 ###################################################################################
 
 doc"Generate R10 precode LDPC symbols in-place at indices (K+1) to (K+S)."
-function r10_ldpc_encode!(C::Array{R10Symbol,1}, p::R10Parameters)
+function r10_ldpc_encode!(C::Array{ISymbol,1}, p::R10Parameters)
     if length(C) != p.L
         error("C must have length p.L = $p.L")
     end
@@ -28,12 +28,12 @@ function r10_ldpc_encode!(C::Array{R10Symbol,1}, p::R10Parameters)
         values[b+1] = xor(values[b+1], v)
     end
     for i in 1:p.S
-        C[p.K+i] = R10Symbol(-1, values[i], neighbours[i])
+        C[p.K+i] = ISymbol(values[i], neighbours[i])
     end
 end
 
 doc"Generate R10 precode HDPC symbols in-place at indices (K+S+1) to (K+S+H)."
-function r10_hdpc_encode!(C::Array{R10Symbol,1}, p::R10Parameters)
+function r10_hdpc_encode!(C::Array{ISymbol,1}, p::R10Parameters)
     if length(C) != p.L
         error("C must have length p.L = $p.L")
     end
@@ -50,7 +50,7 @@ function r10_hdpc_encode!(C::Array{R10Symbol,1}, p::R10Parameters)
         end
     end
     for i in 1:p.H
-        C[p.K+p.S+i] = R10Symbol(-1, values[i], neighbours[i])
+        C[p.K+p.S+i] = ISymbol(values[i], neighbours[i])
     end
 end
 
@@ -100,7 +100,7 @@ function r10_trip(X::Int, p::R10Parameters)
 end
 
 doc"Generate an R10 LT symbol from the intermediate symbols."
-function r10_lt_encode(C::Array{R10Symbol,1}, X::Int, p::R10Parameters)
+function r10_lt_encode(C::Array{ISymbol,1}, X::Int, p::R10Parameters)
     d, a, b = r10_trip(X, p)
     while (b >= p.L)
         b = (b + a) % p.Lp

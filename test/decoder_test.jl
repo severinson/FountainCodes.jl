@@ -3,9 +3,9 @@ using RaptorCodes, Base.Test
 function init(k=10)
     p = RaptorCodes.R10Parameters(k)
     d = RaptorCodes.Decoder(p)
-    C = Array{RaptorCodes.R10Symbol,1}(p.L)
+    C = Array{RaptorCodes.ISymbol,1}(p.L)
     for i = 1:p.K
-        C[i] = RaptorCodes.R10Symbol(-1, i, Set([i]))
+        C[i] = RaptorCodes.ISymbol(i, Set([i]))
     end
     RaptorCodes.r10_ldpc_encode!(C, p)
     RaptorCodes.r10_hdpc_encode!(C, p)
@@ -16,7 +16,7 @@ function test_active_degree()
     p, d, C = init()
     s = RaptorCodes.r10_lt_encode(C, 1, p)
     d = RaptorCodes.active_degree(d, s)
-    d_correct = length(s.neighbours)
+    d_correct = length(s.active_neighbours)
     if d != d_correct
         error("active_degree($s) is $d. should be length $d_correct")
     end
