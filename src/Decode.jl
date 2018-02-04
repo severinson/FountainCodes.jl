@@ -1,3 +1,5 @@
+using DataStructures
+
 mutable struct Decoder
     p::Parameters
     isymbols::Array{ISymbol,1}
@@ -8,6 +10,7 @@ mutable struct Decoder
     cperminv::Array{Int,1} # inverse row permutation
     num_decoded::Int # denoted by i in the R10 spec.
     num_inactivated::Int # denoted by u in the R10 spec.
+    metrics::DataStructures.Accumulator
     function Decoder(p::R10Parameters)
         d = new(
             p,
@@ -19,6 +22,7 @@ mutable struct Decoder
             Array{Int64,1}(),
             0,
             0,
+            DataStructures.counter(String),
         )
 
         # add constraint symbols
@@ -45,6 +49,7 @@ mutable struct Decoder
             Array{Int64,1}(),
             0,
             0,
+            DataStructures.counter(String),
         )
     end
 end
@@ -166,6 +171,7 @@ function subtract!(d::Decoder, i::Int, j::Int)
         x->unlink_isymbol!(d, x, j),
     )
     value = xor(cs1.value, cs2.value)
+    push!(d.metrics, "num_xor", degree(cs1)+1)
     d.csymbols[j] = R10Symbol(-1, value, -1, active_neighbours, inactive_neighbours)
 end
 
