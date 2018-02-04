@@ -106,7 +106,7 @@ function setxor(s1::Set, s2::Set)
 end
 
 doc"XOR of 2 sorted lists."
-function listxor(l1::Array, l2::Array) :: Array
+function listxor(l1::Array, l2::Array, fa::Function, fr::Function) :: Array
     i = 1
     j = 1
     il, jl = length(l1), length(l2)
@@ -118,8 +118,10 @@ function listxor(l1::Array, l2::Array) :: Array
             i += 1
         elseif u > v
             push!(l, v)
+            fa(v)
             j += 1
         else
+            fr(u)
             i += 1
             j += 1
         end
@@ -129,10 +131,22 @@ function listxor(l1::Array, l2::Array) :: Array
         i += 1
     end
     while j <= jl
-        push!(l, l2[j])
+        v = l2[j]
+        push!(l, v)
+        fa(v)
         j += 1
     end
     return l
+end
+
+doc"Link an intermediate symbol to an outer code symbol."
+function link_isymbol!(d::Decoder, i::Int, j::Int)
+    push!(d.isymbols[i].neighbours, j)
+end
+
+doc"Unlink an intermediate symbol from an outer code symbol."
+function unlink_isymbol!(d::Decoder, i::Int, j::Int)
+    delete!(d.isymbols[i].neighbours, j)
 end
 
 doc"subtract csymbols[i] from csymbols[j]. update the isymbols accordingly.."
@@ -140,27 +154,19 @@ function subtract!(d::Decoder, i::Int, j::Int)
     cs1 = d.csymbols[i]
     cs2 = d.csymbols[j]
     active_neighbours = listxor(
-        cs1.active_neighbours,
         cs2.active_neighbours,
+        cs1.active_neighbours,
+        x->link_isymbol!(d, x, j),
+        x->unlink_isymbol!(d, x, j),
     )
     inactive_neighbours = listxor(
-        cs1.inactive_neighbours,
         cs2.inactive_neighbours,
+        cs1.inactive_neighbours,
+        x->link_isymbol!(d, x, j),
+        x->unlink_isymbol!(d, x, j),
     )
     value = xor(cs1.value, cs2.value)
-    for k in cs2.active_neighbours
-        delete!(d.isymbols[k].neighbours, j) # TODO: slow
-    end
-    for k in cs2.inactive_neighbours
-        delete!(d.isymbols[k].neighbours, j)
-    end
-    for k in active_neighbours
-        push!(d.isymbols[k].neighbours, j)# TODO: slow
-    end
-    for k in inactive_neighbours
-        push!(d.isymbols[k].neighbours, j)
-    end
-    return R10Symbol(-1, value, -1, active_neighbours, inactive_neighbours)
+    d.csymbols[j] = R10Symbol(-1, value, -1, active_neighbours, inactive_neighbours)
 end
 
 doc"True if cs neighbours the intermediate symbol with index i."
@@ -249,7 +255,7 @@ function diagonalize!(d::Decoder)
             if d.cperminv[i] == d.num_decoded + 1
                 continue
             end
-            d.csymbols[i] = subtract!(d, d.cperm[d.num_decoded+1], i) # TODO: slow
+            subtract!(d, d.cperm[d.num_decoded+1], i) # TODO: slow
         end
         d.num_decoded += 1
     end
@@ -286,7 +292,7 @@ function gaussian_elimination!(d::Decoder)
             end
             k = d.cperm[j]
             if has_neighbour(d.csymbols[k], cols[1])
-                d.csymbols[k] = subtract!(d, d.cperm[current_row], k)
+                subtract!(d, d.cperm[current_row], k)
             end
         end
     end
@@ -302,7 +308,7 @@ function backsolve!(d::Decoder)
         for j in 1:d.num_decoded
             k = d.cperm[j]
             if has_neighbour(d.csymbols[k], col)
-                d.csymbols[k] = subtract!(d, row, k)
+                subtract!(d, row, k)
             end
         end
     end
