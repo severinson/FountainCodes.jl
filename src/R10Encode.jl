@@ -105,14 +105,15 @@ function r10_lt_encode(C::Array{ISymbol,1}, X::Int, p::R10Parameters)
     while (b >= p.L)
         b = (b + a) % p.Lp
     end
-    neighbours = Set{Int}(b+1)
+    neighbours = Array{Int,1}(min(d, p.L))
+    neighbours[1] = b+1
     value = C[b+1].value
     for j in 1:min(d-1, p.L-1)
         b = (b + a) % p.Lp
         while (b >= p.L)
             b = (b + a) % p.Lp
         end
-        push!(neighbours, b+1)
+        neighbours[j+1] = b+1
         value = xor(value, C[b+1].value)
     end
     return R10Symbol(X, value, neighbours)

@@ -27,7 +27,8 @@ mutable struct Decoder
         r10_hdpc_encode!(C, p)
         for i in (p.K+1):(p.K+p.S+p.H)
             is = C[i]
-            cs = R10Symbol(-1, 0, push!(is.neighbours, i))
+            neighbours = push!([v for v in is.neighbours], i)
+            cs = R10Symbol(-1, 0, neighbours)
             add!(d, cs)
         end
 
@@ -57,6 +58,7 @@ end
 
 doc"Swap cols i and j of the constraint matrix."
 function swap_cols!(d::Decoder, i::Int, j::Int)
+    # println("swapping cols $i and $j")
     d.iperm[i], d.iperm[j] = d.iperm[j], d.iperm[i]
     d.iperminv[d.iperm[i]] = i
     d.iperminv[d.iperm[j]] = j
@@ -64,6 +66,7 @@ end
 
 doc"Swap rows i and j of the constraint matrix."
 function swap_rows!(d::Decoder, i::Int, j::Int)
+    # println("swapping rows $i and $j")
     d.cperm[i], d.cperm[j] = d.cperm[j], d.cperm[i]
     d.cperminv[d.cperm[i]] = i
     d.cperminv[d.cperm[j]] = j
@@ -75,7 +78,7 @@ function select_row(d::Decoder)
     deg_min = d.p.L + 1
     for i in (d.num_decoded+1):length(d.csymbols)
         cs = d.csymbols[d.cperm[i]]
-        deg = active_degree(d, cs) # TODO: slow
+        deg = active_degree(cs)
         if 0 < deg < deg_min
             selected = i
             deg_min = deg
@@ -84,65 +87,65 @@ function select_row(d::Decoder)
     return selected
 end
 
-doc"Number of neighbouring outer coded symbols."
-function degree(is::ISymbol)
-    return length(is.neighbours)
-end
-
-doc"Number of neighbouring intermediate symbols."
-function degree(cs::R10Symbol)
-    return length(cs.active_neighbours) + length(cs.inactive_neighbours)
-end
-
-doc"Neighbouring outer code symbols."
-function neighbours(is::ISymbol)
-    return collect(is.neighbours)
-end
-
-doc"Neighbouring intermediate symbols."
-function neighbours(cs::R10Symbol)
-    return append!(collect(cs.active_neighbours), collect(cs.inactive_neighbours))
-end
-
-doc"Number of non-zero entries in V."
-function active_degree(d::Decoder, cs::R10Symbol)
-    return length(cs.active_neighbours)
-end
-
-doc"Neighbours that are not decoded or inactivated."
-function active_neighbours(d::Decoder, cs::R10Symbol) # TODO: slow
-    return collect(cs.active_neighbours)
-end
-
 doc"XOR of 2 sets."
 function setxor(s1::Set, s2::Set)
     return union(setdiff(s1, s2), setdiff(s2, s1))
+end
+
+doc"XOR of 2 sorted lists."
+function listxor(l1::Array, l2::Array) :: Array
+    i = 1
+    j = 1
+    il, jl = length(l1), length(l2)
+    l = similar(l1, 0)
+    while i <= il && j <= jl
+        u, v = l1[i], l2[j]
+        if u < v
+            push!(l, u)
+            i += 1
+        elseif u > v
+            push!(l, v)
+            j += 1
+        else
+            i += 1
+            j += 1
+        end
+    end
+    while i <= il
+        push!(l, l1[i])
+        i += 1
+    end
+    while j <= jl
+        push!(l, l2[j])
+        j += 1
+    end
+    return l
 end
 
 doc"subtract csymbols[i] from csymbols[j]. update the isymbols accordingly.."
 function subtract!(d::Decoder, i::Int, j::Int)
     cs1 = d.csymbols[i]
     cs2 = d.csymbols[j]
-    active_neighbours = setxor(
+    active_neighbours = listxor(
         cs1.active_neighbours,
         cs2.active_neighbours,
-    ) # TODO: slow
-    inactive_neighbours = setxor(
+    )
+    inactive_neighbours = listxor(
         cs1.inactive_neighbours,
         cs2.inactive_neighbours,
-    ) # TODO: slow
+    )
     value = xor(cs1.value, cs2.value)
+    for k in cs2.active_neighbours
+        delete!(d.isymbols[k].neighbours, j) # TODO: slow
+    end
+    for k in cs2.inactive_neighbours
+        delete!(d.isymbols[k].neighbours, j)
+    end
     for k in active_neighbours
         push!(d.isymbols[k].neighbours, j)# TODO: slow
     end
     for k in inactive_neighbours
-        push!(d.isymbols[k].neighbours, j)# TODO: slow
-    end
-    for k in intersect(cs1.active_neighbours, cs2.active_neighbours)
-        delete!(d.isymbols[k].neighbours, j)
-    end
-    for k in intersect(cs1.inactive_neighbours, cs2.inactive_neighbours)
-        delete!(d.isymbols[k].neighbours, j)
+        push!(d.isymbols[k].neighbours, j)
     end
     return R10Symbol(-1, value, -1, active_neighbours, inactive_neighbours)
 end
@@ -157,12 +160,19 @@ function inactivate_isymbol!(d::Decoder, i::Int)
     is = d.isymbols[i]
     for j in neighbours(is)
         cs = d.csymbols[j]
-        delete!(cs.active_neighbours, i)
-        push!(cs.inactive_neighbours, i)
+        active_neighbours = [v for v in cs.active_neighbours if v != i]
+        d.csymbols[j] = R10Symbol(
+            -1,
+            cs.value,
+            -1,
+            active_neighbours,
+            push!(cs.inactive_neighbours, i),
+        )
     end
 end
 
 function print_state(d::Decoder)
+    return
     println("------------------------------")
     println("I=", d.num_decoded, " u=", d.num_inactivated)
     for i in 1:length(d.iperm)
@@ -192,6 +202,7 @@ doc"Perform row/column operations such that there are non-zero entries only
     along the diagonal and in the rightmost d.num_inactivated columns."
 function diagonalize!(d::Decoder)
     while d.num_decoded + d.num_inactivated < d.p.L
+        print_state(d)
 
         # select a row and swap it with the topmost row of V
         row = select_row(d) # TODO: slow
@@ -204,7 +215,7 @@ function diagonalize!(d::Decoder)
         cs = d.csymbols[d.cperm[d.num_decoded+1]]
 
         # swap any non-zero entry into the first column of V
-        is_indices = active_neighbours(d, cs)
+        is_indices = active_neighbours(cs)
         col = d.iperminv[is_indices[1]]
         swap_cols!(d, col, d.num_decoded+1)
 
@@ -222,7 +233,7 @@ function diagonalize!(d::Decoder)
 
         # zero out entries below the diagonal of the first column of V
         for i in d.isymbols[d.iperm[d.num_decoded+1]].neighbours
-            if d.csymbols[i] === cs
+            if d.cperminv[i] == d.num_decoded + 1
                 continue
             end
             d.csymbols[i] = subtract!(d, d.cperm[d.num_decoded+1], i) # TODO: slow
@@ -306,10 +317,13 @@ end
 doc"Carry out the decoding."
 function decode!(d::Decoder)
     diagonalize!(d)
-    # print_state(d)
+    # println("diagonalization done")
+    print_state(d)
     gaussian_elimination!(d)
-    # print_state(d)
+    # println("ge done")
+    print_state(d)
     backsolve!(d)
-    # print_state(d)
+    # println("backsolve done")
+    print_state(d)
     return get_source(d)
 end
