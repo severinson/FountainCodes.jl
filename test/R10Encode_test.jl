@@ -11,7 +11,7 @@ function test_encode(k=10)
             error("intermediate symbol at index $i not assigned.")
         end
     end
-    s = RaptorCodes.r10_lt_encode(C, 1, p)
+    s = RaptorCodes.lt_generate(C, 1, p)
     # s_correct = RaptorCodes.R10Symbol(1, 10, -1, [2, 18], Array{Int,1}())
     # if s !== s_correct
     #     error("incorrect LT symbol. is $s. should be $s_correct.")

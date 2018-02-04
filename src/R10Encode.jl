@@ -72,7 +72,7 @@ function r10_rand(X::Int, i::Int, m::Int) :: Int
 end
 
 doc"Map a uniformly distributed random number v to a degree."
-function r10_deg(v::Int) :: Int
+function deg(v::Int) :: Int
     d = [1, 2, 3, 4, 10, 11, 40]
     f = [10241, 491582, 712794, 831695, 948446, 1032189, 1048576]
     if !(0 <= v <= 1048576)
@@ -86,22 +86,22 @@ function r10_deg(v::Int) :: Int
 end
 
 doc"Maps an encoding symbol ID X to a triple (d, a, b)"
-function r10_trip(X::Int, p::R10Parameters)
+function trip(X::Int, p::R10Parameters)
     Q = 65521 # the largest prime smaller than 2^16
     JK = J[p.K+1]
     A = (53591 + JK*997) % Q
     B = 10267*(JK+1) % Q
     Y = (B + X*A) % Q
     v = r10_rand(Y, 0, 2<<19)
-    d = r10_deg(v)
+    d = deg(v)
     a = 1 + r10_rand(Y, 1, p.Lp-1)
     b = r10_rand(Y, 2, p.Lp)
     return d, a, b
 end
 
-doc"Generate an R10 LT symbol from the intermediate symbols."
-function r10_lt_encode(C::Array{ISymbol,1}, X::Int, p::R10Parameters)
-    d, a, b = r10_trip(X, p)
+doc"Generate an LT symbol from the intermediate symbols."
+function lt_generate(C::Array{ISymbol,1}, X::Int, p::Parameters)
+    d, a, b = trip(X, p)
     while (b >= p.L)
         b = (b + a) % p.Lp
     end

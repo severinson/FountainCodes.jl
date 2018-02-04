@@ -14,7 +14,7 @@ end
 
 function test_active_degree()
     p, d, C = init()
-    s = RaptorCodes.r10_lt_encode(C, 1, p)
+    s = RaptorCodes.lt_generate(C, 1, p)
     d = RaptorCodes.active_degree(s)
     d_correct = length(s.active_neighbours)
     if d != d_correct
@@ -40,7 +40,7 @@ end
 function test_decoder_1()
     p, d, C = init()
     for i in 1:20
-        s = RaptorCodes.r10_lt_encode(C, i, p)
+        s = RaptorCodes.lt_generate(C, i, p)
         RaptorCodes.add!(d, s)
     end
     output = RaptorCodes.decode!(d)
@@ -53,12 +53,12 @@ function test_decoder_1()
     end
     return true
 end
-# @test test_decoder_1()
+@test test_decoder_1()
 
 function test_decoder_2()
     p, d, C = init()
     for i in 1:15
-        s = RaptorCodes.r10_lt_encode(C, i, p)
+        s = RaptorCodes.lt_generate(C, i, p)
         RaptorCodes.add!(d, s)
     end
     output = RaptorCodes.decode!(d)
@@ -71,12 +71,12 @@ function test_decoder_2()
     end
     return true
 end
-# @test test_decoder_2()
+@test test_decoder_2()
 
 function test_decoder_3()
     p, d, C = init(20)
     for i in 1:25
-        s = RaptorCodes.r10_lt_encode(C, i, p)
+        s = RaptorCodes.lt_generate(C, i, p)
         RaptorCodes.add!(d, s)
     end
     output = RaptorCodes.decode!(d)
@@ -94,7 +94,7 @@ end
 function test_decoder_4()
     p, d, C = init(1024)
     for i in 1:1030
-        s = RaptorCodes.r10_lt_encode(C, i, p)
+        s = RaptorCodes.lt_generate(C, i, p)
         RaptorCodes.add!(d, s)
     end
     output = RaptorCodes.decode!(d)
@@ -107,4 +107,4 @@ function test_decoder_4()
     end
     return true
 end
-# @test test_decoder_4()
+@test test_decoder_4()

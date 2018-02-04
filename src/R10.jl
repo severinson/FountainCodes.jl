@@ -3,7 +3,7 @@ using Primes
 export R10Parameters
 
 doc"R10 parameters container."
-struct R10Parameters
+struct R10Parameters <: Parameters
     K::Integer # number of source symbols
     S::Integer # number of LDPC symbols
     H::Integer # number of HDPC symbols

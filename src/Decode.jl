@@ -1,5 +1,5 @@
 mutable struct Decoder
-    p::R10Parameters
+    p::Parameters
     isymbols::Array{ISymbol,1}
     csymbols::Array{R10Symbol,1}
     iperm::Array{Int,1} # map from columns indices to intermediate symbols
@@ -33,6 +33,19 @@ mutable struct Decoder
         end
 
         return d
+    end
+    function Decoder(p::LTParameters)
+        new(
+            p,
+            [ISymbol(0) for _ in 1:p.L],
+            Array{R10Symbol,1}(0),
+            Array(1:p.L),
+            Array(1:p.L),
+            Array{Int64,1}(),
+            Array{Int64,1}(),
+            0,
+            0,
+        )
     end
 end
 
@@ -252,10 +265,10 @@ function gaussian_elimination!(d::Decoder)
         row = d.num_decoded + i
         cs = d.csymbols[d.cperm[row]]
         while degree(cs) == 0
+            row += 1
             if row > length(d.csymbols)
                 error("Gaussian elimination failed. constraint matrix not of full rank.")
             end
-            row += 1
             cs = d.csymbols[d.cperm[row]]
         end
         current_row = d.num_decoded + i
