@@ -11,6 +11,7 @@ mutable struct Decoder
     num_decoded::Int # denoted by i in the R10 spec.
     num_inactivated::Int # denoted by u in the R10 spec.
     metrics::DataStructures.Accumulator
+    status::String
     function Decoder(p::R10Parameters)
         d = new(
             p,
@@ -23,7 +24,10 @@ mutable struct Decoder
             0,
             0,
             DataStructures.counter(String),
+            "",
         )
+        d.metrics["success"] = 0
+        d.metrics["num_xor"] = 0
 
         # add constraint symbols
         C = [ISymbol(0) for _ in 1:p.L]
@@ -39,7 +43,7 @@ mutable struct Decoder
         return d
     end
     function Decoder(p::LTParameters)
-        new(
+        d = new(
             p,
             [ISymbol(0) for _ in 1:p.L],
             Array{R10Symbol,1}(0),
@@ -50,7 +54,11 @@ mutable struct Decoder
             0,
             0,
             DataStructures.counter(String),
+            "",
         )
+        d.metrics["success"] = 0
+        d.metrics["num_xor"] = 0
+        return d
     end
 end
 
@@ -72,6 +80,21 @@ function add!(d::Decoder, s::R10Symbol)
         push!(d.isymbols[j].neighbours, i)
     end
     return
+end
+
+doc"Check if an intermediate symbol is covered."
+function iscovered(d::Decoder, i::Int) :: Bool
+    is = d.isymbols[i]
+    return degree(is) > 0
+end
+
+doc"Check if all intermediate symbols are covered."
+function check_cover(d::Decoder)
+    for i in 1:d.p.L
+        if !iscovered(d, i)
+            error("intermediate symbol with index $i not covered.")
+        end
+    end
 end
 
 doc"Swap cols i and j of the constraint matrix."
@@ -119,7 +142,7 @@ function listxor(l1::Array, l2::Array, fa::Function, fr::Function) :: Array
     while i <= il && j <= jl
         u, v = l1[i], l2[j]
         if u < v
-            push!(l, u)
+            push!(l, u) # TODO: slow
             i += 1
         elseif u > v
             push!(l, v)
@@ -132,7 +155,7 @@ function listxor(l1::Array, l2::Array, fa::Function, fr::Function) :: Array
         end
     end
     while i <= il
-        push!(l, l1[i])
+        push!(l, l1[i]) # TODO: slow
         i += 1
     end
     while j <= jl
@@ -172,7 +195,7 @@ function subtract!(d::Decoder, i::Int, j::Int)
     )
     value = xor(cs1.value, cs2.value)
     push!(d.metrics, "num_xor", degree(cs1)+1)
-    d.csymbols[j] = R10Symbol(-1, value, -1, active_neighbours, inactive_neighbours)
+    d.csymbols[j] = R10Symbol(-1, value, -1, active_neighbours, inactive_neighbours) # TODO: Don't copy and sort
 end
 
 doc"True if cs neighbours the intermediate symbol with index i."
@@ -327,12 +350,14 @@ function get_source(d::Decoder)
     for i in 1:d.p.K
         is = d.isymbols[i]
         if degree(is) != 1
-            error("source symbol with index $i not decoded")
+            continue
+            # error("source symbol with index $i not decoded")
         end
         col = neighbours(is)[1]
         cs = d.csymbols[col]
         if degree(cs) != 1
-            error("source symbol with index $i not decoded")
+            continue
+            # error("source symbol with index $i not decoded")
         end
         C[i] = cs.value
     end
@@ -340,15 +365,18 @@ function get_source(d::Decoder)
 end
 
 doc"Carry out the decoding."
-function decode!(d::Decoder)
-    diagonalize!(d)
-    # println("diagonalization done")
-    print_state(d)
-    gaussian_elimination!(d)
-    # println("ge done")
-    print_state(d)
-    backsolve!(d)
-    # println("backsolve done")
-    print_state(d)
+function decode!(d::Decoder, raise_on_error=true)
+    try
+        check_cover(d)
+        diagonalize!(d)
+        gaussian_elimination!(d)
+        backsolve!(d)
+        d.metrics["success"] = 1
+    catch e
+        d.status = e.msg
+        if raise_on_error
+            error(e)
+        end
+    end
     return get_source(d)
 end
