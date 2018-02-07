@@ -32,3 +32,5 @@ struct R10Parameters <: Parameters
         new(K, S, H, Hp, L, Lp)
     end
 end
+
+Base.repr(p::R10Parameters) = "R10Parameters($(p.K))"

@@ -1,5 +1,7 @@
 using Primes
 
+export LTParameters
+
 doc"LT parameters."
 struct LTParameters <: Parameters
     K::Integer # number of source symbols
@@ -7,10 +9,15 @@ struct LTParameters <: Parameters
     Lp::Integer
     dd::Soliton # degree distribution object
     function LTParameters(K::Integer, dd::Soliton)
+        if K != dd.K
+            error("K = $k != dd.K = $(dd.k)")
+        end
         Lp = Primes.nextprime(K)
         new(K, K, Lp, dd)
     end
 end
+
+Base.repr(p::LTParameters) = "LTParameters($(p.K), $(repr(p.dd)))"
 
 doc"Map a number 0 <= v <= 1 to a degree."
 function deg(v::Float64, p::LTParameters) :: Int
