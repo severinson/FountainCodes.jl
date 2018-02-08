@@ -24,7 +24,7 @@ function test_active_degree()
 end
 @test test_active_degree()
 
-function test_select_row()
+function test_select_row_1()
     p, d, C = init()
     RaptorCodes.add!(d, RaptorCodes.R10Symbol(1, 0, [1]))
     RaptorCodes.add!(d, RaptorCodes.R10Symbol(2, 0, [1, 2]))
@@ -35,7 +35,22 @@ function test_select_row()
     end
     return true
 end
-@test test_select_row()
+@test test_select_row_1()
+
+function test_select_row_2()
+    p, d, C = init()
+    RaptorCodes.add!(d, RaptorCodes.R10Symbol(1, 0, [1]))
+    RaptorCodes.add!(d, RaptorCodes.R10Symbol(2, 0, [1, 2]))
+    RaptorCodes.add!(d, RaptorCodes.R10Symbol(3, 0, [1, 2, 3, 4]))
+    RaptorCodes.subtract!(d, p.S+p.H+3, p.S+p.H+1)
+    i = RaptorCodes.select_row(d)
+    correct = p.S + p.H + 2
+    if i != correct
+        error("selected row $i. should have selected row $correct.")
+    end
+    return true
+end
+@test test_select_row_2()
 
 function test_decoder_1()
     p, d, C = init()
