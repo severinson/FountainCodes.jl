@@ -195,7 +195,14 @@ function subtract!(d::Decoder, i::Int, j::Int)
     )
     value = xor(cs1.value, cs2.value)
     push!(d.metrics, "num_xor", degree(cs1)+1)
-    d.csymbols[j] = R10Symbol(-1, value, -1, active_neighbours, inactive_neighbours) # TODO: Don't copy and sort
+    d.csymbols[j] = R10Symbol(
+        -1,
+        value,
+        -1,
+        active_neighbours,
+        inactive_neighbours,
+        false,
+    )
 end
 
 doc"True if cs neighbours the intermediate symbol with index i."
@@ -315,14 +322,13 @@ function gaussian_elimination!(d::Decoder)
         swap_cols!(d, current_col, col)
 
         # subtract this row from all other rows in the system.
-        for j in (d.num_decoded+1):length(d.csymbols)
-            if j == d.num_decoded + i
+        for j in d.isymbols[d.iperm[d.num_decoded+i]].neighbours
+            if d.cperminv[j] < d.num_decoded
+                continue
+            elseif d.cperminv[j] == d.num_decoded + i
                 continue
             end
-            k = d.cperm[j]
-            if has_neighbour(d.csymbols[k], cols[1])
-                subtract!(d, d.cperm[current_row], k)
-            end
+            subtract!(d, d.cperm[d.num_decoded+i], j)
         end
     end
     return d
@@ -333,12 +339,11 @@ function backsolve!(d::Decoder)
     for i in 1:d.num_inactivated
         row = d.cperm[d.num_decoded+i]
         cs = d.csymbols[row]
-        col = neighbours(cs)[1]
-        for j in 1:d.num_decoded
-            k = d.cperm[j]
-            if has_neighbour(d.csymbols[k], col)
-                subtract!(d, row, k)
+        for j in d.isymbols[d.iperm[d.num_decoded+i]].neighbours
+            if d.cperminv[j] == d.num_decoded + i
+                continue
             end
+            subtract!(d, d.cperm[d.num_decoded+i], j)
         end
     end
     return d
