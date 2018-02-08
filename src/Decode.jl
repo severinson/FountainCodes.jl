@@ -8,6 +8,7 @@ mutable struct Decoder
     iperminv::Array{Int,1} # inverse column permutation
     cperm::Array{Int,1} # map from row indices to encoded symbols
     cperminv::Array{Int,1} # inverse row permutation
+    pq::PriorityQueue{Int,Int} # used to select rows
     num_decoded::Int # denoted by i in the R10 spec.
     num_inactivated::Int # denoted by u in the R10 spec.
     metrics::DataStructures.Accumulator
@@ -21,6 +22,7 @@ mutable struct Decoder
             Array(1:p.L),
             Array{Int64,1}(),
             Array{Int64,1}(),
+            PriorityQueue{Int,Int}(),
             0,
             0,
             DataStructures.counter(String),
@@ -51,6 +53,7 @@ mutable struct Decoder
             Array(1:p.L),
             Array{Int64,1}(),
             Array{Int64,1}(),
+            PriorityQueue{Int,Int}(),
             0,
             0,
             DataStructures.counter(String),
@@ -71,6 +74,7 @@ doc"Add a coded symbol to the decoder."
 function add!(d::Decoder, s::R10Symbol)
     push!(d.csymbols, s)
     i = length(d.cperm) + 1
+    enqueue!(d.pq, i, active_degree(s))
     push!(d.cperm, i)
     push!(d.cperminv, i)
     for j in s.active_neighbours
@@ -99,7 +103,6 @@ end
 
 doc"Swap cols i and j of the constraint matrix."
 function swap_cols!(d::Decoder, i::Int, j::Int)
-    # println("swapping cols $i and $j")
     d.iperm[i], d.iperm[j] = d.iperm[j], d.iperm[i]
     d.iperminv[d.iperm[i]] = i
     d.iperminv[d.iperm[j]] = j
@@ -107,29 +110,27 @@ end
 
 doc"Swap rows i and j of the constraint matrix."
 function swap_rows!(d::Decoder, i::Int, j::Int)
-    # println("swapping rows $i and $j")
     d.cperm[i], d.cperm[j] = d.cperm[j], d.cperm[i]
     d.cperminv[d.cperm[i]] = i
     d.cperminv[d.cperm[j]] = j
 end
 
 doc"Select the row with smallest active degree. TODO: Not according to the R10 spec."
-function select_row(d::Decoder)
-    selected = -1
-    deg_min = d.p.L + 1
-    for i in (d.num_decoded+1):length(d.csymbols)
-        cs = d.csymbols[d.cperm[i]]
-        deg = active_degree(cs)
-        if 0 < deg < deg_min
-            selected = i
-            deg_min = deg
-        end
+function select_row(d::Decoder) :: Int
+    k = 0 # coded symbol index
+    v = 0 # coded symbol priority
+    while length(d.pq) > 0 && v == 0
+        _, v = peek(d.pq)
+        k = dequeue!(d.pq)
     end
-    return selected
+    if k == 0
+        error("no coded symbols of non-zero weight")
+    end
+    return d.cperminv[k]
 end
 
 doc"XOR of 2 sets."
-function setxor(s1::Set, s2::Set)
+function setxor(s1::Set, s2::Set) :: Set
     return union(setdiff(s1, s2), setdiff(s2, s1))
 end
 
@@ -195,7 +196,7 @@ function subtract!(d::Decoder, i::Int, j::Int)
     )
     value = xor(cs1.value, cs2.value)
     push!(d.metrics, "num_xor", degree(cs1)+1)
-    d.csymbols[j] = R10Symbol(
+    cs = R10Symbol(
         -1,
         value,
         -1,
@@ -203,6 +204,11 @@ function subtract!(d::Decoder, i::Int, j::Int)
         inactive_neighbours,
         false,
     )
+    d.csymbols[j] = cs
+    if j in keys(d.pq)
+        d.pq[j] = active_degree(cs)
+    end
+    return
 end
 
 doc"True if cs neighbours the intermediate symbol with index i."
@@ -223,6 +229,9 @@ function inactivate_isymbol!(d::Decoder, i::Int)
             active_neighbours,
             push!(cs.inactive_neighbours, i),
         )
+        if j in keys(d.pq)
+            d.pq[j] = active_degree(d.csymbols[j])
+        end
     end
 end
 
@@ -230,6 +239,7 @@ function print_state(d::Decoder)
     return
     println("------------------------------")
     println("I=", d.num_decoded, " u=", d.num_inactivated)
+    println(d.pq)
     for i in 1:length(d.iperm)
         @printf "%d:%d " i d.iperm[i]
     end
@@ -261,9 +271,6 @@ function diagonalize!(d::Decoder)
 
         # select a row and swap it with the topmost row of V
         row = select_row(d) # TODO: slow
-        if row == -1
-            error("diagonalization failed")
-        end
         swap_rows!(d, row, d.num_decoded+1)
 
         # find the corresponding coded symbol
@@ -294,6 +301,8 @@ function diagonalize!(d::Decoder)
             subtract!(d, d.cperm[d.num_decoded+1], i) # TODO: slow
         end
         d.num_decoded += 1
+
+        print_state(d)
     end
     return d
 end
@@ -377,11 +386,16 @@ function decode!(d::Decoder, raise_on_error=true)
         gaussian_elimination!(d)
         backsolve!(d)
         d.metrics["success"] = 1
-    catch e
-        d.status = e.msg
-        if raise_on_error
-            error(e)
+    catch err
+        if isa(err, ErrorException)
+            d.status = err.msg
+            if raise_on_error
+                rethrow(err)
+            end
+        else
+            rethrow(err)
         end
+
     end
     return get_source(d)
 end
