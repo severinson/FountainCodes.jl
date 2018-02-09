@@ -52,6 +52,22 @@ function test_select_row_2()
 end
 @test test_select_row_2()
 
+function test_select_row_3()
+    p, d, C = init()
+    RaptorCodes.add!(d, RaptorCodes.R10Symbol(0, 0, [1, 2]))
+    RaptorCodes.add!(d, RaptorCodes.R10Symbol(0, 0, [1, 3]))
+    RaptorCodes.add!(d, RaptorCodes.R10Symbol(0, 0, [2, 4]))
+    RaptorCodes.add!(d, RaptorCodes.R10Symbol(0, 0, [5, 6]))
+    RaptorCodes.subtract!(d, p.S+p.H+3, p.S+p.H+1)
+    i = RaptorCodes.select_row(d)
+    correct = [1, 2, 3] + (p.S + p.H)
+    if !(i in correct)
+        error("selected row $i. should have selected one of $correct.")
+    end
+    return true
+end
+@test test_select_row_3()
+
 function test_decoder_1()
     p, d, C = init()
     for i in 1:20

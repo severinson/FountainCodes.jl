@@ -115,8 +115,80 @@ function swap_rows!(d::Decoder, i::Int, j::Int)
     d.cperminv[d.cperm[j]] = j
 end
 
+doc"The R10 spec. gives a recommendation for which row to select in the case
+    where the row with smallest active degree is 2."
+function select_row_2(d::Decoder) :: Int
+    _, v = peek(d.pq)
+    if v != 2
+        error("function may only be called when 2 is the smallest active degree.")
+    end
+
+    # the coded symbols of active degree 2 are the edges
+    edges = Vector{Int}()
+    while length(d.pq) > 0
+        _, v = peek(d.pq)
+        if v != 2
+            break
+        end
+        push!(edges, dequeue!(d.pq))
+    end
+    # println("edges", edges)
+
+    # the nodes correspond to the intermediate symbols
+    nodes = Set{Int}()
+    a = IntDisjointSets(d.p.L)
+    size = zeros(Int, d.p.L)
+    max_root = 0
+    max_root_size = 0
+    for edge in edges
+        cs = d.csymbols[edge]
+        if active_degree(cs) != 2
+            error("wrong active degree. is $(active_degree(cs)). should be 2.")
+        end
+        n1, n2 = active_neighbours(cs)
+        union!(a, n1, n2)
+        push!(nodes, n1)
+        push!(nodes, n2)
+    end
+    # println("nodes ", nodes)
+
+    for node in nodes
+        root = find_root(a, node)
+        size[root] += 1
+        if size[root] > max_root_size
+            max_root = root
+            max_root_size = size[root]
+        end
+    end
+    node = max_root
+    n = neighbours(d.isymbols[node])
+    result = 0
+    for edge in edges
+        if edge in n
+            result = edge
+        end
+    end
+    if result == 0
+        error("could not find neighbouring row")
+    end
+
+    for edge in edges
+        if edge != result
+            enqueue!(d.pq, edge, active_degree(d.csymbols[edge]))
+        end
+    end
+
+    return d.cperminv[result]
+end
+
 doc"Select the row with smallest active degree. TODO: Not according to the R10 spec."
 function select_row(d::Decoder) :: Int
+    # R10 spec. gives a special case for when 2 is the smallest active degree.
+    _, v = peek(d.pq)
+    if v == 2
+        return select_row_2(d)
+    end
+
     k = 0 # coded symbol index
     v = 0 # coded symbol priority
     while length(d.pq) > 0 && v == 0
@@ -141,7 +213,7 @@ function listxor(l1::Array, l2::Array, fa::Function, fr::Function) :: Array
     il, jl = length(l1), length(l2)
     l = similar(l1, 0)
     while i <= il && j <= jl
-        u, v = l1[i], l2[j]
+        @inbounds u, v = l1[i], l2[j]
         if u < v
             push!(l, u) # TODO: slow
             i += 1
@@ -156,11 +228,12 @@ function listxor(l1::Array, l2::Array, fa::Function, fr::Function) :: Array
         end
     end
     while i <= il
-        push!(l, l1[i]) # TODO: slow
+        @inbounds u = l1[i]
+        push!(l, u) # TODO: slow
         i += 1
     end
     while j <= jl
-        v = l2[j]
+        @inbounds v = l2[j]
         push!(l, v)
         fa(v)
         j += 1
