@@ -73,6 +73,11 @@ function active_degree(cs::R10Symbol)
     return length(cs.active_neighbours)
 end
 
+doc"Number of non-zero entries in U."
+function inactive_degree(cs::R10Symbol)
+    return length(cs.inactive_neighbours)
+end
+
 doc"Neighbours that are not decoded or inactivated."
 function active_neighbours(cs::R10Symbol) # TODO: slow
     return cs.active_neighbours

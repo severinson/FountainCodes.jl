@@ -8,7 +8,7 @@ mutable struct Decoder
     iperminv::Array{Int,1} # inverse column permutation
     cperm::Array{Int,1} # map from row indices to encoded symbols
     cperminv::Array{Int,1} # inverse row permutation
-    pq::PriorityQueue{Int,Int} # used to select rows
+    pq::PriorityQueue{Int,Float64} # used to select rows
     num_decoded::Int # denoted by i in the R10 spec.
     num_inactivated::Int # denoted by u in the R10 spec.
     metrics::DataStructures.Accumulator
@@ -22,7 +22,7 @@ mutable struct Decoder
             Array(1:p.L),
             Array{Int64,1}(),
             Array{Int64,1}(),
-            PriorityQueue{Int,Int}(),
+            PriorityQueue{Int,Float64}(),
             0,
             0,
             DataStructures.counter(String),
@@ -53,7 +53,7 @@ mutable struct Decoder
             Array(1:p.L),
             Array{Int64,1}(),
             Array{Int64,1}(),
-            PriorityQueue{Int,Int}(),
+            PriorityQueue{Int,Float64}(),
             0,
             0,
             DataStructures.counter(String),
@@ -115,11 +115,15 @@ function swap_rows!(d::Decoder, i::Int, j::Int)
     d.cperminv[d.cperm[j]] = j
 end
 
+function priority(cs::R10Symbol, p::Parameters) :: Float64
+    return active_degree(cs) + inactive_degree(cs) / p.L
+end
+
 doc"The R10 spec. gives a recommendation for which row to select in the case
     where the row with smallest active degree is 2."
 function select_row_2(d::Decoder) :: Int
     _, v = peek(d.pq)
-    if v != 2
+    if !(2 <= v < 3)
         error("function may only be called when 2 is the smallest active degree.")
     end
 
@@ -127,7 +131,7 @@ function select_row_2(d::Decoder) :: Int
     edges = Vector{Int}()
     while length(d.pq) > 0
         _, v = peek(d.pq)
-        if v != 2
+        if !(2 <= v < 3)
             break
         end
         push!(edges, dequeue!(d.pq))
@@ -174,7 +178,7 @@ function select_row_2(d::Decoder) :: Int
 
     for edge in edges
         if edge != result
-            enqueue!(d.pq, edge, active_degree(d.csymbols[edge]))
+            enqueue!(d.pq, edge, priority(d.csymbols[edge], d.p))
         end
     end
 
@@ -185,13 +189,13 @@ doc"Select the row with smallest active degree. TODO: Not according to the R10 s
 function select_row(d::Decoder) :: Int
     # R10 spec. gives a special case for when 2 is the smallest active degree.
     _, v = peek(d.pq)
-    if v == 2
+    if (2 <= v < 3)
         return select_row_2(d)
     end
 
     k = 0 # coded symbol index
     v = 0 # coded symbol priority
-    while length(d.pq) > 0 && v == 0
+    while length(d.pq) > 0 && v < 1
         _, v = peek(d.pq)
         k = dequeue!(d.pq)
     end
@@ -279,7 +283,7 @@ function subtract!(d::Decoder, i::Int, j::Int)
     )
     d.csymbols[j] = cs
     if j in keys(d.pq)
-        d.pq[j] = active_degree(cs)
+        d.pq[j] = priority(cs, d.p)
     end
     return
 end
@@ -303,7 +307,7 @@ function inactivate_isymbol!(d::Decoder, i::Int)
             push!(cs.inactive_neighbours, i),
         )
         if j in keys(d.pq)
-            d.pq[j] = active_degree(d.csymbols[j])
+            d.pq[j] = priority(d.csymbols[j], d.p)
         end
     end
 end
