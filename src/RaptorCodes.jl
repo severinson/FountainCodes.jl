@@ -5,6 +5,7 @@ abstract type Parameters end
 
 include("Numinv.jl")
 include("Soliton.jl")
+include("SparseBitVector.jl")
 include("R10.jl")
 include("Gray.jl")
 include("R10Tables.jl")
