@@ -1,58 +1,27 @@
 using DataStructures
 
-mutable struct Decoder
-    p::Parameters
-    isymbols::Array{ISymbol,1}
-    csymbols::Array{R10Symbol,1}
-    iperm::Array{Int,1} # map from columns indices to intermediate symbols
-    iperminv::Array{Int,1} # inverse column permutation
-    cperm::Array{Int,1} # map from row indices to encoded symbols
-    cperminv::Array{Int,1} # inverse row permutation
+mutable struct Decoder{RT}
+    p::Parameters # TODO: Make parametric
+    isymbols::Vector{ISymbol}
+    csymbols::Vector{RT}
+    iperm::Vector{Int} # map from columns indices to intermediate symbols
+    iperminv::Vector{Int} # inverse column permutation
+    cperm::Vector{Int} # map from row indices to encoded symbols
+    cperminv::Vector{Int} # inverse row permutation
     pq::PriorityQueue{Int,Float64} # used to select rows
     num_decoded::Int # denoted by i in the R10 spec.
     num_inactivated::Int # denoted by u in the R10 spec.
     metrics::DataStructures.Accumulator
     status::String
-    function Decoder(p::R10Parameters)
+    function Decoder{RT}(p::Parameters) where RT
         d = new(
             p,
             [ISymbol(0) for _ in 1:p.L],
-            Array{R10Symbol,1}(0),
-            Array(1:p.L),
-            Array(1:p.L),
-            Array{Int64,1}(),
-            Array{Int64,1}(),
-            PriorityQueue{Int,Float64}(),
-            0,
-            0,
-            DataStructures.counter(String),
-            "",
-        )
-        d.metrics["success"] = 0
-        d.metrics["num_xor"] = 0
-
-        # add constraint symbols
-        C = [ISymbol(0) for _ in 1:p.L]
-        r10_ldpc_encode!(C, p)
-        r10_hdpc_encode!(C, p)
-        for i in (p.K+1):(p.K+p.S+p.H)
-            is = C[i]
-            neighbours = push!([v for v in is.neighbours], i)
-            cs = R10Symbol(-1, 0, neighbours)
-            add!(d, cs)
-        end
-
-        return d
-    end
-    function Decoder(p::LTParameters)
-        d = new(
-            p,
-            [ISymbol(0) for _ in 1:p.L],
-            Array{R10Symbol,1}(0),
-            Array(1:p.L),
-            Array(1:p.L),
-            Array{Int64,1}(),
-            Array{Int64,1}(),
+            Vector{RT}(0),
+            Vector(1:p.L),
+            Vector(1:p.L),
+            Vector{Int}(),
+            Vector{Int}(),
             PriorityQueue{Int,Float64}(),
             0,
             0,
@@ -63,6 +32,21 @@ mutable struct Decoder
         d.metrics["num_xor"] = 0
         return d
     end
+end
+
+doc"R10 decoder constructor. Automatically adds constraint symbols."
+function Decoder(p::R10Parameters)
+    d = Decoder{R10Symbol}(p)
+    C = [ISymbol(0) for _ in 1:p.L]
+    r10_ldpc_encode!(C, p)
+    r10_hdpc_encode!(C, p)
+    for i in (p.K+1):(p.K+p.S+p.H)
+        is = C[i]
+        neighbours = push!([v for v in is.neighbours], i)
+        cs = R10Symbol(-1, 0, neighbours)
+        add!(d, cs)
+    end
+    return d
 end
 
 doc"Number of remaining source symbols to process in stage 1."

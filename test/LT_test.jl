@@ -3,7 +3,7 @@ using RaptorCodes, Base.Test
 function init(k=10)
     dd = RaptorCodes.Soliton(k, Int(round(k*2/3)), 0.01)
     p = RaptorCodes.LTParameters(k, dd)
-    d = RaptorCodes.Decoder(p)
+    d = RaptorCodes.Decoder{RaptorCodes.R10Symbol}(p)
     C = Array{RaptorCodes.ISymbol,1}(p.L)
     for i = 1:p.K
         C[i] = RaptorCodes.ISymbol(i, Set([i]))
