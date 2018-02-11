@@ -55,10 +55,10 @@ function num_remaining(d::Decoder)
 end
 
 doc"Add a coded symbol to the decoder."
-function add!(d::Decoder, s::R10Symbol)
+function add!(d::Decoder, s::CodeSymbol)
     push!(d.csymbols, s)
     i = length(d.cperm) + 1
-    enqueue!(d.pq, i, active_degree(s))
+    enqueue!(d.pq, i, priority(s, d.p))
     push!(d.cperm, i)
     push!(d.cperminv, i)
     for j in s.active_neighbours
@@ -99,7 +99,7 @@ function swap_rows!(d::Decoder, i::Int, j::Int)
     d.cperminv[d.cperm[j]] = j
 end
 
-function priority(cs::R10Symbol, p::Parameters) :: Float64
+function priority(cs::CodeSymbol, p::Parameters) :: Float64
     return active_degree(cs) + inactive_degree(cs) / p.L
 end
 
@@ -240,7 +240,7 @@ function unlink_isymbol!(d::Decoder, i::Int, j::Int)
 end
 
 doc"subtract csymbols[i] from csymbols[j]. update the isymbols accordingly.."
-function subtract!(d::Decoder, i::Int, j::Int)
+function subtract!(d::Decoder{R10Symbol}, i::Int, j::Int)
     cs1 = d.csymbols[i]
     cs2 = d.csymbols[j]
     active_neighbours = listxor(
@@ -273,12 +273,12 @@ function subtract!(d::Decoder, i::Int, j::Int)
 end
 
 doc"True if cs neighbours the intermediate symbol with index i."
-function has_neighbour(cs::R10Symbol, i::Int) :: Bool
+function has_neighbour(cs::CodeSymbol, i::Int) :: Bool
     return (i in cs.active_neighbours) || (i in cs.inactive_neighbours)
 end
 
 doc"Inactivate a column of the constraint matrix."
-function inactivate_isymbol!(d::Decoder, i::Int)
+function inactivate_isymbol!(d::Decoder{R10Symbol}, i::Int)
     is = d.isymbols[i]
     for j in neighbours(is)
         cs = d.csymbols[j]
