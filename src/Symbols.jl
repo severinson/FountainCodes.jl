@@ -48,6 +48,58 @@ struct R10Symbol <: CodeSymbol
     end
 end
 
+doc"Outer code symbol with only binary coefficients."
+struct BlockBitRow <: CodeSymbol
+    value::Int
+    active::SparseBitVector
+    inactive::SparseBitVector
+end
+function BlockBitRow(l::Int, value::Int, active::Vector{Int}, inactive::Vector{Int})
+    ba = SparseBitVector(l)
+    for i in active
+        ba[i] = true
+    end
+    bi = SparseBitVector(l)
+    for i in inactive
+        bi[i] = true
+    end
+    return BlockBitRow(value, ba, bi)
+end
+
+@inline function degree(r::BlockBitRow)
+    return active_degree(r) + inactive_degree(r)
+end
+
+@inline function active_degree(r::BlockBitRow)
+    return sum(r.active)
+end
+
+@inline function inactive_degree(r::BlockBitRow)
+    return sum(r.inactive)
+end
+
+@inline function active_neighbours(r::BlockBitRow)
+    return findall(r.active)
+end
+
+@inline function inactive_neighbours(r::BlockBitRow)
+    return findall(r.inactive)
+end
+
+@inline function neighbours(r::BlockBitRow)
+    return append!(findall(r.active), findall(r.inactive))
+end
+
+# function subtract!(d::Decoder{BlockBitRow}, i::Int, j::Int)
+#     cs1 = d.csymbols[i]
+#     cs2 = d.csymbols[j]
+#     active = xor!(cs2.active, cs1.active) # TODO: linking
+#     active = xor!(cs2.inactive, cs1.inactive) # TODO: linking
+#     value = xor(cs2.value, cs1.value)
+#     push!(d.metrics, "num_xor", degree(cs1)+1)
+#     cs = BitRow(value, active, inactive)
+# end
+
 doc"Number of neighbouring outer coded symbols."
 function degree(is::ISymbol)
     return length(is.neighbours)
