@@ -1,6 +1,11 @@
 doc"Arbitrary coded symbol."
 abstract type CodeSymbol end
 
+doc"True if cs neighbours the intermediate symbol with index i."
+function has_neighbour(cs::CodeSymbol, i::Int) :: Bool
+    return i in neighbours(cs)
+end
+
 doc"Intermediate code symbol."
 struct ISymbol <: CodeSymbol
     value::Int
@@ -46,6 +51,85 @@ struct R10Symbol <: CodeSymbol
     function R10Symbol(esi::Int, value::Int, neighbours::Array{Int,1})
         R10Symbol(esi, value, -1, neighbours, Array{Int,1}())
     end
+end
+
+doc"Sparse binary vector."
+struct RBitVector <: CodeSymbol
+    value::Int
+    active::Vector{Int}
+    inactive::Vector{Int}
+    function RBitVector(value::Int, active::Vector{Int}, inactive::Vector{Int}, sort=true)
+        if sort
+            return new(value, sort!(copy(active)), sort!(copy(inactive)))
+        else
+            return new(value, active, inactive)
+        end
+    end
+end
+
+@inline function degree(r::RBitVector)
+    return active_degree(r) + inactive_degree(r)
+end
+
+@inline function active_degree(r::RBitVector)
+    return length(r.active)
+end
+
+@inline function inactive_degree(r::RBitVector)
+    return length(r.inactive)
+end
+
+@inline function active_neighbours(r::RBitVector)
+    return r.active
+end
+
+@inline function inactive_neighbours(r::RBitVector)
+    return r.inactive
+end
+
+@inline function neighbours(r::RBitVector)
+    return append!(copy(r.active), r.inactive)
+end
+
+doc"XOR of 2 sorted lists."
+function listxor{T}(l1::Vector{T}, l2::Vector{T}) :: Vector{T}
+    i = 1
+    j = 1
+    il, jl = length(l1), length(l2)
+    l = similar(l1, 0)
+    @inbounds begin
+        while i <= il && j <= jl
+            u, v = l1[i], l2[j]
+            if u < v
+                push!(l, u) # TODO: slow
+                i += 1
+            elseif u > v
+                push!(l, v)
+                j += 1
+            else
+                i += 1
+                j += 1
+            end
+        end
+        while i <= il
+            u = l1[i]
+            push!(l, u) # TODO: slow
+            i += 1
+        end
+        while j <= jl
+            v = l2[j]
+            push!(l, v)
+            j += 1
+        end
+    end
+    return l
+end
+
+function Base.xor(a::RBitVector, b::RBitVector) :: RBitVector
+    active = listxor(a.active, b.active)
+    inactive = listxor(a.inactive, b.inactive)
+    value = xor(a.value, b.value)
+    return RBitVector(value, active, inactive, false)
 end
 
 doc"Outer code symbol with only binary coefficients."

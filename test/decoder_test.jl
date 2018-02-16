@@ -43,6 +43,7 @@ function test_select_row_2()
     RaptorCodes.add!(d, RaptorCodes.R10Symbol(2, 0, [1, 2]))
     RaptorCodes.add!(d, RaptorCodes.R10Symbol(3, 0, [1, 2, 3, 4]))
     RaptorCodes.subtract!(d, p.S+p.H+3, p.S+p.H+1)
+    RaptorCodes.setpriority!(d, 1)
     i = RaptorCodes.select_row(d)
     correct = p.S + p.H + 2
     if i != correct

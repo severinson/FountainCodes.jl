@@ -3,7 +3,7 @@ using RaptorCodes, Base.Test
 function init(k=10)
     dd = RaptorCodes.Soliton(k, Int(round(k*2/3)), 0.01)
     p = RaptorCodes.LTParameters(k, dd)
-    d = RaptorCodes.Decoder{RaptorCodes.R10Symbol}(p)
+    d = RaptorCodes.Decoder{RaptorCodes.RBitVector}(p)
     C = Array{RaptorCodes.ISymbol,1}(p.L)
     for i = 1:p.K
         C[i] = RaptorCodes.ISymbol(i, Set([i]))
@@ -19,10 +19,6 @@ function test_encode()
         end
     end
     s = RaptorCodes.lt_generate(C, 1, p)
-    # s_correct = RaptorCodes.R10Symbol(1, 10, -1, [2, 18], Array{Int,1}())
-    # if s !== s_correct
-    #     error("incorrect LT symbol. is $s. should be $s_correct.")
-    # end
     return true
 end
 @test test_encode()
