@@ -55,7 +55,7 @@ function num_remaining(d::Decoder)
 end
 
 doc"Add a coded symbol to the decoder."
-function add!(d::Decoder, s::CodeSymbol)
+function add!(d::Decoder, s::Row)
     # TODO: Adding after decoding has already failed gives wrong priority.
     if d.status != ""
         error("cannot add more symbols after decoding has failed")
@@ -107,8 +107,8 @@ function swap_rows!(d::Decoder, i::Int, j::Int)
     d.rowperminv[d.rowperm[j]] = j
 end
 
-function priority(cs::CodeSymbol, p::Parameters) :: Float64
-    return active_degree(cs)
+function priority(row::Row, p::Parameters) :: Float64
+    return active_degree(row)
 end
 
 doc"The R10 spec. gives a recommendation for which row to select in the case
