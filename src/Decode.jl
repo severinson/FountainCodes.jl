@@ -1,5 +1,6 @@
 using DataStructures
 
+doc"R10-compliant decoder."
 mutable struct Decoder{RT}
     p::Parameters
     columns::Vector{Vector{Int}}
@@ -56,7 +57,6 @@ end
 
 doc"add a row to the decoder."
 function add!{T}(d::Decoder{T}, s::T)
-    # TODO: Adding after decoding has already failed gives wrong priority.
     if d.status != ""
         error("cannot add more symbols after decoding has failed")
     end
@@ -108,7 +108,26 @@ function swap_rows!(d::Decoder, i::Int, j::Int)
 end
 
 function priority(row::Row, p::Parameters) :: Float64
-    return active_degree(row)
+    return degree(row)
+end
+
+doc"zero out any elements of rows[rpi] below the diagonal"
+function zerodiag!(d::Decoder, rpi::Int) :: Int
+    for cpi in active_neighbours(d.rows[rpi])
+        ci = d.colperminv[cpi]
+        if ci < d.num_decoded+1
+            rpj = d.rowperm[ci]
+            subtract!(d, rpj, rpi)
+        end
+    end
+    for cpi in inactive_neighbours(d.rows[rpi])
+        ci = d.colperminv[cpi]
+        if ci < d.num_decoded+1
+            rpj = d.rowperm[ci]
+            subtract!(d, rpj, rpi)
+        end
+    end
+    return rpi
 end
 
 doc"The R10 spec. gives a recommendation for which row to select in the case
@@ -116,38 +135,52 @@ doc"The R10 spec. gives a recommendation for which row to select in the case
 function select_row_2(d::Decoder) :: Int
     _, v = peek(d.pq)
     if !(2 <= v < 3)
-        error("function may only be called when 2 is the smallest active degree.")
+        return 0
     end
 
-    # the coded symbols of active degree 2 are the edges
+    # a column is selected based on a graph where the rows of active degree 2
+    # are the edges and the columns with non-zero entries are the edges. we want
+    # to find any edge part of the largest connected component of this graph.
     edges = Vector{Int}()
+    priorities = Vector{Float64}()
+
+    # get the edges from the priority queue
     while length(d.pq) > 0
         _, v = peek(d.pq)
         if !(2 <= v < 3)
             break
         end
         push!(edges, dequeue!(d.pq))
+        push!(priorities, v)
     end
-    # println("edges", edges)
 
-    # the nodes correspond to the intermediate symbols
+    # get the nodes from the edges. use a union-find data structure to keep
+    # track of the graph components.
     nodes = Set{Int}()
     a = IntDisjointSets(d.p.L)
+    n = Vector{Int}(2)
+    for (edge, prio) in zip(edges, priorities)
+        row = d.rows[edge]
+        i = 1
+        for cpi in active_neighbours(row)
+            ci = d.colperminv[cpi]
+            if ci > d.num_decoded
+                n[i] = cpi
+                i += 1
+            end
+        end
+        if i != 3
+            error("selected row did not have exactly 2 non-zero entries in V")
+        end
+        union!(a, n[1], n[2])
+        push!(nodes, n[1])
+        push!(nodes, n[2])
+    end
+
+    # compute the size of each component. remember the largest one.
     size = zeros(Int, d.p.L)
     max_root = 0
     max_root_size = 0
-    for edge in edges
-        cs = d.rows[edge]
-        if active_degree(cs) != 2
-            error("wrong active degree. is $(active_degree(cs)). should be 2.")
-        end
-        n1, n2 = active_neighbours(cs)
-        union!(a, n1, n2)
-        push!(nodes, n1)
-        push!(nodes, n2)
-    end
-    # println("nodes ", nodes)
-
     for node in nodes
         root = find_root(a, node)
         size[root] += 1
@@ -156,36 +189,31 @@ function select_row_2(d::Decoder) :: Int
             max_root_size = size[root]
         end
     end
-    node = max_root
-    n = neighbours(d.columns[node])
-    result = 0
+
+    # find any edge that connects to the root node of the largest component.
+    k = 0
     for edge in edges
-        if edge in n
-            result = edge
+        if edge in d.columns[max_root]
+            k = edge
         end
     end
-    if result == 0
+    if k == 0
         error("could not find neighbouring row")
     end
 
-    for edge in edges
-        if edge != result
-            enqueue!(d.pq, edge, priority(d.rows[edge], d.p))
+    # add all other edges back to the priority queue
+    for (edge, priority) in zip(edges, priorities)
+        if edge != k
+            enqueue!(d.pq, edge, priority)
         end
     end
 
-    return d.rowperminv[result]
+    zerodiag!(d, k)
+    return d.rowperminv[k]
 end
 
 doc"Select the row with smallest active degree. TODO: Not according to the R10 spec."
 function select_row(d::Decoder) :: Int
-    # R10 spec. gives a special case for when 2 is the smallest active degree.
-    # TODO: re-add this feature. add tests.
-    # _, v = peek(d.pq)
-    # if (2 <= v < 3)
-    #     return select_row_2(d)
-    # end
-
     k = 0 # coded symbol index
     v = 0 # coded symbol priority
     while length(d.pq) > 0 && v < 1
@@ -195,22 +223,7 @@ function select_row(d::Decoder) :: Int
     if k == 0
         error("no coded symbols of non-zero weight")
     end
-
-    # zero out any elements below the diagonal
-    for cpi in active_neighbours(d.rows[k])
-        ci = d.colperminv[cpi]
-        if ci < d.num_decoded+1
-            rpi = d.rowperm[ci]
-            subtract!(d, rpi, k)
-        end
-    end
-    for cpi in inactive_neighbours(d.rows[k])
-        ci = d.colperminv[cpi]
-        if ci < d.num_decoded+1
-            rpi = d.rowperm[ci]
-            subtract!(d, rpi, k)
-        end
-    end
+    zerodiag!(d, k)
     return d.rowperminv[k]
 end
 
@@ -293,8 +306,13 @@ doc"Perform row/column operations such that there are non-zero entries only
 function diagonalize!(d::Decoder)
     while d.num_decoded + d.num_inactivated < d.p.L
 
-        # select a row and swap it with the topmost row of V
-        ri = select_row(d)
+        # select a row and swap it with the topmost row of V. the R10 spec.
+        # gives a special selection strategy for when 2 is the smallest active
+        # degree. fall back to the regular strategy when this is not the case.
+        ri = select_row_2(d)
+        if ri == 0
+            ri = select_row(d)
+        end
         swap_rows!(d, ri, d.num_decoded+1)
 
         # swap any non-zero entry into the first column of V
@@ -356,7 +374,7 @@ function gaussian_elimination!(d::Decoder)
     return d
 end
 
-doc"Backsolve using the symbols decoded via GE."
+doc"backsolve with the symbols decoded via GE."
 function backsolve!(d::Decoder)
     for ri in 1:d.p.L-d.num_inactivated
         rpi = d.rowperm[ri]
@@ -370,7 +388,7 @@ function backsolve!(d::Decoder)
     return d
 end
 
-doc"Get the decoded source symbols."
+doc"return decoded source symbols."
 function get_source(d::Decoder)
     C = Vector{Int}(d.p.K)
     for ri in 1:d.p.L
@@ -388,7 +406,7 @@ function get_source(d::Decoder)
     return C
 end
 
-doc"Carry out the decoding."
+doc"carry out the decoding and return the source symbols."
 function decode!(d::Decoder, raise_on_error=true)
     try
         check_cover(d)
