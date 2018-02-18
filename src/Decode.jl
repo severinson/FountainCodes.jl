@@ -62,7 +62,6 @@ function add!{T}(d::Decoder{T}, s::T)
     end
     push!(d.rows, s)
     i = length(d.rowperm) + 1
-    enqueue!(d.pq, i, priority(s, d.p))
     push!(d.rowperm, i)
     push!(d.rowperminv, i)
     for j in s.active
@@ -71,7 +70,14 @@ function add!{T}(d::Decoder{T}, s::T)
     for j in s.inactive
         push!(d.columns[j], i)
     end
-    return
+
+    # a priority queue is used to select rows during decoding. rows have
+    # priority equal to its number of non-zero entries in V plus deg/L. adding
+    # deg/L causes rows with lower original degree to be selected first, leading
+    # to lower complexity.
+    deg = degree(s)
+    enqueue!(d.pq, i, deg + deg/d.p.L)
+    return d
 end
 
 doc"add a coded symbol to the decoder."
