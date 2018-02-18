@@ -55,7 +55,7 @@ function num_remaining(d::Decoder)
 end
 
 doc"Add a coded symbol to the decoder."
-function add!(d::Decoder, s::Row)
+function add!{T}(d::Decoder{T}, s::T)
     # TODO: Adding after decoding has already failed gives wrong priority.
     if d.status != ""
         error("cannot add more symbols after decoding has failed")
