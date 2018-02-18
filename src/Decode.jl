@@ -99,18 +99,18 @@ function check_cover(d::Decoder)
     end
 end
 
-doc"Swap cols i and j of the constraint matrix."
-@inline function swap_cols!(d::Decoder, i::Int, j::Int)
-    d.colperm[i], d.colperm[j] = d.colperm[j], d.colperm[i]
-    d.colperminv[d.colperm[i]] = i
-    d.colperminv[d.colperm[j]] = j
+doc"Swap cols ci and cj of the constraint matrix."
+@inline function swap_cols!(d::Decoder, ci::Int, cj::Int)
+    d.colperm[ci], d.colperm[cj] = d.colperm[cj], d.colperm[ci]
+    d.colperminv[d.colperm[ci]] = ci
+    d.colperminv[d.colperm[cj]] = cj
 end
 
-doc"Swap rows i and j of the constraint matrix."
-@inline function swap_rows!(d::Decoder, i::Int, j::Int)
-    d.rowperm[i], d.rowperm[j] = d.rowperm[j], d.rowperm[i]
-    d.rowperminv[d.rowperm[i]] = i
-    d.rowperminv[d.rowperm[j]] = j
+doc"Swap rows ri and rj of the constraint matrix."
+@inline function swap_rows!(d::Decoder, ri::Int, rj::Int)
+    d.rowperm[ri], d.rowperm[rj] = d.rowperm[rj], d.rowperm[ri]
+    d.rowperminv[d.rowperm[ri]] = ri
+    d.rowperminv[d.rowperm[rj]] = rj
 end
 
 function priority(row::Row, p::Parameters) :: Float64
