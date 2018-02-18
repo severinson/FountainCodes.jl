@@ -90,7 +90,7 @@ function Base.xor(a::RBitVector, b::RBitVector) :: RBitVector
 end
 
 doc"sparse binary row based on dense bit vectors."
-struct BlockBitRow <: CodeSymbol
+struct BlockBitRow <: Row
     value::Int
     active::SparseBitVector
     inactive::SparseBitVector
@@ -140,38 +140,3 @@ end
 #     push!(d.metrics, "num_xor", degree(cs1)+1)
 #     cs = BitRow(value, active, inactive)
 # end
-
-doc"Number of neighbouring outer coded symbols."
-function degree(is::ISymbol)
-    return length(is.neighbours)
-end
-
-doc"Number of neighbouring intermediate symbols."
-function degree(cs::R10Symbol)
-    return length(cs.active_neighbours) + length(cs.inactive_neighbours)
-end
-
-doc"Neighbouring outer code symbols."
-function neighbours(is::ISymbol)
-    return collect(is.neighbours)
-end
-
-doc"Neighbouring intermediate symbols."
-function neighbours(cs::R10Symbol)
-    return append!(append!([], cs.active_neighbours), cs.inactive_neighbours)
-end
-
-doc"Number of non-zero entries in V."
-function active_degree(cs::R10Symbol)
-    return length(cs.active_neighbours)
-end
-
-doc"Number of non-zero entries in U."
-function inactive_degree(cs::R10Symbol)
-    return length(cs.inactive_neighbours)
-end
-
-doc"Neighbours that are not decoded or inactivated."
-function active_neighbours(cs::R10Symbol)
-    return cs.active_neighbours
-end

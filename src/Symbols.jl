@@ -44,3 +44,38 @@ struct R10Symbol <: CodeSymbol
         R10Symbol(esi, value, -1, neighbours, Array{Int,1}())
     end
 end
+
+doc"Number of neighbouring outer coded symbols."
+function degree(is::ISymbol)
+    return length(is.neighbours)
+end
+
+doc"Number of neighbouring intermediate symbols."
+function degree(cs::R10Symbol)
+    return length(cs.active_neighbours) + length(cs.inactive_neighbours)
+end
+
+doc"Neighbouring outer code symbols."
+function neighbours(is::ISymbol)
+    return collect(is.neighbours)
+end
+
+doc"Neighbouring intermediate symbols."
+function neighbours(cs::R10Symbol)
+    return append!(append!([], cs.active_neighbours), cs.inactive_neighbours)
+end
+
+doc"Number of non-zero entries in V."
+function active_degree(cs::R10Symbol)
+    return length(cs.active_neighbours)
+end
+
+doc"Number of non-zero entries in U."
+function inactive_degree(cs::R10Symbol)
+    return length(cs.inactive_neighbours)
+end
+
+doc"Neighbours that are not decoded or inactivated."
+function active_neighbours(cs::R10Symbol)
+    return cs.active_neighbours
+end
