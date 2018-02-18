@@ -17,7 +17,6 @@ include("Gray.jl")
 include("R10Tables.jl")
 include("R10.jl")
 include("Matrix.jl")
-include("R10Encode.jl")
 include("LT.jl")
 include("Decode.jl")
 
