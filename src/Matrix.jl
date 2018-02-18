@@ -19,6 +19,11 @@ struct RBitVector <: Row
     end
 end
 
+function RBitVector(s::R10Symbol)
+    return RBitVector(s.value, s.active_neighbours, s.inactive_neighbours)
+end
+
+
 @inline function degree(r::Row)
     return active_degree(r) + inactive_degree(r)
 end

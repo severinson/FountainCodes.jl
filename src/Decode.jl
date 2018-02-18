@@ -54,7 +54,7 @@ function num_remaining(d::Decoder)
     return d.p.L - p.num_decoded - p.num_inactivated
 end
 
-doc"Add a coded symbol to the decoder."
+doc"add a row to the decoder."
 function add!{T}(d::Decoder{T}, s::T)
     # TODO: Adding after decoding has already failed gives wrong priority.
     if d.status != ""
@@ -74,9 +74,9 @@ function add!{T}(d::Decoder{T}, s::T)
     return
 end
 
-function add!(d::Decoder, s::R10Symbol)
-    row = RBitVector(s.value, s.active_neighbours, s.inactive_neighbours)
-    add!(d, row)
+doc"add a coded symbol to the decoder."
+function add!{RT}(d::Decoder{RT}, s::CodeSymbol)
+    add!(d, RT(s))
 end
 
 doc"Check if an intermediate symbol is covered."
