@@ -100,14 +100,14 @@ function check_cover(d::Decoder)
 end
 
 doc"Swap cols i and j of the constraint matrix."
-function swap_cols!(d::Decoder, i::Int, j::Int)
+@inline function swap_cols!(d::Decoder, i::Int, j::Int)
     d.colperm[i], d.colperm[j] = d.colperm[j], d.colperm[i]
     d.colperminv[d.colperm[i]] = i
     d.colperminv[d.colperm[j]] = j
 end
 
 doc"Swap rows i and j of the constraint matrix."
-function swap_rows!(d::Decoder, i::Int, j::Int)
+@inline function swap_rows!(d::Decoder, i::Int, j::Int)
     d.rowperm[i], d.rowperm[j] = d.rowperm[j], d.rowperm[i]
     d.rowperminv[d.rowperm[i]] = i
     d.rowperminv[d.rowperm[j]] = j
