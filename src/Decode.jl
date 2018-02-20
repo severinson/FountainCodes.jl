@@ -290,7 +290,6 @@ end
 
 doc"Print the constraint matrix and its metadata. Used for debugging."
 function print_state(d::Decoder)
-    return
     println("------------------------------")
     println("I=", d.num_decoded, " u=", d.num_inactivated)
     println(d.pq)
@@ -312,7 +311,7 @@ function print_state(d::Decoder)
                 @printf "0 "
             end
         end
-        @printf "] = %d\n" cs.value
+        println("] = $(d.values[d.rowperm[i]])")
     end
     println("------------------------------")
 end
