@@ -422,13 +422,14 @@ function get_source{RT,VT}(d::Decoder{RT,VT})
 end
 
 doc"carry out the decoding and return the source symbols."
-function decode!(d::Decoder, raise_on_error=true)
+function decode!{RT,VT}(d::Decoder{RT,VT}, raise_on_error=true)
     try
         check_cover(d)
         diagonalize!(d)
         gaussian_elimination!(d)
         backsolve!(d)
         d.metrics["success"] = 1
+        return get_source(d)
     catch err
         if isa(err, ErrorException)
             d.status = err.msg
@@ -439,5 +440,5 @@ function decode!(d::Decoder, raise_on_error=true)
             rethrow(err)
         end
     end
-    return get_source(d)
+    Vector{VT}(d.p.K)
 end
