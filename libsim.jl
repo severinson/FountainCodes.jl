@@ -1,7 +1,7 @@
-struct Simulation
+struct Simulation{VT<:RaptorCodes.Value}
     p::RaptorCodes.Parameters
     overhead::Int # absolute reception overhead
-    C::Vector{RaptorCodes.ISymbol{R10Value}}
+    C::Vector{RaptorCodes.ISymbol{VT}}
     n::Int # number of samples
 end
 
@@ -60,5 +60,6 @@ function simulate(sr::Simulation, dct::Dict, dir::String)
     end
     df = DataFrame(samples)
     CSV.write(filename, df)
+    println("finished simulation for $(repr(sr))")
     return samples
 end
