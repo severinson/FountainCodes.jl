@@ -3,7 +3,10 @@ module RaptorCodes
 doc"parameter container"
 abstract type Parameters end
 
-doc"arbitrary coded symbol"
+doc"symbol value"
+abstract type Value end
+
+doc"coded symbol"
 abstract type CodeSymbol end
 
 doc"matrix row"

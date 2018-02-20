@@ -43,24 +43,24 @@ end
 Base.repr(p::R10Parameters) = "R10Parameters($(p.K))"
 
 doc"Generate R10 precode LDPC symbols in-place at indices (K+1) to (K+S)."
-function r10_ldpc_encode!(C::Array{ISymbol,1}, p::R10Parameters)
+function r10_ldpc_encode!{VT<:Value}(C::Vector{ISymbol{VT}}, p::R10Parameters)
     if length(C) != p.L
         error("C must have length p.L = $p.L")
     end
     neighbours = [Set{Int}() for _ in 1:p.S]
-    values = [0 for _ in 1:p.S]
+    values = [R10Value(0) for _ in 1:p.S]
     for i in 0:p.K-1
         v = C[i+1].value
         a = 1 + Int64((floor(i/p.S) % (p.S-1)))
         b = i % p.S
         push!(neighbours[b+1], i+1)
-        values[b+1] = xor(values[b+1], v)
+        values[b+1] = values[b+1] + v
         b = (b + a) % p.S
         push!(neighbours[b+1], i+1)
-        values[b+1] = xor(values[b+1], v)
+        values[b+1] = values[b+1] + v
         b = (b + a) % p.S
         push!(neighbours[b+1], i+1)
-        values[b+1] = xor(values[b+1], v)
+        values[b+1] = values[b+1] + v
     end
     for i in 1:p.S
         C[p.K+i] = ISymbol(values[i], neighbours[i])
@@ -68,18 +68,18 @@ function r10_ldpc_encode!(C::Array{ISymbol,1}, p::R10Parameters)
 end
 
 doc"Generate R10 precode HDPC symbols in-place at indices (K+S+1) to (K+S+H)."
-function r10_hdpc_encode!(C::Array{ISymbol,1}, p::R10Parameters)
+function r10_hdpc_encode!{VT<:Value}(C::Vector{ISymbol{VT}}, p::R10Parameters)
     if length(C) != p.L
         error("C must have length p.L = $p.L")
     end
     neighbours = [Set{Int}() for _ in 1:p.H]
-    values = [0 for _ in 1:p.H]
+    values = [R10Value(0) for _ in 1:p.H]
     for h in 0:p.H-1
         j = 0
         for g in gray(p.K+p.S, p.Hp)
             if g & (1 << h) != 0
                 push!(neighbours[h+1], j+1)
-                values[h+1] = xor(values[h+1], C[j+1].value)
+                values[h+1] = values[h+1] + C[j+1].value
             end
             j += 1
         end
@@ -135,12 +135,12 @@ function trip(X::Int, p::R10Parameters)
 end
 
 doc"Generate an LT symbol from the intermediate symbols."
-function lt_generate(C::Array{ISymbol,1}, X::Int, p::Parameters)
+function lt_generate{VT<:Value}(C::Vector{ISymbol{VT}}, X::Int, p::Parameters)
     d, a, b = trip(X, p)
     while (b >= p.L)
         b = (b + a) % p.Lp
     end
-    neighbours = Array{Int,1}(min(d, p.L))
+    neighbours = Vector{Int}(min(d, p.L))
     neighbours[1] = b+1
     value = C[b+1].value
     for j in 1:min(d-1, p.L-1)
@@ -149,7 +149,7 @@ function lt_generate(C::Array{ISymbol,1}, X::Int, p::Parameters)
             b = (b + a) % p.Lp
         end
         neighbours[j+1] = b+1
-        value = xor(value, C[b+1].value)
+        value = value + C[b+1].value
     end
     return R10Symbol(X, value, neighbours)
 end

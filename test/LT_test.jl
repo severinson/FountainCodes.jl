@@ -3,10 +3,10 @@ using RaptorCodes, Base.Test
 function init(k=10)
     dd = RaptorCodes.Soliton(k, Int(round(k*2/3)), 0.01)
     p = RaptorCodes.LTParameters(k, dd)
-    d = RaptorCodes.Decoder{RaptorCodes.RBitVector}(p)
-    C = Array{RaptorCodes.ISymbol,1}(p.L)
+    d = RaptorCodes.Decoder(p)
+    C = Vector{RaptorCodes.ISymbol{R10Value}}(p.L)
     for i = 1:p.K
-        C[i] = RaptorCodes.ISymbol(i, Set([i]))
+        C[i] = RaptorCodes.ISymbol(R10Value(i), Set([i]))
     end
     return p, d, C
 end

@@ -1,8 +1,9 @@
 using DataStructures
 
 doc"R10-compliant decoder."
-mutable struct Decoder{RT}
+mutable struct Decoder{RT<:Row,VT<:Value}
     p::Parameters
+    values::Vector{VT}
     columns::Vector{Vector{Int}}
     rows::Vector{RT}
     colperm::Vector{Int} # maps column indices to their respective objects
@@ -14,9 +15,10 @@ mutable struct Decoder{RT}
     num_inactivated::Int # denoted by u in the R10 spec.
     metrics::DataStructures.Accumulator
     status::String
-    function Decoder{RT}(p::Parameters) where RT
+    function Decoder{RT,VT}(p::Parameters) where RT<:Row where VT
         d = new(
             p,
+            Vector{VT}(0),
             [Vector{Int}() for _ in 1:p.L],
             Vector{RT}(0),
             Vector(1:p.L),
@@ -37,17 +39,22 @@ end
 
 doc"R10 decoder constructor. Automatically adds constraint symbols."
 function Decoder(p::R10Parameters)
-    d = Decoder{RBitVector}(p)
-    C = [ISymbol(0) for _ in 1:p.L]
+    d = Decoder{RBitVector,R10Value}(p)
+    C = [ISymbol(R10Value(0)) for _ in 1:p.L]
     r10_ldpc_encode!(C, p)
     r10_hdpc_encode!(C, p)
     for i in (p.K+1):(p.K+p.S+p.H)
         is = C[i]
         neighbours = push!([v for v in is.neighbours], i)
-        cs = R10Symbol(-1, 0, neighbours)
+        cs = R10Symbol(-1, R10Value(0), neighbours)
         add!(d, cs)
     end
     return d
+end
+
+doc"Default LT decoder constructor."
+function Decoder(p::LTParameters)
+    return Decoder{RBitVector,R10Value}(p)
 end
 
 doc"Number of remaining source symbols to process in stage 1."
@@ -56,10 +63,11 @@ function num_remaining(d::Decoder)
 end
 
 doc"add a row to the decoder."
-function add!{T}(d::Decoder{T}, s::T)
+function add!{RT,VT}(d::Decoder{RT,VT}, s::RT, v::VT)
     if d.status != ""
         error("cannot add more symbols after decoding has failed")
     end
+    push!(d.values, v)
     push!(d.rows, s)
     i = length(d.rowperm) + 1
     push!(d.rowperm, i)
@@ -82,7 +90,7 @@ end
 
 doc"add a coded symbol to the decoder."
 function add!{RT}(d::Decoder{RT}, s::CodeSymbol)
-    add!(d, RT(s))
+    add!(d, RT(s), s.value)
 end
 
 doc"Check if an intermediate symbol is covered."
@@ -237,9 +245,9 @@ doc"subtract rows[i] from rows[j]. update the columns accordingly.."
 function subtract!(d::Decoder{RBitVector}, i::Int, j::Int)
     row1 = d.rows[i]
     row2 = d.rows[j]
-    # TODO: It would make more sense to have values as separate objects
     row = xor(row1, row2)
     d.rows[j] = row
+    d.values[j] = d.values[i] + d.values[j]
     push!(d.metrics, "num_xor", degree(row1)+1)
 end
 
@@ -258,7 +266,7 @@ function inactivate_isymbol!(d::Decoder{RBitVector}, cpi::Int)
             if length(active) != length(row.active) - 1
                 error("degree of row $rpi != 1")
             end
-            d.rows[rpi] = RBitVector(row.value, active, push!(row.inactive, cpi))
+            d.rows[rpi] = RBitVector(active, push!(row.inactive, cpi))
             if rpi in keys(d.pq)
                 d.pq[rpi] -= 1.0
             end
@@ -395,8 +403,8 @@ function backsolve!(d::Decoder)
 end
 
 doc"return decoded source symbols."
-function get_source(d::Decoder)
-    C = Vector{Int}(d.p.K)
+function get_source{RT,VT}(d::Decoder{RT,VT})
+    C = Vector{VT}(d.p.K)
     for ri in 1:d.p.L
         rpi = d.rowperm[ri]
         row = d.rows[rpi]
@@ -407,7 +415,7 @@ function get_source(d::Decoder)
         if ci > d.p.K
             continue
         end
-        C[ci] = row.value
+        C[ci] = d.values[rpi]
     end
     return C
 end

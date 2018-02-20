@@ -7,20 +7,22 @@ end
 
 doc"Sparse binary row."
 struct RBitVector <: Row
-    value::Int
     active::Vector{Int}
     inactive::Vector{Int}
-    function RBitVector(value::Int, active::Vector{Int}, inactive::Vector{Int}, sort=true)
+    function RBitVector(
+        active::Vector{Int},
+        inactive::Vector{Int},
+        sort=true)
         if sort
-            return new(value, sort!(copy(active)), sort!(copy(inactive)))
+            return new(sort!(copy(active)), sort!(copy(inactive)))
         else
-            return new(value, active, inactive)
+            return new(active, inactive)
         end
     end
 end
 
 function RBitVector(s::R10Symbol)
-    return RBitVector(s.value, s.active_neighbours, s.inactive_neighbours)
+    return RBitVector(s.active_neighbours, s.inactive_neighbours)
 end
 
 
@@ -85,8 +87,7 @@ end
 function Base.xor(a::RBitVector, b::RBitVector) :: RBitVector
     active = listxor(a.active, b.active)
     inactive = listxor(a.inactive, b.inactive)
-    value = xor(a.value, b.value)
-    return RBitVector(value, active, inactive, false)
+    return RBitVector(active, inactive, false)
 end
 
 doc"sparse binary row based on dense bit vectors."

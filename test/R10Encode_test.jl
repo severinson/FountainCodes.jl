@@ -1,8 +1,8 @@
 function test_encode(k=10)
     p = RaptorCodes.R10Parameters(k)
-    C = Array{RaptorCodes.ISymbol,1}(p.L)
+    C = Vector{RaptorCodes.ISymbol{RaptorCodes.R10Value}}(p.L)
     for i = 1:p.K
-        C[i] = RaptorCodes.ISymbol(i, Set([i]))
+        C[i] = RaptorCodes.ISymbol(R10Value(i), Set([i]))
     end
     RaptorCodes.r10_ldpc_encode!(C, p)
     RaptorCodes.r10_hdpc_encode!(C, p)

@@ -3,9 +3,9 @@ using RaptorCodes, Base.Test
 function init(k=10)
     p = RaptorCodes.R10Parameters(k)
     d = RaptorCodes.Decoder(p)
-    C = Array{RaptorCodes.ISymbol,1}(p.L)
+    C = Vector{RaptorCodes.ISymbol{R10Value}}(p.L)
     for i = 1:p.K
-        C[i] = RaptorCodes.ISymbol(i, Set([i]))
+        C[i] = RaptorCodes.ISymbol(R10Value(i), Set([i]))
     end
     RaptorCodes.r10_ldpc_encode!(C, p)
     RaptorCodes.r10_hdpc_encode!(C, p)
@@ -26,9 +26,9 @@ end
 
 function test_select_row_1()
     p, d, C = init()
-    RaptorCodes.add!(d, RaptorCodes.R10Symbol(1, 0, [1]))
-    RaptorCodes.add!(d, RaptorCodes.R10Symbol(2, 0, [1, 2]))
-    RaptorCodes.add!(d, RaptorCodes.R10Symbol(3, 0, [1, 2, 3, 4]))
+    RaptorCodes.add!(d, R10Symbol(1, R10Value(0), [1]))
+    RaptorCodes.add!(d, R10Symbol(2, R10Value(0), [1, 2]))
+    RaptorCodes.add!(d, R10Symbol(3, R10Value(0), [1, 2, 3, 4]))
     i = RaptorCodes.select_row(d)
     if i != p.S + p.H + 1
         error("selected row $i. should have selected row $(p.S+p.H+1).")
@@ -39,9 +39,9 @@ end
 
 function test_select_row_2()
     p, d, C = init()
-    RaptorCodes.add!(d, RaptorCodes.R10Symbol(1, 0, [1]))
-    RaptorCodes.add!(d, RaptorCodes.R10Symbol(2, 0, [1, 2]))
-    RaptorCodes.add!(d, RaptorCodes.R10Symbol(3, 0, [1, 2, 3, 4]))
+    RaptorCodes.add!(d, R10Symbol(1, R10Value(0), [1]))
+    RaptorCodes.add!(d, R10Symbol(2, R10Value(0), [1, 2]))
+    RaptorCodes.add!(d, R10Symbol(3, R10Value(0), [1, 2, 3, 4]))
     RaptorCodes.subtract!(d, p.S+p.H+3, p.S+p.H+1)
     RaptorCodes.setpriority!(d, 1)
     i = RaptorCodes.select_row(d)
@@ -55,10 +55,10 @@ end
 
 function test_select_row_3()
     p, d, C = init()
-    RaptorCodes.add!(d, RaptorCodes.R10Symbol(0, 0, [7, 8]))
-    RaptorCodes.add!(d, RaptorCodes.R10Symbol(0, 0, [1, 2]))
-    RaptorCodes.add!(d, RaptorCodes.R10Symbol(0, 0, [2, 3]))
-    RaptorCodes.add!(d, RaptorCodes.R10Symbol(0, 0, [5, 6]))
+    RaptorCodes.add!(d, R10Symbol(0, R10Value(0), [7, 8]))
+    RaptorCodes.add!(d, R10Symbol(0, R10Value(0), [1, 2]))
+    RaptorCodes.add!(d, R10Symbol(0, R10Value(0), [2, 3]))
+    RaptorCodes.add!(d, R10Symbol(0, R10Value(0), [5, 6]))
     i = RaptorCodes.select_row_2(d)
     correct = [2, 3] + (p.S + p.H)
     if !(i in correct)
