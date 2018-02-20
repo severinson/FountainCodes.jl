@@ -1,6 +1,6 @@
 import RaptorCodes, DataStructures, DataFrames, CSV
 @everywhere using RaptorCodes, DataStructures, DataFrames, CSV
-@everywhere include("simulate.jl")
+@everywhere include("libsim.jl")
 
 """ Packages
 - DataFrames
@@ -15,6 +15,7 @@ function r10_main()
         p = R10Parameters(K)
         C = init(p)
         for overhead in linspace(K*0.05, K*0.5, 10)
+            overhead = Int(round(overhead))
             sr = Simulation(p, overhead, C, 100)
             println(repr(sr))
             dct = Dict()
