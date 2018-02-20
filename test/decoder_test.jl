@@ -139,3 +139,23 @@ function test_decoder_4()
     return true
 end
 @test test_decoder_4()
+
+function test_decoder_dummy_1()
+    # TODO: Not supported yete
+    k = 20
+    p = RaptorCodes.R10Parameters(k)
+    d = RaptorCodes.Decoder{RBitVector,DummyValue}(p)
+    C = Vector{RaptorCodes.ISymbol{DummyValue}}(p.L)
+    for i = 1:p.K
+        C[i] = RaptorCodes.ISymbol(DummyValue(i), Set([i]))
+    end
+    RaptorCodes.r10_ldpc_encode!(C, p)
+    RaptorCodes.r10_hdpc_encode!(C, p)
+    for i in 1:25
+        s = RaptorCodes.lt_generate(C, i, p)
+        RaptorCodes.add!(d, s)
+    end
+    output = RaptorCodes.decode!(d)
+    return true
+end
+# @test test_decoder_dummy_1()
