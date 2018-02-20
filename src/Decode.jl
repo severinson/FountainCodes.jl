@@ -33,6 +33,7 @@ mutable struct Decoder{RT<:Row,VT<:Value}
         )
         d.metrics["success"] = 0
         d.metrics["num_xor"] = 0
+        d.metrics["rowops"] = 0
         return d
     end
 end
@@ -249,6 +250,7 @@ function subtract!(d::Decoder{RBitVector}, i::Int, j::Int)
     d.rows[j] = row
     d.values[j] = d.values[i] + d.values[j]
     push!(d.metrics, "num_xor", degree(row1)+1)
+    push!(d.metrics, "rowops", 1)
 end
 
 doc"Inactivate a column of the constraint matrix."
