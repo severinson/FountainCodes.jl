@@ -1,9 +1,7 @@
-using RaptorCodes, DataStructures, DataFrames, CSV
-
 struct Simulation
     p::RaptorCodes.Parameters
     overhead::Int # absolute reception overhead
-    C::Array{RaptorCodes.ISymbol,1}
+    C::Vector{RaptorCodes.ISymbol{R10Value}}
     n::Int # number of samples
 end
 
@@ -12,9 +10,9 @@ function repr(r::Simulation)
 end
 
 function init(p::R10Parameters)
-    C = Array{RaptorCodes.ISymbol,1}(p.L)
+    C = Vector{RaptorCodes.ISymbol{R10Value}}(p.L)
     for i = 1:p.K
-        C[i] = RaptorCodes.ISymbol(i, Set([i]))
+        C[i] = RaptorCodes.ISymbol(R10Value(i), Set([i]))
     end
     RaptorCodes.r10_ldpc_encode!(C, p)
     RaptorCodes.r10_hdpc_encode!(C, p)
@@ -22,9 +20,9 @@ function init(p::R10Parameters)
 end
 
 function init(p::LTParameters)
-    C = Array{RaptorCodes.ISymbol,1}(p.L)
+    C = Vector{RaptorCodes.ISymbol{R10Value}}(p.L)
     for i = 1:p.K
-        C[i] = RaptorCodes.ISymbol(i, Set([i]))
+        C[i] = RaptorCodes.ISymbol(R10Value(i), Set([i]))
     end
     return C
 end
@@ -50,6 +48,7 @@ function simulate(sr::Simulation, dct::Dict, dir::String)
         return CSV.read(filename)
     catch
     end
+    println("starting simulation for $(repr(sr))")
     samples = DefaultDict(Vector)
     for i in 1:sr.n
         for v in dct
@@ -58,9 +57,8 @@ function simulate(sr::Simulation, dct::Dict, dir::String)
         for v in sample(sr)
             push!(samples[v[1]], v[2])
         end
-        println(samples)
     end
     df = DataFrame(samples)
     CSV.write(filename, df)
-    return df
+    return samples
 end
