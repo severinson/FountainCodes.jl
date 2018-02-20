@@ -1,4 +1,4 @@
-export R10Value, R10Symbol
+export R10Value, DummyValue, R10Symbol
 
 doc"byte vector"
 struct R10Value <: Value
@@ -25,6 +25,19 @@ function Base.:(==)(a::R10Value, b::R10Value)
     length(a.bytes) > length(b.bytes) && return false
     length(b.bytes) > length(a.bytes) && return false
     return a.bytes == b.bytes
+end
+
+doc"empty value used for simulations"
+struct DummyValue <: Value
+end
+function DummyValue(x)
+    return DummyValue()
+end
+function Base.:+(a::DummyValue, b::DummyValue)
+    return DummyValue()
+end
+function Base.:(==)(a::DummyValue, b::DummyValue)
+    return true
 end
 
 doc"Intermediate code symbol."
