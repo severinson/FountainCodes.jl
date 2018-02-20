@@ -48,7 +48,7 @@ function r10_ldpc_encode!{VT<:Value}(C::Vector{ISymbol{VT}}, p::R10Parameters)
         error("C must have length p.L = $p.L")
     end
     neighbours = [Set{Int}() for _ in 1:p.S]
-    values = [R10Value(0) for _ in 1:p.S]
+    values = [VT(0) for _ in 1:p.S]
     for i in 0:p.K-1
         v = C[i+1].value
         a = 1 + Int64((floor(i/p.S) % (p.S-1)))
@@ -73,7 +73,7 @@ function r10_hdpc_encode!{VT<:Value}(C::Vector{ISymbol{VT}}, p::R10Parameters)
         error("C must have length p.L = $p.L")
     end
     neighbours = [Set{Int}() for _ in 1:p.H]
-    values = [R10Value(0) for _ in 1:p.H]
+    values = [VT(0) for _ in 1:p.H]
     for h in 0:p.H-1
         j = 0
         for g in gray(p.K+p.S, p.Hp)
