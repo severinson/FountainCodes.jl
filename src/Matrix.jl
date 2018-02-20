@@ -1,5 +1,7 @@
 # matrix primitives and concrete row types
 
+export RBitVector
+
 doc"True if cs neighbours the intermediate symbol with index i."
 function has_neighbour(row::Row, i::Int) :: Bool
     return i in neighbours(row)
