@@ -1,3 +1,7 @@
+# R10-compliant decoder. Counts the number of XORs. Counts the number of
+# multiplications as if all elements were drawn from a field of order larger
+# than 2.
+
 using DataStructures
 
 doc"R10-compliant decoder."
@@ -32,7 +36,8 @@ mutable struct Decoder{RT<:Row,VT<:Value}
             "",
         )
         d.metrics["success"] = 0
-        d.metrics["num_xor"] = 0
+        d.metrics["decoding_additions"] = 0
+        d.metrics["decoding_multiplications"] = 0
         d.metrics["rowops"] = 0
         return d
     end
@@ -142,6 +147,7 @@ function zerodiag!(d::Decoder, rpi::Int) :: Int
             subtract!(d, rpj, rpi)
         end
     end
+    push!(d.metrics, "decoding_multiplications", degree(d.rows[rpi])+1)
     return rpi
 end
 
@@ -249,7 +255,8 @@ function subtract!(d::Decoder{RBitVector}, i::Int, j::Int)
     row = xor(row1, row2)
     d.rows[j] = row
     d.values[j] = d.values[i] + d.values[j]
-    push!(d.metrics, "num_xor", degree(row1)+1)
+    push!(d.metrics, "decoding_additions", degree(row1)+1)
+    push!(d.metrics, "decoding_multiplications", degree(row1)+1)
     push!(d.metrics, "rowops", 1)
 end
 
