@@ -1,0 +1,31 @@
+* DONE 
+  CLOSED: [2018-01-30 Tue 17:03]
+Gaussian elimination of a system of equations over F_2.
+* TODO  
+Separate value type, i.e., allow the value of a coded symbol have arbitrary
+type. Define the subtract operator for different value types.
+* TODO  
+Allow different types of coded symbols, where the difference is the field over
+which its coefficients are defined. For example, binary, q* TODO ary, real.
+* TODO Standard row selection
+- If there's no row of active degree 2, choose any row with minimum degree. If
+  several exist, pick the row with minimum original degree. I guess this is
+  because these rows will have fewer inactivated neighbours.
+- If there's a row of active degree 2, choose any row of active degree 2 that is
+  part of the maximum size component.
+
+- Need a fast way of finding this row. Could use a priority queue where priority
+  is determined first by active degree and second by size of the component it's
+  part of.
+- Need a fast method for finding the active degree of a cs.
+- Need a fast method for finding the size of the component a cs is part of.
+
+** DONE Abstract symbol type
+   CLOSED: [2018-01-31 Wed 14:39]
+** DONE Separate Intermediate and coded symbol objects
+   CLOSED: [2018-01-31 Wed 14:39]
+** TODO Separate sets for different kinds of neighbours
+
+* TODO Discard unneeded rows
+- After the GE step we can discard all only-zero rows.
+
