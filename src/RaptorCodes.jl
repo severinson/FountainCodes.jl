@@ -22,5 +22,6 @@ include("R10.jl")
 include("Matrix.jl")
 include("LT.jl")
 include("Decode.jl")
+include("Simulate.jl")
 
 end # module
