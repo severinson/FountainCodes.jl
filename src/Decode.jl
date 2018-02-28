@@ -111,7 +111,6 @@ function add!{RT,VT}(d::Decoder{RT,VT}, s::RT, v::VT)
     for j in s.active
         push!(d.columns[j], i)
     end
-    # TODO: address this
     if inactive_degree(s) != 0
         error("cannot add rows with inactivated columns")
     end
@@ -284,16 +283,16 @@ function subtract!(d::Decoder{RBitVector}, i::Int, j::Int)
     row2 = d.rows[j]
     xor!(row2.inactive, row1.inactive)
     d.values[j] = d.values[i] + d.values[j]
-    # push!(d.metrics, "decoding_additions", degree(row1)+1)
-    # push!(d.metrics, "decoding_multiplications", degree(row1)+1)
-    # push!(d.metrics, "rowops", 1)
+    weight = sum(row1.inactive)
+    push!(d.metrics, "decoding_additions", weight+1)
+    push!(d.metrics, "decoding_multiplications", weight+1)
+    push!(d.metrics, "rowops", 1)
 end
 
 doc"Inactivate a column of the constraint matrix."
 function inactivate_isymbol!(d::Decoder{RBitVector}, cpi::Int)
     rightmost_active_col = length(d.columns) - d.num_inactivated
     ci = d.colperminv[cpi]
-    # TODO: check both here and in diagonalize
     if ci > rightmost_active_col
         return
     end
@@ -473,14 +472,6 @@ function backsolve!(d::Decoder)
                 subtract!(d, rpj, rpi)
             end
         end
-
-        # ui = findfirst(row.inactive)
-        # while ui != 0
-        #     ci = _ui2ci(d, ui)
-        #     rpj = d.rowperm[ci]
-        #     subtract!(d, rpj, rpi)
-        #     ui = findnext(row.inactive, ui+1)
-        # end
     end
     return d
 end
