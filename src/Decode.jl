@@ -14,6 +14,8 @@ mutable struct Decoder{RT<:Row,VT<:Value}
     colperminv::Vector{Int} # maps column object indices to their column indices
     rowperm::Vector{Int} # maps row indices to their respective objects
     rowperminv::Vector{Int} # maps row object indices to their row indices
+    uperm::Vector{Int} # maps ui to upi
+    uperminv::Vector{Int} # maps upi to ui
     pq::PriorityQueue{Int,Float64} # used to select rows
     num_decoded::Int # denoted by i in the R10 spec.
     num_inactivated::Int # denoted by u in the R10 spec.
@@ -27,6 +29,8 @@ mutable struct Decoder{RT<:Row,VT<:Value}
             Vector{RT}(0),
             Vector(1:p.L),
             Vector(1:p.L),
+            Vector{Int}(),
+            Vector{Int}(),
             Vector{Int}(),
             Vector{Int}(),
             PriorityQueue{Int,Float64}(),
@@ -63,6 +67,32 @@ function Decoder(p::LTParameters)
     return Decoder{RBitVector,R10Value}(p)
 end
 
+# the inactivated part is stored as dense bit vectors. these are indexed from
+# the right of the matrix.
+@inline _ci2ui(d::Decoder, ci::Int) = d.p.L-ci+1
+@inline _ui2ci(d::Decoder, ui::Int) = d.p.L-ui+1
+
+doc"set an element of the dense part of the matrix."
+function setdense!(d::Decoder, rpi::Int, cpi::Int, v::Bool)
+    row = d.rows[rpi]
+    ci = d.colperminv[cpi]
+    ui = _ci2ui(d, ci)
+    upi = d.uperm[ui]
+    row.inactive[upi] = v
+end
+
+doc"get an element from the dense part of the matrix."
+function getdense(d::Decoder, rpi::Int, cpi::Int) :: Bool
+    row = d.rows[rpi]
+    ci = d.colperminv[cpi]
+    ui = _ci2ui(d, ci)
+    if ui > length(d.uperm)
+        return false
+    end
+    upi = d.uperm[ui]
+    return row.inactive[upi]
+end
+
 doc"Number of remaining source symbols to process in stage 1."
 function num_remaining(d::Decoder)
     return d.p.L - p.num_decoded - p.num_inactivated
@@ -81,8 +111,9 @@ function add!{RT,VT}(d::Decoder{RT,VT}, s::RT, v::VT)
     for j in s.active
         push!(d.columns[j], i)
     end
-    for j in s.inactive
-        push!(d.columns[j], i)
+    # TODO: address this
+    if inactive_degree(s) != 0
+        error("cannot add rows with inactivated columns")
     end
 
     # a priority queue is used to select rows during decoding. rows have
@@ -120,6 +151,13 @@ doc"Swap cols ci and cj of the constraint matrix."
     d.colperminv[d.colperm[cj]] = cj
 end
 
+doc"Swap cols ui and uj of the dense submatrix u."
+@inline function swap_dense_cols!(d::Decoder, ui::Int, uj::Int)
+    d.uperm[ui], d.uperm[uj] = d.uperm[uj], d.uperm[ui]
+    d.uperminv[d.uperm[ui]] = ui
+    d.uperminv[d.uperm[uj]] = uj
+end
+
 doc"Swap rows ri and rj of the constraint matrix."
 @inline function swap_rows!(d::Decoder, ri::Int, rj::Int)
     d.rowperm[ri], d.rowperm[rj] = d.rowperm[rj], d.rowperm[ri]
@@ -135,19 +173,11 @@ doc"zero out any elements of rows[rpi] below the diagonal"
 function zerodiag!(d::Decoder, rpi::Int) :: Int
     for cpi in active_neighbours(d.rows[rpi])
         ci = d.colperminv[cpi]
-        if ci < d.num_decoded+1
+        if ci < d.num_decoded+1 && ci <= d.p.L-d.num_inactivated
             rpj = d.rowperm[ci]
             subtract!(d, rpj, rpi)
         end
     end
-    for cpi in inactive_neighbours(d.rows[rpi])
-        ci = d.colperminv[cpi]
-        if ci < d.num_decoded+1
-            rpj = d.rowperm[ci]
-            subtract!(d, rpj, rpi)
-        end
-    end
-    push!(d.metrics, "decoding_multiplications", degree(d.rows[rpi])+1)
     return rpi
 end
 
@@ -185,7 +215,7 @@ function select_row_2(d::Decoder) :: Int
         i = 1
         for cpi in active_neighbours(row)
             ci = d.colperminv[cpi]
-            if ci > d.num_decoded
+            if (d.num_decoded < ci <= d.p.L-d.num_inactivated)
                 n[i] = cpi
                 i += 1
             end
@@ -233,7 +263,7 @@ function select_row_2(d::Decoder) :: Int
     return d.rowperminv[k]
 end
 
-doc"Select the row with smallest active degree. TODO: Not according to the R10 spec."
+doc"Select the row with smallest active degree."
 function select_row(d::Decoder) :: Int
     k = 0 # coded symbol index
     v = 0 # coded symbol priority
@@ -248,34 +278,31 @@ function select_row(d::Decoder) :: Int
     return d.rowperminv[k]
 end
 
-doc"subtract rows[i] from rows[j]. update the columns accordingly.."
+doc"subtract rows[i] from rows[j]."
 function subtract!(d::Decoder{RBitVector}, i::Int, j::Int)
     row1 = d.rows[i]
     row2 = d.rows[j]
-    row = xor(row1, row2)
-    d.rows[j] = row
+    xor!(row2.inactive, row1.inactive)
     d.values[j] = d.values[i] + d.values[j]
-    push!(d.metrics, "decoding_additions", degree(row1)+1)
-    push!(d.metrics, "decoding_multiplications", degree(row1)+1)
-    push!(d.metrics, "rowops", 1)
+    # push!(d.metrics, "decoding_additions", degree(row1)+1)
+    # push!(d.metrics, "decoding_multiplications", degree(row1)+1)
+    # push!(d.metrics, "rowops", 1)
 end
 
 doc"Inactivate a column of the constraint matrix."
 function inactivate_isymbol!(d::Decoder{RBitVector}, cpi::Int)
     rightmost_active_col = length(d.columns) - d.num_inactivated
     ci = d.colperminv[cpi]
+    # TODO: check both here and in diagonalize
     if ci > rightmost_active_col
         return
     end
+    push!(d.uperm, d.num_inactivated+1)
+    push!(d.uperminv, d.num_inactivated+1)
     swap_cols!(d, ci, rightmost_active_col)
     for rpi in d.columns[cpi]
         if d.rowperminv[rpi] > d.num_decoded
-            row = d.rows[rpi]
-            active = [v for v in row.active if v != cpi]
-            if length(active) != length(row.active) - 1
-                error("degree of row $rpi != 1")
-            end
-            d.rows[rpi] = RBitVector(active, push!(row.inactive, cpi))
+            setdense!(d, rpi, cpi, true)
             if rpi in keys(d.pq)
                 d.pq[rpi] -= 1.0
             end
@@ -297,6 +324,8 @@ end
 
 doc"Print the constraint matrix and its metadata. Used for debugging."
 function print_state(d::Decoder)
+    # TODO: this function makes less sense now that we no longer subtract
+    # elements.
     println("------------------------------")
     println("I=", d.num_decoded, " u=", d.num_inactivated)
     println(d.pq)
@@ -337,19 +366,32 @@ function diagonalize!(d::Decoder)
         end
         swap_rows!(d, ri, d.num_decoded+1)
 
-        # swap any non-zero entry into the first column of V
+        # swap any non-zero entry in V into the first column of V
         row = d.rows[d.rowperm[d.num_decoded+1]]
         active = active_neighbours(row)
-        col = d.colperminv[active[1]]
-        swap_cols!(d, col, d.num_decoded+1)
+        i = 1
+        cpi = active[i]
+        ci = d.colperminv[cpi]
+        while !(d.num_decoded < ci <= d.p.L-d.num_inactivated) && i < length(active)
+            i += 1
+            cpi = active[i]
+            ci = d.colperminv[cpi]
+        end
+        if !(d.num_decoded < ci <= d.p.L-d.num_inactivated)
+            error("incorrectly selected a row with no neighbours in V.")
+        end
+        swap_cols!(d, ci, d.num_decoded+1)
 
         # decrement the priority of all rows neighbouring this column by 1
-        setpriority!(d, active[1])
+        setpriority!(d, cpi)
 
         # inactivate the remaining neighbouring symbols
-        for i in 2:length(active)
-            cpi = active[i]
-            inactivate_isymbol!(d, cpi)
+        for j in i+1:length(active)
+            cpi = active[j]
+            ci = d.colperminv[cpi]
+            if (d.num_decoded+1 < ci <= d.p.L-d.num_inactivated)
+                inactivate_isymbol!(d, cpi)
+            end
         end
         d.num_decoded += 1
     end
@@ -362,32 +404,54 @@ function gaussian_elimination!(d::Decoder)
     # add all remaining rows to the priority queue
     for ri in d.num_decoded+1:length(d.rows)
         rpi = d.rowperm[ri]
-        d.pq[rpi] = degree(d.rows[rpi])
+        d.pq[rpi] = active_degree(d.rows[rpi])
     end
 
     for i in 1:d.num_inactivated
 
         # select a row with non-zero inactive degree to swap with the current row
-        ri = select_row(d)
-        rpi = d.rowperm[ri]
-        row = d.rows[rpi]
-        while inactive_degree(row) == 0
-            ri = select_row(d)
-            rpi = d.rowperm[ri]
-            row = d.rows[rpi]
+        ci = d.num_decoded+1
+        cpi = d.colperm[ci]
+        ri = 0
+        rpi = 0
+        while length(d.pq) > 0
+            rj = select_row(d)
+            rpj = d.rowperm[rj]
+            row = d.rows[rpj]
+
+            # zero out the elements below the diagonal
+            for cj in d.p.L-d.num_inactivated+1:d.num_decoded
+                cpj = d.colperm[cj]
+                if getdense(d, rpj, cpj)
+                    rpk = d.rowperm[cj]
+                    subtract!(d, rpk, rpj)
+                end
+            end
+
+            if inactive_degree(row) > 0
+                ri = rj
+                rpi = rpj
+                break
+            end
+        end
+        if ri == 0
+            error("GE failed due to rank deficiency.")
         end
         swap_rows!(d, d.num_decoded+1, ri)
 
-        # swap any non-zero entry into the i-th entry of u_lower
-        inactive = inactive_neighbours(row)
-        cpi = inactive[1]
-        ci = d.colperminv[cpi]
-        swap_cols!(d, d.num_decoded+1, ci)
+        # swap any non-zero entry into the i-th column of u_lower
+        row = d.rows[rpi]
+        upi = findfirst(row.inactive)
+        ui = d.uperminv[upi]
+        cj = _ui2ci(d, ui)
+        uj = _ci2ui(d, ci)
+        swap_dense_cols!(d, ui, uj)
+        swap_cols!(d, ci, cj)
 
         # subtract this row from all rows in u_lower above this one
         for rj in d.p.L-d.num_inactivated+1:d.num_decoded
             rpj = d.rowperm[rj]
-            if has_neighbour(d.rows[rpj], d.colperm[d.num_decoded+1])
+            if getdense(d, rpj, d.colperm[d.num_decoded+1])
                 subtract!(d, d.rowperm[d.num_decoded+1], rpj)
             end
         end
@@ -398,32 +462,39 @@ end
 
 doc"backsolve with the symbols decoded via GE."
 function backsolve!(d::Decoder)
+    # TODO: findnext would be more efficient
     for ri in 1:d.p.L-d.num_inactivated
         rpi = d.rowperm[ri]
-        row = d.rows[rpi]
-        for cpi in inactive_neighbours(row)
-            ci = d.colperminv[cpi]
-            rpj = d.rowperm[ci]
-            subtract!(d, rpj, rpi)
+        # row = d.rows[rpi]
+        for ci in d.p.L-d.num_inactivated+1:d.p.L
+            cpi = d.colperm[ci]
+            if getdense(d, rpi, cpi)
+                rpj = d.rowperm[ci]
+                subtract!(d, rpj, rpi)
+            end
         end
+
+        # ui = findfirst(row.inactive)
+        # while ui != 0
+        #     ci = _ui2ci(d, ui)
+        #     rpj = d.rowperm[ci]
+        #     subtract!(d, rpj, rpi)
+        #     ui = findnext(row.inactive, ui+1)
+        # end
     end
     return d
 end
 
-doc"return decoded source symbols."
+doc"return the decoded source symbols."
 function get_source{RT,VT}(d::Decoder{RT,VT})
     C = Vector{VT}(d.p.K)
-    for ri in 1:d.p.L
-        rpi = d.rowperm[ri]
-        row = d.rows[rpi]
-        if degree(row) != 1
-            error("row $ri does not have degree 1.")
-        end
-        ci = neighbours(row)[1]
-        if ci > d.p.K
+    for i in 1:d.p.L
+        rpi = d.rowperm[i]
+        cpi = d.colperm[i]
+        if cpi > d.p.K
             continue
         end
-        C[ci] = d.values[rpi]
+        C[cpi] = d.values[rpi]
     end
     return C
 end

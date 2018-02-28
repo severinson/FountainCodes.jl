@@ -68,6 +68,107 @@ function test_select_row_3()
 end
 @test test_select_row_3()
 
+function test_diagonalize_1()
+    # println()
+    p, d, C = init()
+    for i in 1:20
+        s = RaptorCodes.lt_generate(C, i, p)
+        RaptorCodes.add!(d, s)
+    end
+    RaptorCodes.diagonalize!(d)
+    for i in 1:d.num_decoded
+        rpi = d.rowperm[i]
+        cpi = d.colperm[i]
+        correct = R10Value(C[cpi].value)
+        row = d.rows[rpi]
+        for ci in 1:d.p.L
+            cpj = d.colperm[ci]
+            if RaptorCodes.getdense(d, rpi, cpj)
+                correct = correct + C[cpj].value
+            end
+        end
+        if d.values[rpi] != correct
+            error("diagonalization failed. values[$rpi] is $(d.values[rpi]) but should be $correct")
+        end
+    end
+    return true
+end
+@test test_diagonalize_1()
+
+function test_diagonalize_2()
+    p, d, C = init(1024)
+    for i in 1:1030
+        s = RaptorCodes.lt_generate(C, i, p)
+        RaptorCodes.add!(d, s)
+    end
+    RaptorCodes.diagonalize!(d)
+    for i in 1:d.num_decoded
+        rpi = d.rowperm[i]
+        cpi = d.colperm[i]
+        correct = R10Value(C[cpi].value)
+        row = d.rows[rpi]
+        for ci in 1:d.p.L
+            cpj = d.colperm[ci]
+            if RaptorCodes.getdense(d, rpi, cpj)
+                correct = correct + C[cpj].value
+            end
+        end
+        if d.values[rpi] != correct
+            error("diagonalization failed. values[$rpi] is $(d.values[rpi]) but should be $correct")
+        end
+    end
+    return true
+end
+@test test_diagonalize_2()
+
+function test_ge_1()
+    p, d, C = init()
+    for i in 1:20
+        s = RaptorCodes.lt_generate(C, i, p)
+        RaptorCodes.add!(d, s)
+    end
+    RaptorCodes.diagonalize!(d)
+    RaptorCodes.gaussian_elimination!(d)
+    for i in d.p.L-d.num_inactivated+1:d.p.L
+        rpi = d.rowperm[i]
+        cpi = d.colperm[i]
+        correct = R10Value(C[cpi].value)
+        if d.values[rpi] != correct
+            error("GE failed. values[$rpi] is $(d.values[rpi]) but should be $correct")
+        end
+        row = d.rows[rpi]
+        if sum(row.inactive) != 1
+            error("GE failed. row[$rpi]=$row does not sum to 1.")
+        end
+    end
+    return true
+end
+@test test_ge_1()
+
+function test_ge_2()
+    p, d, C = init(20)
+    for i in 1:25
+        s = RaptorCodes.lt_generate(C, i, p)
+        RaptorCodes.add!(d, s)
+    end
+    RaptorCodes.diagonalize!(d)
+    RaptorCodes.gaussian_elimination!(d)
+    for i in d.p.L-d.num_inactivated+1:d.p.L
+        rpi = d.rowperm[i]
+        cpi = d.colperm[i]
+        correct = R10Value(C[cpi].value)
+        if d.values[rpi] != correct
+            error("GE failed. values[$rpi] is $(d.values[rpi]) but should be $correct")
+        end
+        row = d.rows[rpi]
+        if sum(row.inactive) != 1
+            error("GE failed. row[$rpi]=$row does not sum to 1.")
+        end
+    end
+    return true
+end
+@test test_ge_2()
+
 function test_decoder_1()
     p, d, C = init()
     for i in 1:20
@@ -141,7 +242,7 @@ end
 @test test_decoder_4()
 
 function test_decoder_dummy_1()
-    # TODO: Not supported yete
+    # TODO: Not supported yet
     k = 20
     p = RaptorCodes.R10Parameters(k)
     d = RaptorCodes.Decoder{RBitVector,DummyValue}(p)

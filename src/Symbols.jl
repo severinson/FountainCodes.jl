@@ -14,6 +14,9 @@ function R10Value(x)
     unsafe_copy!(pointer(dst), src, sz)
     return R10Value(dst)
 end
+function R10Value(x::R10Value)
+    return R10Value(copy(x.bytes))
+end
 
 function Base.:+(a::R10Value, b::R10Value)
     length(a.bytes) > length(b.bytes) && throw(BoundsError(b, length(a.bytes)+1))

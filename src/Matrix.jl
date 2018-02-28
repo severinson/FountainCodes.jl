@@ -7,29 +7,47 @@ function has_neighbour(row::Row, i::Int) :: Bool
     return i in neighbours(row)
 end
 
+doc"in-place XOR of two bit-vectors."
+function xor!(a::BitVector, b::BitVector)
+    length(b) > length(a) && throw(BoundsError(a, length(a)+1))
+    @inbounds begin
+        @simd for i in 1:length(b.chunks)
+            a.chunks[i] = xor(a.chunks[i], b.chunks[i])
+        end
+    end
+    return a
+end
+
+doc"find all non-zero entries."
+function findall(b::BitVector)
+    i = findfirst(b)
+    v = Vector{Int}()
+    while i != 0 && i <= length(b)
+        push!(v, i)
+        i = findnext(b, i+1)
+    end
+    return v
+end
+
 doc"Sparse binary row."
 struct RBitVector <: Row
     active::Vector{Int}
-    inactive::Vector{Int}
-    function RBitVector(
-        active::Vector{Int},
-        inactive::Vector{Int},
-        sort=true)
-        if sort
-            return new(sort!(copy(active)), sort!(copy(inactive)))
-        else
-            return new(active, inactive)
-        end
+    inactive::BitVector
+    # TODO: remove inactive argument
+    function RBitVector(active::Vector{Int}, inactive::Vector{Int})
+        return new(sort!(copy(active)), BitVector(64))
     end
 end
 
 function RBitVector(s::R10Symbol)
+    if length(s.inactive_neighbours) != 0
+        error("there must be 0 inactive neighbours")
+    end
     return RBitVector(s.active_neighbours, s.inactive_neighbours)
 end
 
-
-@inline function degree(r::Row)
-    return active_degree(r) + inactive_degree(r)
+@inline function degree(r::RBitVector)
+    return active_degree(r)
 end
 
 @inline function active_degree(r::RBitVector)
@@ -37,7 +55,7 @@ end
 end
 
 @inline function inactive_degree(r::RBitVector)
-    return length(r.inactive)
+    return sum(r.inactive)
 end
 
 @inline function active_neighbours(r::RBitVector)
@@ -45,7 +63,7 @@ end
 end
 
 @inline function inactive_neighbours(r::RBitVector)
-    return r.inactive
+    return findall(r.inactive)
 end
 
 @inline function neighbours(r::RBitVector)
@@ -86,11 +104,11 @@ function listxor{T}(l1::Vector{T}, l2::Vector{T}) :: Vector{T}
     return l
 end
 
-function Base.xor(a::RBitVector, b::RBitVector) :: RBitVector
-    active = listxor(a.active, b.active)
-    inactive = listxor(a.inactive, b.inactive)
-    return RBitVector(active, inactive, false)
-end
+# function Base.xor(a::RBitVector, b::RBitVector) :: RBitVector
+#     active = b.active
+#     inactive = listxor(a.inactive, b.inactive)
+#     return RBitVector(active, inactive, false)
+# end
 
 doc"sparse binary row based on dense bit vectors."
 struct BlockBitRow <: Row
