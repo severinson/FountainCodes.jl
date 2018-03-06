@@ -33,8 +33,7 @@ doc"Sparse binary row."
 struct RBitVector <: Row
     active::Vector{Int}
     inactive::BitVector
-    # TODO: remove inactive argument
-    function RBitVector(active::Vector{Int}, inactive::Vector{Int})
+    function RBitVector(active::Vector{Int})
         return new(sort!(copy(active)), BitVector(64))
     end
 end
@@ -43,7 +42,7 @@ function RBitVector(s::R10Symbol)
     if length(s.inactive_neighbours) != 0
         error("there must be 0 inactive neighbours")
     end
-    return RBitVector(s.active_neighbours, s.inactive_neighbours)
+    return RBitVector(s.active_neighbours)
 end
 
 @inline function degree(r::RBitVector)
