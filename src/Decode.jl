@@ -78,7 +78,7 @@ function setdense!(d::Decoder, rpi::Int, cpi::Int, v::Bool)
     ci = d.colperminv[cpi]
     ui = _ci2ui(d, ci)
     upi = d.uperm[ui]
-    row.inactive[upi] = v
+    return setdense!(row, upi, v)
 end
 
 doc"get an element from the dense part of the matrix."
@@ -90,7 +90,7 @@ function getdense(d::Decoder, rpi::Int, cpi::Int) :: Bool
         return false
     end
     upi = d.uperm[ui]
-    return row.inactive[upi]
+    return getdense(row, upi)
 end
 
 doc"Number of remaining source symbols to process in stage 1."
@@ -278,9 +278,9 @@ doc"subtract rows[i] from rows[j]."
 function subtract!(d::Decoder{RBitVector}, i::Int, j::Int)
     row1 = d.rows[i]
     row2 = d.rows[j]
-    xor!(row2.inactive, row1.inactive)
+    d.rows[j] = subtract!(row2, row1)
     d.values[j] = d.values[i] + d.values[j]
-    weight = sum(row1.inactive)
+    weight = inactive_degree(row1)
     push!(d.metrics, "decoding_additions", weight+1)
     push!(d.metrics, "decoding_multiplications", weight+1)
     push!(d.metrics, "rowops", 1)
@@ -400,7 +400,7 @@ function gaussian_elimination!(d::Decoder)
     # add all remaining rows to the priority queue
     for ri in d.num_decoded+1:length(d.rows)
         rpi = d.rowperm[ri]
-        d.pq[rpi] = active_degree(d.rows[rpi])
+        d.pq[rpi] = degree(d.rows[rpi])
     end
 
     for i in 1:d.num_inactivated
@@ -437,7 +437,7 @@ function gaussian_elimination!(d::Decoder)
 
         # swap any non-zero entry into the i-th column of u_lower
         row = d.rows[rpi]
-        upi = findfirst(row.inactive)
+        upi = getinactive(row)
         ui = d.uperminv[upi]
         cj = _ui2ci(d, ui)
         uj = _ci2ui(d, ci)
