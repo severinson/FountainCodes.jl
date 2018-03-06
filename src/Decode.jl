@@ -111,9 +111,6 @@ function add!{RT,VT}(d::Decoder{RT,VT}, s::RT, v::VT)
     for j in s.active
         push!(d.columns[j], i)
     end
-    if inactive_degree(s) != 0
-        error("cannot add rows with inactivated columns")
-    end
 
     # a priority queue is used to select rows during decoding. rows have
     # priority equal to its number of non-zero entries in V plus deg/L. adding

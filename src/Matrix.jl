@@ -39,9 +39,6 @@ struct RBitVector <: Row
 end
 
 function RBitVector(s::R10Symbol)
-    if length(s.inactive_neighbours) != 0
-        error("there must be 0 inactive neighbours")
-    end
     return RBitVector(s.active_neighbours)
 end
 
