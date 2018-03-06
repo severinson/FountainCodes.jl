@@ -12,18 +12,6 @@ function init(k=10)
     return p, d, C
 end
 
-function test_active_degree()
-    p, d, C = init()
-    s = RaptorCodes.lt_generate(C, 1, p)
-    d = RaptorCodes.active_degree(s)
-    d_correct = length(s.active_neighbours)
-    if d != d_correct
-        error("active_degree($s) is $d. should be length $d_correct")
-    end
-    return true
-end
-@test test_active_degree()
-
 function test_select_row_1()
     p, d, C = init()
     RaptorCodes.add!(d, R10Symbol(1, R10Value(0), [1]))

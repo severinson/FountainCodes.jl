@@ -12,10 +12,10 @@ function test_encode(k=10)
         end
     end
     s = RaptorCodes.lt_generate(C, 1, p)
-    # s_correct = RaptorCodes.R10Symbol(1, 10, -1, [2, 18], Array{Int,1}())
-    # if s !== s_correct
-    #     error("incorrect LT symbol. is $s. should be $s_correct.")
-    # end
+    deg = RaptorCodes.degree(s)
+    if deg != 2
+        error("LT degree is $deg bout should be 2")
+    end
     return true
 end
 @test test_encode()

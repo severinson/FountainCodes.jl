@@ -43,7 +43,7 @@ function Base.:(==)(a::DummyValue, b::DummyValue)
     return true
 end
 
-doc"Intermediate code symbol."
+doc"intermediate code symbol."
 struct ISymbol{VT<:Value} <: CodeSymbol
     value::VT
     neighbours::Set{Int}
@@ -55,7 +55,7 @@ function ISymbol{VT<:Value}(value::VT)
     ISymbol(value, Set{Int}())
 end
 
-doc"Outer code symbol."
+doc"outer code symbol."
 struct R10Symbol{VT<:Value} <: CodeSymbol
     esi::Int # encoded symbol id
     value::VT # value of the symbol
@@ -80,37 +80,12 @@ function R10Symbol{VT<:Value}(esi::Int, value::VT, neighbours::Vector{Int})
     R10Symbol(esi, value, -1, neighbours, Array{Int,1}())
 end
 
-doc"Number of neighbouring outer coded symbols."
+doc"number of neighbouring outer coded symbols."
 function degree(is::ISymbol)
     return length(is.neighbours)
 end
 
-doc"Number of neighbouring intermediate symbols."
+doc"number of neighbouring intermediate symbols."
 function degree(cs::R10Symbol)
-    return length(cs.active_neighbours) + length(cs.inactive_neighbours)
-end
-
-doc"Neighbouring outer code symbols."
-function neighbours(is::ISymbol)
-    return collect(is.neighbours)
-end
-
-doc"Neighbouring intermediate symbols."
-function neighbours(cs::R10Symbol)
-    return append!(append!([], cs.active_neighbours), cs.inactive_neighbours)
-end
-
-doc"Number of non-zero entries in V."
-function active_degree(cs::R10Symbol)
     return length(cs.active_neighbours)
-end
-
-doc"Number of non-zero entries in U."
-function inactive_degree(cs::R10Symbol)
-    return length(cs.inactive_neighbours)
-end
-
-doc"Neighbours that are not decoded or inactivated."
-function active_neighbours(cs::R10Symbol)
-    return cs.active_neighbours
 end
