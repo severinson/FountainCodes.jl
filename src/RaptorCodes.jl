@@ -14,7 +14,6 @@ abstract type Row end
 
 include("Numinv.jl")
 include("Soliton.jl")
-include("SparseBitVector.jl")
 include("Symbols.jl")
 include("Gray.jl")
 include("R10Tables.jl")
