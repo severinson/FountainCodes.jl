@@ -47,9 +47,6 @@ doc"intermediate code symbol."
 struct ISymbol{VT<:Value} <: CodeSymbol
     value::VT
     neighbours::Set{Int}
-    # function ISymbol{VT}(value::R10Value, neighbours::Set{Int}) where {VT<:Value}
-    #     new(value, neighbours)
-    # end
 end
 function ISymbol{VT<:Value}(value::VT)
     ISymbol(value, Set{Int}())
