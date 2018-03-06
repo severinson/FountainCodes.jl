@@ -58,21 +58,6 @@ struct R10Symbol{VT<:Value} <: CodeSymbol
     value::VT # value of the symbol
     active_neighbours::Vector{Int}
 end
-# function R10Symbol{VT<:Value}(
-#     esi::Int,
-#     value::VT,
-#     active_neighbours::Vector{Int})
-#     return R10Symbol(
-#         esi,
-#         value,
-#         sort!(copy(active_neighbours)),
-#         sort!(copy(inactive_neighbours)),
-#     )
-# end
-
-# function R10Symbol{VT<:Value}(esi::Int, value::VT, neighbours::Vector{Int})
-#     R10Symbol(esi, value, neighbours)
-# end
 
 doc"number of neighbouring outer coded symbols."
 function degree(is::ISymbol)
