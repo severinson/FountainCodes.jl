@@ -56,7 +56,7 @@ doc"outer code symbol."
 struct R10Symbol{VT<:Value} <: CodeSymbol
     esi::Int # encoded symbol id
     value::VT # value of the symbol
-    active_neighbours::Vector{Int}
+    neighbours::Vector{Int}
 end
 
 doc"number of neighbouring outer coded symbols."
@@ -66,5 +66,5 @@ end
 
 doc"number of neighbouring intermediate symbols."
 function degree(cs::R10Symbol)
-    return length(cs.active_neighbours)
+    return length(cs.neighbours)
 end

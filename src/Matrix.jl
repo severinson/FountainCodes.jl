@@ -39,7 +39,7 @@ struct RBitVector <: Row
 end
 
 function RBitVector(s::R10Symbol)
-    return RBitVector(s.active_neighbours)
+    return RBitVector(s.neighbours)
 end
 
 @inline function degree(r::RBitVector)
