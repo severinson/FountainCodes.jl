@@ -68,37 +68,3 @@ end
 @inline function neighbours(r::RBitVector)
     return append!(copy(r.active), r.inactive)
 end
-
-doc"XOR of 2 sorted lists."
-function listxor{T}(l1::Vector{T}, l2::Vector{T}) :: Vector{T}
-    i = 1
-    j = 1
-    il, jl = length(l1), length(l2)
-    l = similar(l1, 0)
-    @inbounds begin
-        while i <= il && j <= jl
-            u, v = l1[i], l2[j]
-            if u < v
-                push!(l, u) # TODO: slow
-                i += 1
-            elseif u > v
-                push!(l, v)
-                j += 1
-            else
-                i += 1
-                j += 1
-            end
-        end
-        while i <= il
-            u = l1[i]
-            push!(l, u) # TODO: slow
-            i += 1
-        end
-        while j <= jl
-            v = l2[j]
-            push!(l, v)
-            j += 1
-        end
-    end
-    return l
-end
