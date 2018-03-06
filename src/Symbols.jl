@@ -56,25 +56,23 @@ doc"outer code symbol."
 struct R10Symbol{VT<:Value} <: CodeSymbol
     esi::Int # encoded symbol id
     value::VT # value of the symbol
-    primary_neighbour::Int
     active_neighbours::Vector{Int}
     inactive_neighbours::Vector{Int}
 end
-function R10Symbol{VT<:Value}(
-    esi::Int, value::VT,
-    primary_neighbour::Int,
-    active_neighbours::Vector{Int})
-    return R10Symbol(
-        esi,
-        value,
-        primary_neighbour,
-        sort!(copy(active_neighbours)),
-        sort!(copy(inactive_neighbours)),
-    )
-end
+# function R10Symbol{VT<:Value}(
+#     esi::Int,
+#     value::VT,
+#     active_neighbours::Vector{Int})
+#     return R10Symbol(
+#         esi,
+#         value,
+#         sort!(copy(active_neighbours)),
+#         sort!(copy(inactive_neighbours)),
+#     )
+# end
 
 function R10Symbol{VT<:Value}(esi::Int, value::VT, neighbours::Vector{Int})
-    R10Symbol(esi, value, -1, neighbours, Array{Int,1}())
+    R10Symbol(esi, value, neighbours, Array{Int,1}())
 end
 
 doc"number of neighbouring outer coded symbols."
