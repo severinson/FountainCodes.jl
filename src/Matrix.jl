@@ -31,8 +31,8 @@ end
 
 doc"Sparse binary row."
 struct RBitVector <: Row
-    active::Vector{Int}
-    inactive::BitVector
+    active::Vector{Int} # sorted list of initial non-zero indices.
+    inactive::BitVector # dense binary part
     function RBitVector(active::Vector{Int})
         return new(sort!(copy(active)), BitVector(64))
     end
