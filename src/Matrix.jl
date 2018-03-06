@@ -31,7 +31,7 @@ end
 
 doc"Sparse binary row."
 struct RBitVector <: Row
-    active::Vector{Int} # sorted list of initial non-zero indices.
+    indices::Vector{Int} # sorted list of initial non-zero indices.
     inactive::BitVector # dense binary part
     function RBitVector(active::Vector{Int})
         return new(sort!(copy(active)), BitVector(64))
@@ -47,21 +47,17 @@ end
 end
 
 @inline function active_degree(r::RBitVector)
-    return length(r.active)
+    return length(r.indices)
 end
 
 @inline function inactive_degree(r::RBitVector)
     return sum(r.inactive)
 end
 
-@inline function active_neighbours(r::RBitVector)
-    return r.active
+@inline function neighbours(r::RBitVector)
+    return r.indices
 end
 
 @inline function inactive_neighbours(r::RBitVector)
     return findall(r.inactive)
-end
-
-@inline function neighbours(r::RBitVector)
-    return append!(copy(r.active), r.inactive)
 end

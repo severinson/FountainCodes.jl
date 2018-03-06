@@ -108,7 +108,7 @@ function add!{RT,VT}(d::Decoder{RT,VT}, s::RT, v::VT)
     i = length(d.rowperm) + 1
     push!(d.rowperm, i)
     push!(d.rowperminv, i)
-    for j in s.active
+    for j in neighbours(s)
         push!(d.columns[j], i)
     end
 
@@ -167,7 +167,7 @@ end
 
 doc"zero out any elements of rows[rpi] below the diagonal"
 function zerodiag!(d::Decoder, rpi::Int) :: Int
-    for cpi in active_neighbours(d.rows[rpi])
+    for cpi in neighbours(d.rows[rpi])
         ci = d.colperminv[cpi]
         if ci < d.num_decoded+1 && ci <= d.p.L-d.num_inactivated
             rpj = d.rowperm[ci]
@@ -209,7 +209,7 @@ function select_row_2(d::Decoder) :: Int
     for (edge, prio) in zip(edges, priorities)
         row = d.rows[edge]
         i = 1
-        for cpi in active_neighbours(row)
+        for cpi in neighbours(row)
             ci = d.colperminv[cpi]
             if (d.num_decoded < ci <= d.p.L-d.num_inactivated)
                 n[i] = cpi
@@ -364,7 +364,7 @@ function diagonalize!(d::Decoder)
 
         # swap any non-zero entry in V into the first column of V
         row = d.rows[d.rowperm[d.num_decoded+1]]
-        active = active_neighbours(row)
+        active = neighbours(row)
         i = 1
         cpi = active[i]
         ci = d.colperminv[cpi]
