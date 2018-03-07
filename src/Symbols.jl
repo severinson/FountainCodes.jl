@@ -4,6 +4,9 @@ const F256 = UInt8
 
 doc"convert an object to a vector of bytes"
 function asbytes(x) :: Vector{F256}
+    if !isbits(x)
+        error("$x is not a plain data type and cannot be converted to bytes")
+    end
     sz = sizeof(x)
     dst = Vector{F256}(sz)
     src = convert(Ptr{F256}, pointer_from_objref(x))
