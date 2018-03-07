@@ -1,4 +1,4 @@
-using Primes
+using Primes, Nulls
 
 export R10Parameters
 
@@ -43,50 +43,62 @@ end
 Base.repr(p::R10Parameters) = "R10Parameters($(p.K))"
 
 doc"Generate R10 precode LDPC symbols in-place at indices (K+1) to (K+S)."
-function r10_ldpc_encode!{VT<:Value}(C::Vector{ISymbol{VT}}, p::R10Parameters)
+function r10_ldpc_encode!(C::Vector, p::R10Parameters, neighbours::Union{Vector{Set{Int}},Null}=null)
     if length(C) != p.L
         error("C must have length p.L = $p.L")
     end
-    neighbours = [Set{Int}() for _ in 1:p.S]
-    values = [VT(0) for _ in 1:p.S]
-    for i in 0:p.K-1
-        v = C[i+1].value
-        a = 1 + Int64((floor(i/p.S) % (p.S-1)))
-        b = i % p.S
-        push!(neighbours[b+1], i+1)
-        values[b+1] = values[b+1] + v
-        b = (b + a) % p.S
-        push!(neighbours[b+1], i+1)
-        values[b+1] = values[b+1] + v
-        b = (b + a) % p.S
-        push!(neighbours[b+1], i+1)
-        values[b+1] = values[b+1] + v
+    if !(neighbours isa Null) && length(neighbours) != p.L
+        error("neighbours must have length p.L = $p.L")
     end
     for i in 1:p.S
-        C[p.K+i] = ISymbol(values[i], neighbours[i])
+        C[p.K+i] = zero(C[1])
     end
+    for i in 0:p.K-1
+        v = C[i+1]
+        a = 1 + Int64((floor(i/p.S) % (p.S-1)))
+        b = i % p.S
+        C[p.K+b+1] = C[p.K+b+1] + v
+        if !(neighbours isa Null)
+            push!(neighbours[p.K+b+1], i+1)
+        end
+        b = (b + a) % p.S
+        C[p.K+b+1] = C[p.K+b+1] + v
+        if !(neighbours isa Null)
+            push!(neighbours[p.K+b+1], i+1)
+        end
+        b = (b + a) % p.S
+        C[p.K+b+1] = C[p.K+b+1] + v
+        if !(neighbours isa Null)
+            push!(neighbours[p.K+b+1], i+1)
+        end
+    end
+    return C
 end
 
 doc"Generate R10 precode HDPC symbols in-place at indices (K+S+1) to (K+S+H)."
-function r10_hdpc_encode!{VT<:Value}(C::Vector{ISymbol{VT}}, p::R10Parameters)
+function r10_hdpc_encode!(C::Vector, p::R10Parameters, neighbours::Union{Vector{Set{Int}},Null}=null)
     if length(C) != p.L
         error("C must have length p.L = $p.L")
     end
-    neighbours = [Set{Int}() for _ in 1:p.H]
-    values = [VT(0) for _ in 1:p.H]
+    if !(neighbours isa Null) && length(neighbours) != p.L
+        error("neighbours must have length p.L = $p.L")
+    end
+    for i in 1:p.H
+        C[p.K+p.S+i] = zero(C[1])
+    end
     for h in 0:p.H-1
         j = 0
-        for g in gray(p.K+p.S, p.Hp)
-            if g & (1 << h) != 0
-                push!(neighbours[h+1], j+1)
-                values[h+1] = values[h+1] + C[j+1].value
+        for g in gray(p.K+p.S+1, p.Hp)
+            if !iszero(g & (1 << h))
+                C[p.K+p.S+h+1] = C[p.K+p.S+h+1] + C[j+1]
+                if !(neighbours isa Null)
+                    push!(neighbours[p.K+p.S+h+1], j+1)
+                end
             end
             j += 1
         end
     end
-    for i in 1:p.H
-        C[p.K+p.S+i] = ISymbol(values[i], neighbours[i])
-    end
+    return C
 end
 
 doc"R10 standardized rand function."
@@ -135,21 +147,21 @@ function trip(X::Int, p::R10Parameters)
 end
 
 doc"Generate an LT symbol from the intermediate symbols."
-function lt_generate{VT<:Value}(C::Vector{ISymbol{VT}}, X::Int, p::Parameters)
+function lt_generate(C::Vector, X::Int, p::Parameters)
     d, a, b = trip(X, p)
     while (b >= p.L)
         b = (b + a) % p.Lp
     end
     neighbours = Vector{Int}(min(d, p.L))
     neighbours[1] = b+1
-    value = C[b+1].value
+    value = C[b+1]
     for j in 1:min(d-1, p.L-1)
         b = (b + a) % p.Lp
         while (b >= p.L)
             b = (b + a) % p.Lp
         end
         neighbours[j+1] = b+1
-        value = value + C[b+1].value
+        value = value + C[b+1]
     end
     return R10Symbol(X, value, neighbours)
 end
