@@ -5,9 +5,9 @@
 using DataStructures
 
 doc"R10-compliant decoder."
-mutable struct Decoder{RT<:Row,VT<:Value}
+mutable struct Decoder{RT<:Row,VT}
     p::Parameters
-    values::Vector{VT}
+    values::Vector{Vector{VT}} # each intermediate symbol is an array of type VT
     columns::Vector{Vector{Int}}
     rows::Vector{RT}
     colperm::Vector{Int} # maps column indices to their respective objects
@@ -24,7 +24,7 @@ mutable struct Decoder{RT<:Row,VT<:Value}
     function Decoder{RT,VT}(p::Parameters) where RT<:Row where VT
         d = new(
             p,
-            Vector{VT}(0),
+            Vector{Vector{VT}}(0),
             [Vector{Int}() for _ in 1:p.L],
             Vector{RT}(0),
             Vector(1:p.L),
@@ -49,14 +49,17 @@ end
 
 doc"R10 decoder constructor. Automatically adds constraint symbols."
 function Decoder(p::R10Parameters)
-    d = Decoder{RBitVector,R10Value}(p)
-    C = [ISymbol(R10Value(0)) for _ in 1:p.L]
-    r10_ldpc_encode!(C, p)
-    r10_hdpc_encode!(C, p)
+    d = Decoder{RBitVector,F256}(p)
+    C = [Vector{F256}() for _ in 1:p.L]
+    neighbours = [Set{Int}() for _ in 1:p.L]
+    r10_ldpc_encode!(C, p, neighbours)
+    r10_hdpc_encode!(C, p, neighbours)
     for i in (p.K+1):(p.K+p.S+p.H)
-        is = C[i]
-        neighbours = push!([v for v in is.neighbours], i)
-        cs = R10Symbol(-1, R10Value(0), neighbours)
+        cs = R10Symbol(
+            -1,
+            Vector{F256}(),
+            sort!(push!(collect(neighbours[i]), i)),
+        )
         add!(d, cs)
     end
     return d
@@ -64,7 +67,7 @@ end
 
 doc"Default LT decoder constructor."
 function Decoder(p::LTParameters)
-    return Decoder{RBitVector,R10Value}(p)
+    return Decoder{RBitVector,F256}(p)
 end
 
 # the inactivated part is stored as dense bit vectors. these are indexed from
@@ -99,7 +102,7 @@ function num_remaining(d::Decoder)
 end
 
 doc"add a row to the decoder."
-function add!{RT,VT}(d::Decoder{RT,VT}, s::RT, v::VT)
+function add!{RT,VT}(d::Decoder{RT,VT}, s::RT, v::Vector{VT})
     if d.status != ""
         error("cannot add more symbols after decoding has failed")
     end
@@ -279,7 +282,17 @@ function subtract!(d::Decoder{RBitVector}, i::Int, j::Int)
     row1 = d.rows[i]
     row2 = d.rows[j]
     d.rows[j] = subtract!(row2, row1)
-    d.values[j] = d.values[i] + d.values[j]
+
+    # zero values are only allocated when necessary
+    if !iszero(d.values[i])
+        if !iszero(d.values[j])
+            d.values[j] = d.values[i] + d.values[j]
+        else
+            d.values[j] = copy(d.values[i])
+        end
+    end
+
+    # track metrics for later analysis
     weight = inactive_degree(row1)
     push!(d.metrics, "decoding_additions", weight+1)
     push!(d.metrics, "decoding_multiplications", weight+1)
@@ -475,7 +488,7 @@ end
 
 doc"return the decoded source symbols."
 function get_source{RT,VT}(d::Decoder{RT,VT})
-    C = Vector{VT}(d.p.K)
+    C = Vector{Vector{VT}}(d.p.K)
     for i in 1:d.p.L
         rpi = d.rowperm[i]
         cpi = d.colperm[i]
@@ -506,5 +519,5 @@ function decode!{RT,VT}(d::Decoder{RT,VT}, raise_on_error=true)
             rethrow(err)
         end
     end
-    Vector{VT}(d.p.K)
+    Vector{Vector{VT}}(d.p.K)
 end

@@ -93,8 +93,6 @@ doc"sparse binary/q-ary row"
 struct RqRow <: Row
     indices::Vector{Int} # sorted list of initial non-zero indices.
     values::Vector{UInt8} # initial non-zero values for indices
-    # binary::Union{BitVector,null} # dense binary part
-    # qary::Union{Vector{UInt8},null} # dense q-ary part
     dense::Union{BitVector,Vector{UInt8},Null} # dense part
     function RqRow(indices::Vector{Int}, values::Vector{Int})
         p = sortperm(indices)

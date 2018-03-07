@@ -4,9 +4,9 @@ function init(k=10)
     dd = RaptorCodes.Soliton(k, Int(round(k*2/3)), 0.01)
     p = RaptorCodes.LTParameters(k, dd)
     d = RaptorCodes.Decoder(p)
-    C = Vector{RaptorCodes.ISymbol{R10Value}}(p.L)
+    C = Vector{Vector{F256}}(p.L)
     for i = 1:p.K
-        C[i] = RaptorCodes.ISymbol(R10Value(i), Set([i]))
+        C[i] = Vector{F256}([i % 256])
     end
     return p, d, C
 end
@@ -31,10 +31,8 @@ function test_decode_1()
     end
     output = RaptorCodes.decode!(d)
     for i in 1:p.K
-        if output[i] != C[i].value
-            error(
-                "decoding failure. source[$i] is $(output[i]). should be $(C[i].value)."
-            )
+        if output[i] != C[i]
+            error("decoding failure. source[$i] is $(output[i]). should be $(C[i]).")
         end
     end
     return true
@@ -49,10 +47,8 @@ function test_decoder_2()
     end
     output = RaptorCodes.decode!(d)
     for i in 1:p.K
-        if output[i] != C[i].value
-            error(
-                "decoding failure. source[$i] is $(output[i]). should be $(C[i].value)."
-            )
+        if output[i] != C[i]
+            error("decoding failure. source[$i] is $(output[i]). should be $(C[i]).")
         end
     end
     return true

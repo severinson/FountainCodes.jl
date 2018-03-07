@@ -1,10 +1,10 @@
 # simulate decoding performance
 using DataStructures, DataFrames, CSV
 
-struct Simulation{VT<:RaptorCodes.Value}
+struct Simulation{VT}
     p::RaptorCodes.Parameters
     overhead::Int # absolute reception overhead
-    C::Vector{RaptorCodes.ISymbol{VT}} # intermediate symbols
+    C::Vector{Vector{VT}} # intermediate symbols
     n::Int # number of samples
 end
 
@@ -14,9 +14,9 @@ end
 
 doc"R10 code intermediate symbols"
 function intermediate(p::R10Parameters)
-    C = Vector{ISymbol{R10Value}}(p.L)
+    C = Vector{Vector{F256}}(p.L)
     for i = 1:p.K
-        C[i] = ISymbol(R10Value(i), Set([i]))
+        C[i] = Vector{F256}()
     end
     r10_ldpc_encode!(C, p)
     r10_hdpc_encode!(C, p)
@@ -25,9 +25,9 @@ end
 
 doc"LT code intermediate symbols"
 function intermediate(p::LTParameters)
-    C = Vector{ISymbol{R10Value}}(p.L)
+    C = Vector{Vector{F256}}(p.L)
     for i = 1:p.K
-        C[i] = ISymbol(R10Value(i), Set([i]))
+        C[i] = Vector{F256}()
     end
     return C
 end
