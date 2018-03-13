@@ -22,8 +22,14 @@ function asbytes(x) :: Vector{GF256}
     return dst
 end
 
+doc"addition over GF256 according to rfc6330.."
 function Base.:+(a::GF256, b::GF256)
     return xor(a, b)
+end
+
+doc"addition over GF256 according to rfc6330."
+function Base.:*(a::GF256, b::GF256)
+    return RQ_OCT_EXP[RQ_OCT_LOG[a+1] + RQ_OCT_LOG[b+1]]
 end
 
 doc"outer code symbol."
