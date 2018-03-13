@@ -3,12 +3,12 @@ using Primes, Distributions
 export LTParameters, QLTParameters
 
 doc"LT code parameters."
-struct LTParameters{T <: Sampleable{Univariate, Discrete}} <: Parameters
+struct LTParameters{T <: Sampleable{Univariate, Discrete}} <: FountainCode
     K::Integer # number of source symbols
     L::Integer # number of intermediate symbols
     Lp::Integer
     dd::T # degree distribution
-    function LTParameters{T}(K::Integer, dd::T) where T <: Sampleable{Univariate, Discrete}
+    function LTParameters{T}(K::Integer, dd::T) where T
         Lp = Primes.nextprime(K)
         new(K, K, Lp, dd)
     end
@@ -20,7 +20,7 @@ Base.repr(p::LTParameters) = "LTParameters($(p.K), $(repr(p.dd)))"
 
 doc"q-ary LT code parameters."
 struct QLTParameters{DT <: Sampleable{Univariate, Discrete},
-                     CT <: Sampleable{Univariate}} <: Parameters
+                     CT <: Sampleable{Univariate}} <: FountainCode
     K::Integer # number of source symbols
     L::Integer # number of intermediate symbols
     Lp::Integer
@@ -38,17 +38,12 @@ function QLTParameters(K::Integer, dd::DT, cd::CT) where {DT <: Sampleable{Univa
 end
 
 doc"Map a number 0 <= v <= 1 to a degree."
-function deg(v::Real, p::LTParameters) :: Int
+function deg(v::Real, p::FountainCode) :: Int
     return quantile(p.dd, v)
-end
-
-doc"Map a number 0 <= v <= 1 to a degree."
-function deg(v::Real, p::QLTParameters) :: Int
-    return quantile(p.dd, v)
-end
+end 
 
 doc"Maps an encoding symbol ID X to a triple (d, a, b)"
-function trip(X::Int, p::Parameters)
+function trip(X::Int, p::FountainCode)
     Q = 65521 # the largest prime smaller than 2^16
     JK = J[p.K+1]
     A = (53591 + JK*997) % Q

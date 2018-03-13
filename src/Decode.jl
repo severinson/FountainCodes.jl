@@ -6,7 +6,7 @@ using DataStructures
 
 doc"R10-compliant decoder."
 mutable struct Decoder{RT<:Row,VT}
-    p::Parameters
+    p::Code
     values::Vector{VT} # source values may be of any type, including arrays
     columns::Vector{Vector{Int}}
     rows::Vector{RT}
@@ -21,7 +21,7 @@ mutable struct Decoder{RT<:Row,VT}
     num_inactivated::Int # denoted by u in the R10 spec.
     metrics::DataStructures.Accumulator
     status::String
-    function Decoder{RT,VT}(p::Parameters) where RT<:Row where VT
+    function Decoder{RT,VT}(p::Code) where RT<:Row where VT
         d = new(
             p,
             Vector{Vector{VT}}(0),
@@ -66,12 +66,7 @@ function Decoder(p::R10Parameters)
 end
 
 doc"Default LT decoder constructor."
-function Decoder(p::LTParameters)
-    return Decoder{RBitVector,Vector{F256}}(p)
-end
-
-doc"Default QLT decoder constructor."
-function Decoder(p::QLTParameters)
+function Decoder(p::FountainCode)
     return Decoder{RBitVector,Vector{F256}}(p)
 end
 
@@ -169,7 +164,7 @@ doc"Swap rows ri and rj of the constraint matrix."
     d.rowperminv[d.rowperm[rj]] = rj
 end
 
-function priority(row::Row, p::Parameters) :: Float64
+function priority(row::Row) :: Float64
     return degree(row)
 end
 

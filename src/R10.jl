@@ -10,7 +10,7 @@ export R10Parameters
 # - Call r10_lt_encode with C as its argument to generate an LT symbol.
 
 doc"R10 parameters container."
-struct R10Parameters <: Parameters
+struct R10Parameters <: RaptorCode
     K::Integer # number of source symbols
     S::Integer # number of LDPC symbols
     H::Integer # number of HDPC symbols
@@ -147,7 +147,7 @@ function trip(X::Int, p::R10Parameters)
 end
 
 doc"Generate an LT symbol from the intermediate symbols."
-function lt_generate(C::Vector, X::Int, p::Parameters)
+function lt_generate(C::Vector, X::Int, p::Code)
     d, a, b = trip(X, p)
     while (b >= p.L)
         b = (b + a) % p.Lp

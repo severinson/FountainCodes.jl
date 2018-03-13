@@ -2,7 +2,7 @@
 using DataStructures, DataFrames, CSV
 
 struct Simulation{VT}
-    p::RaptorCodes.Parameters
+    p::RaptorCodes.Code
     overhead::Int # absolute reception overhead
     C::Vector{Vector{VT}} # intermediate symbols
     n::Int # number of samples

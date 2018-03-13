@@ -1,7 +1,8 @@
 module RaptorCodes
 
-doc"parameter container"
-abstract type Parameters end
+abstract type Code end
+abstract type RaptorCode <: Code end
+abstract type FountainCode <: Code end
 
 doc"symbol value"
 abstract type Value end
