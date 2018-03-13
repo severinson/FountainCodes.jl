@@ -37,14 +37,18 @@ function QLTParameters(K::Integer, dd::DT, cd::CT) where {DT <: Sampleable{Univa
     QLTParameters{DT, CT}(K, dd, cd)
 end
 
+function QLTParameters(K::Integer, dd::DT) where DT <: Sampleable{Univariate, Discrete}
+    QLTParameters{DT, DiscreteUniform}(K, dd, DiscreteUniform(0, 255))
+end
+
 doc"Map a number 0 <= v <= 1 to a degree."
 function deg(v::Real, p::LTCode) :: Int
     return quantile(p.dd, v)
 end
 
 doc"Map a number 0 <= v <= 1 to a coefficient."
-function coefficient(p::Code{NonBinary})
-    return rand(p.cd)
+function coefficient(p::QLTParameters)
+    return GF256(rand(p.cd))
 end
 
 doc"Maps an encoding symbol ID X to a triple (d, a, b)"
