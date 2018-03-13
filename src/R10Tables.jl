@@ -112,7 +112,7 @@ const V1 = [
     4135048896
 ]
 
-doc"systematic indices used to generate encoded symbol identifiers"
+doc"systematic indices used to generate encoded symbol identifiers."
 const J = [
     18, 14, 61, 46, 14, 22, 20, 40, 48, 1, 29, 40, 43, 46, 18, 8, 20, 2,
     61, 26, 13, 29, 36, 19, 58, 5, 58, 0, 54, 56, 24, 14, 5, 67, 39, 31,
