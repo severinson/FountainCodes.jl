@@ -37,7 +37,7 @@ end
 Base.repr(s::Soliton) = "Soliton($(s.K), $(s.mode), $(s.delta))"
 
 "Robust component of the Soliton distribution."
-function tau(K::Int64, mode::Int, delta::Float64, R::Float64, i::Int64)
+function tau(K::Int, mode::Int, delta::Real, R::Real, i::Int)
     if i < mode
         return 1 / (i * mode)
     elseif i == mode
