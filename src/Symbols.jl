@@ -1,6 +1,14 @@
 export R10Value, R10Symbol, F256
 
+# TODO: this method overrides the default behavior of UInt8
 const F256 = UInt8
+# primitive type F256 <: Unsigned 8 end
+# struct F256
+#     x::UInt8
+#     function F256(v)
+#         return new(UInt8(v))
+#     end
+# end
 
 doc"convert an object to a vector of bytes"
 function asbytes(x) :: Vector{F256}
