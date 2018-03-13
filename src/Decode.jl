@@ -70,6 +70,11 @@ function Decoder(p::LTParameters)
     return Decoder{RBitVector,Vector{F256}}(p)
 end
 
+doc"Default QLT decoder constructor."
+function Decoder(p::QLTParameters)
+    return Decoder{RBitVector,Vector{F256}}(p)
+end
+
 # the inactivated part is stored as dense bit vectors. these are indexed from
 # the right of the matrix.
 @inline _ci2ui(d::Decoder, ci::Int) = d.p.L-ci+1
