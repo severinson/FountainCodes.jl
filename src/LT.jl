@@ -55,3 +55,23 @@ function trip(X::Int, p::FountainCode)
     b = r10_rand(Y, 2, p.Lp)
     return d, a, b
 end
+
+doc"Generate an LT symbol from the intermediate symbols."
+function lt_generate(C::Vector, X::Int, p::FountainCode{Binary})
+    d, a, b = trip(X, p)
+    while (b >= p.L)
+        b = (b + a) % p.Lp
+    end
+    neighbours = Vector{Int}(min(d, p.L))
+    neighbours[1] = b+1
+    value = C[b+1]
+    for j in 1:min(d-1, p.L-1)
+        b = (b + a) % p.Lp
+        while (b >= p.L)
+            b = (b + a) % p.Lp
+        end
+        neighbours[j+1] = b+1
+        value = value + C[b+1]
+    end
+    return R10Symbol(X, value, neighbours)
+end
