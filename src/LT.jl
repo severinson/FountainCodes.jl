@@ -1,21 +1,20 @@
-using Primes
+using Primes, Distributions
 
 export LTParameters
 
 doc"LT parameters."
-struct LTParameters <: Parameters
+struct LTParameters{T <: Sampleable{Univariate, Discrete}} <: Parameters
     K::Integer # number of source symbols
     L::Integer # number of intermediate symbols
     Lp::Integer
-    dd::Soliton # degree distribution object
-    function LTParameters(K::Integer, dd::Soliton)
-        if K != dd.K
-            error("K = $k != dd.K = $(dd.k)")
-        end
+    dd::T # degree distribution
+    function LTParameters{T}(K::Integer, dd::Soliton) where T <: Sampleable{Univariate, Discrete}
         Lp = Primes.nextprime(K)
         new(K, K, Lp, dd)
     end
 end
+
+LTParameters(K::Integer, dd::T) where {T <: Sampleable{Univariate, Discrete}} = LTParameters{T}(K, dd)
 
 Base.repr(p::LTParameters) = "LTParameters($(p.K), $(repr(p.dd)))"
 
