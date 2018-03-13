@@ -49,15 +49,15 @@ end
 
 doc"R10 decoder constructor. Automatically adds constraint symbols."
 function Decoder(p::R10Parameters)
-    d = Decoder{RBitVector,Vector{F256}}(p)
-    C = [Vector{F256}() for _ in 1:p.L]
+    d = Decoder{RBitVector,Vector{GF256}}(p)
+    C = [Vector{GF256}() for _ in 1:p.L]
     neighbours = [Set{Int}() for _ in 1:p.L]
     r10_ldpc_encode!(C, p, neighbours)
     r10_hdpc_encode!(C, p, neighbours)
     for i in (p.K+1):(p.K+p.S+p.H)
         cs = R10Symbol(
             -1,
-            Vector{F256}(),
+            Vector{GF256}(),
             sort!(push!(collect(neighbours[i]), i)),
         )
         add!(d, cs)
@@ -67,7 +67,7 @@ end
 
 doc"Default LT decoder constructor."
 function Decoder(p::LTCode)
-    return Decoder{RBitVector,Vector{F256}}(p)
+    return Decoder{RBitVector,Vector{GF256}}(p)
 end
 
 # the inactivated part is stored as dense bit vectors. these are indexed from

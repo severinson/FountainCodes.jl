@@ -3,9 +3,9 @@ using RaptorCodes, Base.Test
 function init(k=10)
     p = RaptorCodes.R10Parameters(k)
     d = RaptorCodes.Decoder(p)
-    C = Vector{Vector{F256}}(p.L)
+    C = Vector{Vector{GF256}}(p.L)
     for i = 1:p.K
-        C[i] = Vector{F256}([i % 256])
+        C[i] = Vector{GF256}([i % 256])
     end
     RaptorCodes.r10_ldpc_encode!(C, p)
     RaptorCodes.r10_hdpc_encode!(C, p)
@@ -14,9 +14,9 @@ end
 
 function test_select_row_1()
     p, d, C = init()
-    RaptorCodes.add!(d, R10Symbol(1, Vector{F256}([1]), [1]))
-    RaptorCodes.add!(d, R10Symbol(2, Vector{F256}([1]), [1, 2]))
-    RaptorCodes.add!(d, R10Symbol(3, Vector{F256}([1]), [1, 2, 3, 4]))
+    RaptorCodes.add!(d, R10Symbol(1, Vector{GF256}([1]), [1]))
+    RaptorCodes.add!(d, R10Symbol(2, Vector{GF256}([1]), [1, 2]))
+    RaptorCodes.add!(d, R10Symbol(3, Vector{GF256}([1]), [1, 2, 3, 4]))
     i = RaptorCodes.select_row(d)
     if i != p.S + p.H + 1
         error("selected row $i. should have selected row $(p.S+p.H+1).")
@@ -27,9 +27,9 @@ end
 
 function test_select_row_2()
     p, d, C = init()
-    RaptorCodes.add!(d, R10Symbol(1, Vector{F256}([1]), [1]))
-    RaptorCodes.add!(d, R10Symbol(2, Vector{F256}([1]), [1, 2]))
-    RaptorCodes.add!(d, R10Symbol(3, Vector{F256}([1]), [1, 2, 3, 4]))
+    RaptorCodes.add!(d, R10Symbol(1, Vector{GF256}([1]), [1]))
+    RaptorCodes.add!(d, R10Symbol(2, Vector{GF256}([1]), [1, 2]))
+    RaptorCodes.add!(d, R10Symbol(3, Vector{GF256}([1]), [1, 2, 3, 4]))
     RaptorCodes.subtract!(d, p.S+p.H+3, p.S+p.H+1)
     RaptorCodes.setpriority!(d, 1)
     i = RaptorCodes.select_row(d)
@@ -43,10 +43,10 @@ end
 
 function test_select_row_3()
     p, d, C = init()
-    RaptorCodes.add!(d, R10Symbol(0, Vector{F256}([1]), [7, 8]))
-    RaptorCodes.add!(d, R10Symbol(0, Vector{F256}([1]), [1, 2]))
-    RaptorCodes.add!(d, R10Symbol(0, Vector{F256}([1]), [2, 3]))
-    RaptorCodes.add!(d, R10Symbol(0, Vector{F256}([1]), [5, 6]))
+    RaptorCodes.add!(d, R10Symbol(0, Vector{GF256}([1]), [7, 8]))
+    RaptorCodes.add!(d, R10Symbol(0, Vector{GF256}([1]), [1, 2]))
+    RaptorCodes.add!(d, R10Symbol(0, Vector{GF256}([1]), [2, 3]))
+    RaptorCodes.add!(d, R10Symbol(0, Vector{GF256}([1]), [5, 6]))
     i = RaptorCodes.select_row_2(d)
     correct = [2, 3] + (p.S + p.H)
     if !(i in correct)

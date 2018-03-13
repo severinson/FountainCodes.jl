@@ -1,7 +1,7 @@
-export R10Value, R10Symbol, F256
+export R10Value, R10Symbol, GF256
 
 # TODO: this method overrides the default behavior of UInt8
-const F256 = UInt8
+const GF256 = UInt8
 # primitive type F256 <: Unsigned 8 end
 # struct F256
 #     x::UInt8
@@ -11,18 +11,18 @@ const F256 = UInt8
 # end
 
 doc"convert an object to a vector of bytes"
-function asbytes(x) :: Vector{F256}
+function asbytes(x) :: Vector{GF256}
     if !isbits(x)
         error("$x is not a plain data type and cannot be converted to bytes")
     end
     sz = sizeof(x)
-    dst = Vector{F256}(sz)
+    dst = Vector{GF256}(sz)
     src = convert(Ptr{F256}, pointer_from_objref(x))
     unsafe_copy!(pointer(dst), src, sz)
     return dst
 end
 
-function Base.:+(a::F256, b::F256)
+function Base.:+(a::GF256, b::GF256)
     return xor(a, b)
 end
 

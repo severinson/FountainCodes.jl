@@ -4,9 +4,9 @@ function init(k=10)
     dd = RaptorCodes.Soliton(k, Int(round(k*2/3)), 0.01)
     p = RaptorCodes.LTParameters(k, dd)
     d = RaptorCodes.Decoder(p)
-    C = Vector{Vector{F256}}(p.L)
+    C = Vector{Vector{GF256}}(p.L)
     for i = 1:p.K
-        C[i] = Vector{F256}([i % 256])
+        C[i] = Vector{GF256}([i % 256])
     end
     return p, d, C
 end
@@ -59,9 +59,9 @@ function init_gf256(k=10)
     dd = RaptorCodes.Soliton(k, Int(round(k*2/3)), 0.01)
     p = RaptorCodes.QLTParameters(k, dd, Uniform(0, 255))
     d = RaptorCodes.Decoder(p)
-    C = Vector{Vector{F256}}(p.L)
+    C = Vector{Vector{GF256}}(p.L)
     for i = 1:p.K
-        C[i] = Vector{F256}([i % 256])
+        C[i] = Vector{GF256}([i % 256])
     end
     return p, d, C
 end
@@ -75,6 +75,7 @@ function test_encode_gf256()
         end
     end
     s = RaptorCodes.lt_generate(C, 1, p)
+    println(s)
     return true
 end
 @test test_encode_gf256()

@@ -1,8 +1,8 @@
 function init(k=10)
     p = RaptorCodes.R10Parameters(k)
-    C = Vector{Vector{F256}}(p.L)
+    C = Vector{Vector{GF256}}(p.L)
     for i = 1:p.K
-        C[i] = Vector{F256}([i % 256])
+        C[i] = Vector{GF256}([i % 256])
     end
     N = [Set{Int}() for _ in 1:length(C)]
     RaptorCodes.r10_ldpc_encode!(C, p, N)
