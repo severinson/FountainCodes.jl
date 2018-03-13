@@ -40,7 +40,7 @@ end
 doc"Map a number 0 <= v <= 1 to a degree."
 function deg(v::Real, p::FountainCode) :: Int
     return quantile(p.dd, v)
-end 
+end
 
 doc"Maps an encoding symbol ID X to a triple (d, a, b)"
 function trip(X::Int, p::FountainCode)
