@@ -23,14 +23,7 @@ struct Soliton <: Sampleable{Univariate, Discrete}
             tau(K, mode, delta, R, i) + rho(K, i)
             for i=1:K
         )
-        soliton = new(
-            K,
-            mode,
-            delta,
-            R,
-            c,
-            beta,
-        )
+        new(K, mode, delta, R, c, beta)
     end
 end
 
