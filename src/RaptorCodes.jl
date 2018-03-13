@@ -1,8 +1,11 @@
 module RaptorCodes
+using Distributions
 
+mutable struct Binary <: ValueSupport end
+mutable struct NonBinary <: ValueSupport end
 abstract type Code end
-abstract type RaptorCode <: Code end
-abstract type FountainCode <: Code end
+abstract type RaptorCode{V<:ValueSupport} <: Code end
+abstract type FountainCode{V<:ValueSupport} <: Code end
 
 doc"symbol value"
 abstract type Value end

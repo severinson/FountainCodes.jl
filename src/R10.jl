@@ -10,7 +10,7 @@ export R10Parameters
 # - Call r10_lt_encode with C as its argument to generate an LT symbol.
 
 doc"R10 parameters container."
-struct R10Parameters <: RaptorCode
+struct R10Parameters <: RaptorCode{Binary}
     K::Integer # number of source symbols
     S::Integer # number of LDPC symbols
     H::Integer # number of HDPC symbols

@@ -3,7 +3,7 @@ using Primes, Distributions
 export LTParameters, QLTParameters
 
 doc"LT code parameters."
-struct LTParameters{T <: Sampleable{Univariate, Discrete}} <: FountainCode
+struct LTParameters{T <: Sampleable{Univariate, Discrete}} <: FountainCode{Binary}
     K::Integer # number of source symbols
     L::Integer # number of intermediate symbols
     Lp::Integer
@@ -20,7 +20,7 @@ Base.repr(p::LTParameters) = "LTParameters($(p.K), $(repr(p.dd)))"
 
 doc"q-ary LT code parameters."
 struct QLTParameters{DT <: Sampleable{Univariate, Discrete},
-                     CT <: Sampleable{Univariate}} <: FountainCode
+                     CT <: Sampleable{Univariate}} <: FountainCode{NonBinary}
     K::Integer # number of source symbols
     L::Integer # number of intermediate symbols
     Lp::Integer
