@@ -7,7 +7,7 @@ using DataStructures
 doc"R10-compliant decoder."
 mutable struct Decoder{RT<:Row,VT}
     p::Parameters
-    values::Vector{Vector{VT}} # each intermediate symbol is an array of type VT
+    values::Vector{VT} # source values may be of any type, including arrays
     columns::Vector{Vector{Int}}
     rows::Vector{RT}
     colperm::Vector{Int} # maps column indices to their respective objects
@@ -49,7 +49,7 @@ end
 
 doc"R10 decoder constructor. Automatically adds constraint symbols."
 function Decoder(p::R10Parameters)
-    d = Decoder{RBitVector,F256}(p)
+    d = Decoder{RBitVector,Vector{F256}}(p)
     C = [Vector{F256}() for _ in 1:p.L]
     neighbours = [Set{Int}() for _ in 1:p.L]
     r10_ldpc_encode!(C, p, neighbours)
@@ -67,7 +67,7 @@ end
 
 doc"Default LT decoder constructor."
 function Decoder(p::LTParameters)
-    return Decoder{RBitVector,F256}(p)
+    return Decoder{RBitVector,Vector{F256}}(p)
 end
 
 # the inactivated part is stored as dense bit vectors. these are indexed from
@@ -102,7 +102,7 @@ function num_remaining(d::Decoder)
 end
 
 doc"add a row to the decoder."
-function add!{RT,VT}(d::Decoder{RT,VT}, s::RT, v::Vector{VT})
+function add!{RT,VT}(d::Decoder{RT,VT}, s::RT, v::VT)
     if d.status != ""
         error("cannot add more symbols after decoding has failed")
     end
@@ -488,7 +488,7 @@ end
 
 doc"return the decoded source symbols."
 function get_source{RT,VT}(d::Decoder{RT,VT})
-    C = Vector{Vector{VT}}(d.p.K)
+    C = Vector{VT}(d.p.K)
     for i in 1:d.p.L
         rpi = d.rowperm[i]
         cpi = d.colperm[i]
@@ -519,5 +519,5 @@ function decode!{RT,VT}(d::Decoder{RT,VT}, raise_on_error=true)
             rethrow(err)
         end
     end
-    Vector{Vector{VT}}(d.p.K)
+    Vector{VT}(d.p.K)
 end
