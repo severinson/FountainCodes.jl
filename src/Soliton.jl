@@ -1,8 +1,9 @@
+using Distributions
 
 export Soliton
 
 "Soliton distribution."
-struct Soliton
+struct Soliton <: Sampleable{Univariate, Discrete}
     K::Int64 # number of input symbols
     mode::Int64 # robust component spike location
     delta::Float64 # interpreted as the decoder failure probability
@@ -83,6 +84,10 @@ function rho(f::Soliton, i::Int64)
     end
 end
 
+function params(d::Soliton)
+    return (d.K, d.mode, d.delta)
+end
+
 "Soliton distribution probability density function."
 function pdf(f::Soliton, i::Int64)
     return (tau(f, i) + rho(f, i)) / f.beta
@@ -94,11 +99,11 @@ function cdf(f::Soliton, i::Int64)
 end
 
 "Soliton distribution inverse cdf."
-function icdf(f::Soliton, v::Float64)
+function Base.quantile(f::Soliton, v::Real) :: Int64
     return numinv(x->cdf(f, x), v, 1.0, Float64(f.K))
 end
 
 "Draw a random sample from the distribution."
-function sample(f::Soliton)
-    return icdf(f, rand())
+function Base.rand(f::Soliton) :: Int64
+    return quantile(f, rand())
 end

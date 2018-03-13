@@ -12,6 +12,9 @@ abstract type CodeSymbol end
 doc"matrix row"
 abstract type Row end
 
+# set the random seed
+srand(3)
+
 include("Numinv.jl")
 include("Soliton.jl")
 include("Symbols.jl")
