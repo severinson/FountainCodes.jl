@@ -66,7 +66,7 @@ function Decoder(p::R10Parameters)
 end
 
 doc"Default LT decoder constructor."
-function Decoder(p::FountainCode)
+function Decoder(p::LTCode)
     return Decoder{RBitVector,Vector{F256}}(p)
 end
 

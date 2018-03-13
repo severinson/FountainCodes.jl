@@ -3,7 +3,7 @@ using Primes, Distributions
 export LTParameters, QLTParameters
 
 doc"LT code parameters."
-struct LTParameters{T <: Sampleable{Univariate, Discrete}} <: FountainCode{Binary}
+struct LTParameters{T <: Sampleable{Univariate, Discrete}} <: LTCode{Binary}
     K::Integer # number of source symbols
     L::Integer # number of intermediate symbols
     Lp::Integer
@@ -20,7 +20,7 @@ Base.repr(p::LTParameters) = "LTParameters($(p.K), $(repr(p.dd)))"
 
 doc"q-ary LT code parameters."
 struct QLTParameters{DT <: Sampleable{Univariate, Discrete},
-                     CT <: Sampleable{Univariate}} <: FountainCode{NonBinary}
+                     CT <: Sampleable{Univariate}} <: LTCode{NonBinary}
     K::Integer # number of source symbols
     L::Integer # number of intermediate symbols
     Lp::Integer
@@ -38,12 +38,17 @@ function QLTParameters(K::Integer, dd::DT, cd::CT) where {DT <: Sampleable{Univa
 end
 
 doc"Map a number 0 <= v <= 1 to a degree."
-function deg(v::Real, p::FountainCode) :: Int
+function deg(v::Real, p::LTCode) :: Int
     return quantile(p.dd, v)
 end
 
+doc"Map a number 0 <= v <= 1 to a coefficient."
+function coefficient(p::Code{NonBinary})
+    return rand(p.cd)
+end
+
 doc"Maps an encoding symbol ID X to a triple (d, a, b)"
-function trip(X::Int, p::FountainCode)
+function trip(X::Int, p::LTCode)
     Q = 65521 # the largest prime smaller than 2^16
     JK = J[p.K+1]
     A = (53591 + JK*997) % Q
@@ -57,7 +62,7 @@ function trip(X::Int, p::FountainCode)
 end
 
 doc"Generate an LT symbol from the intermediate symbols."
-function lt_generate(C::Vector, X::Int, p::FountainCode{Binary})
+function lt_generate(C::Vector, X::Int, p::LTCode{Binary})
     d, a, b = trip(X, p)
     while (b >= p.L)
         b = (b + a) % p.Lp
@@ -72,6 +77,26 @@ function lt_generate(C::Vector, X::Int, p::FountainCode{Binary})
         end
         neighbours[j+1] = b+1
         value = value + C[b+1]
+    end
+    return R10Symbol(X, value, neighbours)
+end
+
+doc"Generate an LT symbol from the intermediate symbols."
+function lt_generate(C::Vector, X::Int, p::LTCode{NonBinary})
+    d, a, b = trip(X, p)
+    while (b >= p.L)
+        b = (b + a) % p.Lp
+    end
+    neighbours = Vector{Int}(min(d, p.L))
+    neighbours[1] = b+1
+    value = C[b+1] * coefficient(p)
+    for j in 1:min(d-1, p.L-1)
+        b = (b + a) % p.Lp
+        while (b >= p.L)
+            b = (b + a) % p.Lp
+        end
+        neighbours[j+1] = b+1
+        value = value + C[b+1] * coefficient(p)
     end
     return R10Symbol(X, value, neighbours)
 end
