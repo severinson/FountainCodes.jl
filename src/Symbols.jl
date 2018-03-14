@@ -1,4 +1,4 @@
-export R10Value, R10Symbol, GF256
+export R10Value, R10Symbol, QSymbol, GF256
 
 # TODO: this method overrides the default behavior of UInt8
 const GF256 = UInt8

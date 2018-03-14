@@ -119,30 +119,97 @@ function test_diagonalize_2()
 end
 @test test_diagonalize_2()
 
+function test_subtract_gf256_1()
+    p, d, C = init_gf256(10)
+    s = RaptorCodes.lt_generate(C, 1, p)
+    RaptorCodes.add!(d, s)
+    RaptorCodes.add!(d, s)
+    RaptorCodes.subtract!(d, 1, 2, GF256(1))
+    if !iszero(d.values[2])
+        error("values[2]=$(d.values[2]) should be zero")
+    end
+    return true
+end
+@test test_subtract_gf256_1()
+
+function test_subtract_gf256_2()
+    p, d, C = init_gf256(10)
+    a = GF256(3)
+    RaptorCodes.add!(d, QSymbol(1, [a], [1, 2], Vector{GF256}([1, 2])))
+    RaptorCodes.add!(d, QSymbol(1, [GF256(2)*a], [1, 2], Vector{GF256}([2, 4])))
+    RaptorCodes.subtract!(d, 1, 2, GF256(2))
+    if !iszero(d.values[2])
+        error("values[2]=$(d.values[2]) should be zero")
+    end
+    return true
+end
+@test test_subtract_gf256_2()
+
+function test_zerodiag_gf256()
+    p, d, C = init_gf256(10)
+    RaptorCodes.add!(d, QSymbol(1, [GF256(2)], [1], Vector{GF256}([2])))
+    RaptorCodes.add!(d, QSymbol(1, [GF256(3)], [1], Vector{GF256}([3])))
+    d.num_decoded += 1
+    RaptorCodes.zerodiag!(d, 2)
+    if !iszero(d.values[2])
+        error("values[2]=$(d.values[2]) should be zero")
+    end
+    return true
+end
+@test test_zerodiag_gf256()
+
+function test_inactivate_gf256()
+    p, d, C = init_gf256(10)
+    RaptorCodes.add!(d, QSymbol(1, [GF256(2)], [1], Vector{GF256}([2])))
+    RaptorCodes.add!(d, QSymbol(1, [GF256(3)], [1], Vector{GF256}([3])))
+    RaptorCodes.inactivate_isymbol!(d, 1)
+    c = RaptorCodes.getdense(d, 1, 1)
+    if c != GF256(2)
+        error("inactivated element of row 1 is $c but should be $(GF256(2))")
+    end
+    c = RaptorCodes.getdense(d, 2, 1)
+    if c != GF256(3)
+        error("inactivated element of row 2 is $c but should be $(GF256(3))")
+    end
+    RaptorCodes.subtract!(d, 1, 2, GF256(3)/GF256(2))
+    c = RaptorCodes.getdense(d, 2, 1)
+    if !iszero(c)
+        error("inactivated element of row 2 is $c but should be zero")
+    end
+    return true
+end
+@test test_inactivate_gf256()
+
 function test_diagonalize_gf256()
     p, d, C = init_gf256(10)
-    for i in 1:20
+    for i in 1:15
         s = RaptorCodes.lt_generate(C, i, p)
         RaptorCodes.add!(d, s)
     end
     RaptorCodes.diagonalize!(d)
+    println("u=$(d.num_inactivated)")
     for i in 1:d.num_decoded
         rpi = d.rowperm[i]
         cpi = d.colperm[i]
-        correct = C[cpi]
         row = d.rows[rpi]
+        coef = RaptorCodes.coefficient(row, cpi)
+        correct = coef*C[cpi]
+        println()
         for ci in 1:d.p.L
             cpj = d.colperm[ci]
-            coefficient = RaptorCodes.getdense(d, rpi, cpj)
-            if !iszero(coefficient)
-                correct = correct + C[cpj] * coefficient
+            coef = RaptorCodes.getdense(d, rpi, cpj)
+            if !iszero(coef)
+                correct = correct + coef * C[cpj]
             end
         end
+        println("row=$row")
         if d.values[rpi] != correct
-            error("diagonalization failed. values[$rpi] is $(d.values[rpi]) but should be $correct")
+            println("---------------------------------------")
+            println("diagonalization failed. values[$rpi] is $(d.values[rpi]) but should be $correct")
+            println("---------------------------------------")
         end
     end
-    return true
+    return false
 end
 @test test_diagonalize_gf256()
 
@@ -196,16 +263,19 @@ end
 
 function test_ge_gf256()
     p, d, C = init_gf256()
-    for i in 1:20
+    for i in 1:15
         s = RaptorCodes.lt_generate(C, i, p)
         RaptorCodes.add!(d, s)
     end
     RaptorCodes.diagonalize!(d)
     RaptorCodes.gaussian_elimination!(d)
+    println("L=$(d.p.L) u=$(d.num_inactivated)")
     for i in d.p.L-d.num_inactivated+1:d.p.L
         rpi = d.rowperm[i]
         cpi = d.colperm[i]
-        correct = C[cpi]
+        row = d.rows[rpi]
+        coef = RaptorCodes.getdense(d, rpi, cpi)
+        correct = coef*C[cpi]
         if d.values[rpi] != correct
             error("GE failed. values[$rpi] is $(d.values[rpi]) but should be $correct")
         end

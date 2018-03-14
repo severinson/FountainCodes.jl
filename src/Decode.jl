@@ -124,7 +124,7 @@ function getdense(d::Decoder, rpi::Int, cpi::Int)
     ci = d.colperminv[cpi]
     ui = _ci2ui(d, ci)
     if ui > length(d.uperm)
-        return false
+        return false # TODO: type instability
     end
     upi = d.uperm[ui]
     return getdense(row, upi)
@@ -181,6 +181,8 @@ function zerodiag!(d::Decoder, rpi::Int) :: Int
         ci = d.colperminv[cpi]
         if ci < d.num_decoded+1 && ci <= d.p.L-d.num_inactivated
             rpj = d.rowperm[ci]
+            row = d.rows[rpj]
+            coef = coef / coefficient(row, cpi)
             subtract!(d, rpj, rpi, coef)
         end
     end
@@ -284,25 +286,25 @@ function select_row(d::Decoder) :: Int
     return d.rowperminv[k]
 end
 
-doc"subtract rows[i] from rows[j]."
-function subtract!(d::Decoder, i::Int, j::Int, coef)
-    row1 = d.rows[i]
-    row2 = d.rows[j]
-    d.rows[j] = subtract!(row2, row1, coef)
+doc"subtract coef*rows[rpi] from rows[rpj]."
+function subtract!(d::Decoder, rpi::Int, rpj::Int, coef)
+    row1 = d.rows[rpi]
+    row2 = d.rows[rpj]
+    d.rows[rpj] = subtract!(row2, row1, coef)
 
     # zero values are allocated on-demand
-    if !iszero(d.values[i])
-        if !iszero(d.values[j])
+    if !iszero(d.values[rpi])
+        if !iszero(d.values[rpj])
             if coef == one(coef)
-                d.values[j] = d.values[j] + d.values[i]
+                d.values[rpj] = d.values[rpj] + d.values[rpi]
             else
-                d.values[j] = d.values[j] + coef*d.values[i]
+                d.values[rpj] = d.values[rpj] + coef*d.values[rpi]
             end
         else
             if coef == one(coef)
-                d.values[j] = copy(d.values[i])
+                d.values[rpj] = copy(d.values[rpi])
             else
-                d.values[j] = coef*copy(d.values[i])
+                d.values[rpj] = coef*copy(d.values[rpi])
             end
         end
     end
@@ -326,7 +328,8 @@ function inactivate_isymbol!(d::Decoder, cpi::Int)
     swap_cols!(d, ci, rightmost_active_col)
     for rpi in d.columns[cpi]
         if d.rowperminv[rpi] > d.num_decoded
-            setdense!(d, rpi, cpi, true)
+            coef = coefficient(d.rows[rpi], cpi)
+            setdense!(d, rpi, cpi, coef)
             if rpi in keys(d.pq)
                 d.pq[rpi] -= 1.0
             end
