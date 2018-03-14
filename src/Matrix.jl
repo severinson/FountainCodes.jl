@@ -45,6 +45,10 @@ end
     return r.indices
 end
 
+@inline function coefficients(r::RBitVector)
+    return ones(length(r.indices))
+end
+
 doc"in-place XOR of two bit-vectors."
 function xor!(a::BitVector, b::BitVector)
     length(b) > length(a) && throw(BoundsError(a, length(a)+1))
@@ -69,7 +73,7 @@ function xor!(a::Vector{UInt8}, b::Vector{UInt8})
     return a
 end
 
-@inline function subtract!(b::RBitVector, a::RBitVector)
+@inline function subtract!(b::RBitVector, a::RBitVector, coef)
     xor!(b.inactive, a.inactive)
     return b
 end
@@ -99,6 +103,14 @@ struct RqRow{CT} <: Row
         p = sortperm(indices)
         return new(copy(indices)[p], copy(values)[p], null)
     end
+    function RqRow{CT}(indices::Vector{Int}, values::Vector{CT}, dense::BitVector) where CT
+        p = sortperm(indices)
+        return new(copy(indices)[p], copy(values)[p], dense)
+    end
+    function RqRow{CT}(indices::Vector{Int}, values::Vector{CT}, dense::Vector{CT}) where CT
+        p = sortperm(indices)
+        return new(copy(indices)[p], copy(values)[p], dense)
+    end
 end
 
 function RqRow(s::R10Symbol)
@@ -113,17 +125,21 @@ end
     return length(r.indices)
 end
 
-@inline function inactive_degree(r::RqRow)
+@inline function inactive_degree{CT}(r::RqRow{CT})
     if r.dense isa BitVector
         return sum(r.dense)
-    elseif r.dense isa Vector{UInt8}
-        return sum(!iszero(v) for v in r.quary)
+    elseif r.dense isa Vector{CT}
+        return sum(!iszero(v) for v in r.dense)
     end
     return 0
 end
 
 @inline function neighbours(r::RqRow)
     return r.indices
+end
+
+@inline function coefficients(r::RqRow)
+    return r.values
 end
 
 doc"convert a binary array to a q-ary array"
@@ -136,37 +152,38 @@ function qary_from_binary(b::BitVector) :: Array{UInt8}
     return qary
 end
 
-@inline function subtract!(b::RqRow, a::RqRow) ::RqRow
+@inline function subtract!{CT}(b::RqRow{CT}, a::RqRow{CT}, coef::CT) ::RqRow
+    # println("a=$a b=$b coef=$coef type=$(typeof(coef))")
     if a.dense isa BitVector
         if b.dense isa BitVector
             xor!(b.dense, a.dense)
             return b
-        elseif b.dense isa Vector{UInt8}
+        elseif b.dense isa Vector{CT}
             qary = qary_from_binary(a.dense)
-            xor!(b.dense, qary)
+            xor!(b.dense, coef*qary)
+            return b
+        else
+            return RqRow{CT}(b.indices, b.values, a.dense)
+        end
+    elseif a.dense isa Vector{CT}
+        if b.dense isa BitVector
+            qary = qary_from_binary(b.dense)
+            qary = xor!(qary, coef*a.dense)
+            return RqRow{CT}(b.indices, b.values, qary)
+        elseif b.dense isa Vector{CT}
+            xor!(b.dense, coef*a.dense)
             return b
         else
             return RqRow(b.indices, b.values, a.dense)
-        end
-    elseif a.dense isa Vector{UInt8}
-        if b.dense isa BitVector
-            qary = qary_from_binary(b.dense)
-            qary = xor!(qary, a.dense)
-            return RqRow(b.indices, b.values, qary)
-        elseif b.dense isa Vector{UInt8}
-            xor!(b.dense, a.dense)
-            return b
-        else
-            return RqRow(b.indices, b.values, b.dense)
         end
     end
     return b
 end
 
-doc"subtract c*a from b"
-@inline function subtract!(b::RqRow, a::RqRow, c::UInt8)
-    error("not implemented")
-end
+# doc"subtract c*a from b"
+# @inline function subtract!(b::RqRow, a::RqRow, c::UInt8)
+#     error("not implemented")
+# end
 
 doc"get the index of any non-zero inactive element"
 @inline function getinactive(r::RqRow)
@@ -174,12 +191,33 @@ doc"get the index of any non-zero inactive element"
 end
 
 doc"set an element of the dense part of the matrix."
-@inline function setdense!(row::RqRow, upi::Int, v)
-    row.dense[upi] = v
+@inline function setdense!{CT}(row::RqRow{CT}, upi::Int, v::Bool)
+    if row.dense isa BitVector
+        row.dense[upi] = v
+    elseif row.dense isa Vector{CT}
+        row.dense[upi] = one(CT)
+    else
+        row = RqRow{CT}(
+            row.indices,
+            row.values,
+            BitVector(64*((upi-1)>>6+1)), # closest multiple of 64
+        )
+        row.dense[upi] = v
+    end
     return row
 end
 
 doc"get an element from the dense part of the matrix."
-@inline function getdense(row::RqRow, upi::Int)
-    return row.inactive[upi]
+@inline function getdense{CT}(row::RqRow{CT}, upi::Int)
+    if row.dense isa BitVector
+        if row.dense[upi]
+            return one(CT)
+        else
+            return zero(CT)
+        end
+    elseif row.dense isa Vector{CT}
+        return row.dense[upi]
+    else
+        return zero(CT)
+    end
 end
