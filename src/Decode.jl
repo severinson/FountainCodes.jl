@@ -66,8 +66,41 @@ function Decoder(p::R10Parameters)
 end
 
 doc"Default LT decoder constructor."
-function Decoder(p::LTCode)
+function Decoder(p::LTCode{Binary})
     return Decoder{RBitVector,Vector{GF256}}(p)
+end
+
+doc"Default LT decoder constructor."
+function Decoder{DT}(p::QLTParameters{DT,GF256})
+    return Decoder{RqRow,Vector{GF256}}(p)
+end
+
+doc"add a row to the decoder."
+function add!{RT,VT}(d::Decoder{RT,VT}, s::RT, v::VT)
+    if d.status != ""
+        error("cannot add more symbols after decoding has failed")
+    end
+    push!(d.values, v)
+    push!(d.rows, s)
+    i = length(d.rowperm) + 1
+    push!(d.rowperm, i)
+    push!(d.rowperminv, i)
+    for j in neighbours(s)
+        push!(d.columns[j], i)
+    end
+
+    # a priority queue is used to select rows during decoding. rows have
+    # priority equal to its number of non-zero entries in V plus deg/L. adding
+    # deg/L causes rows with lower original degree to be selected first, leading
+    # to lower complexity.
+    deg = degree(s)
+    enqueue!(d.pq, i, deg + deg/d.p.L)
+    return d
+end
+
+doc"add a coded symbol to the decoder."
+function add!{RT}(d::Decoder{RT}, s::CodeSymbol)
+    add!(d, RT(s), s.value)
 end
 
 # the inactivated part is stored as dense bit vectors. these are indexed from
@@ -99,34 +132,6 @@ end
 doc"Number of remaining source symbols to process in stage 1."
 function num_remaining(d::Decoder)
     return d.p.L - p.num_decoded - p.num_inactivated
-end
-
-doc"add a row to the decoder."
-function add!{RT,VT}(d::Decoder{RT,VT}, s::RT, v::VT)
-    if d.status != ""
-        error("cannot add more symbols after decoding has failed")
-    end
-    push!(d.values, v)
-    push!(d.rows, s)
-    i = length(d.rowperm) + 1
-    push!(d.rowperm, i)
-    push!(d.rowperminv, i)
-    for j in neighbours(s)
-        push!(d.columns[j], i)
-    end
-
-    # a priority queue is used to select rows during decoding. rows have
-    # priority equal to its number of non-zero entries in V plus deg/L. adding
-    # deg/L causes rows with lower original degree to be selected first, leading
-    # to lower complexity.
-    deg = degree(s)
-    enqueue!(d.pq, i, deg + deg/d.p.L)
-    return d
-end
-
-doc"add a coded symbol to the decoder."
-function add!{RT}(d::Decoder{RT}, s::CodeSymbol)
-    add!(d, RT(s), s.value)
 end
 
 doc"Check if an intermediate symbol is covered."
