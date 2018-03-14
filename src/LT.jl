@@ -19,26 +19,19 @@ LTParameters(K::Integer, dd::T) where {T <: Sampleable{Univariate, Discrete}} = 
 Base.repr(p::LTParameters) = "LTParameters($(p.K), $(repr(p.dd)))"
 
 doc"q-ary LT code parameters."
-struct QLTParameters{DT <: Sampleable{Univariate, Discrete},
-                     CT <: Sampleable{Univariate}} <: LTCode{NonBinary}
+struct QLTParameters{DT <: Sampleable{Univariate, Discrete}, CT} <: LTCode{NonBinary}
     K::Integer # number of source symbols
     L::Integer # number of intermediate symbols
     Lp::Integer
     dd::DT # degree distribution
-    cd::CT # coefficient distribution
-    function QLTParameters{DT, CT}(K::Integer, dd::DT, cd::CT) where {DT, CT}
+    function QLTParameters{DT,CT}(K::Integer, dd::DT) where {DT, CT}
         Lp = Primes.nextprime(K)
-        new(K, K, Lp, dd, cd)
+        new(K, K, Lp, dd)
     end
 end
 
-function QLTParameters(K::Integer, dd::DT, cd::CT) where {DT <: Sampleable{Univariate, Discrete},
-                                                          CT <: Sampleable{Univariate}}
-    QLTParameters{DT, CT}(K, dd, cd)
-end
-
 function QLTParameters(K::Integer, dd::DT) where DT <: Sampleable{Univariate, Discrete}
-    QLTParameters{DT, DiscreteUniform}(K, dd, DiscreteUniform(0, 255))
+    QLTParameters{DT,GF256}(K, dd)
 end
 
 doc"Map a number 0 <= v <= 1 to a degree."
@@ -47,8 +40,8 @@ function deg(v::Real, p::LTCode) :: Int
 end
 
 doc"Map a number 0 <= v <= 1 to a coefficient."
-function coefficient(p::QLTParameters)
-    return GF256(rand(p.cd))
+function coefficient{DT,CT}(p::QLTParameters{DT,CT})
+    return rand(CT)
 end
 
 doc"Maps an encoding symbol ID X to a triple (d, a, b)"
