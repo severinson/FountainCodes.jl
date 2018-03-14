@@ -174,13 +174,25 @@ function priority(row::Row) :: Float64
     return degree(row)
 end
 
+# doc"zero out any elements of rows[rpi] below the diagonal"
+# function zerodiag!(d::Decoder{RBitRow}, rpi::Int) :: Int
+#     for cpi in neighbours(d.rows[rpi])
+#         ci = d.colperminv[cpi]
+#         if ci < d.num_decoded+1 && ci <= d.p.L-d.num_inactivated
+#             rpj = d.rowperm[ci]
+#             subtract!(d, rpj, rpi)
+#         end
+#     end
+#     return rpi
+# end
+
 doc"zero out any elements of rows[rpi] below the diagonal"
 function zerodiag!(d::Decoder, rpi::Int) :: Int
-    for cpi in neighbours(d.rows[rpi])
+    for (cpi, coef) in zip(neighbours(d.rows[rpi]), coefficients(d.rows[rpi]))
         ci = d.colperminv[cpi]
         if ci < d.num_decoded+1 && ci <= d.p.L-d.num_inactivated
             rpj = d.rowperm[ci]
-            subtract!(d, rpj, rpi)
+            subtract!(d, rpj, rpi, coef)
         end
     end
     return rpi
@@ -284,17 +296,25 @@ function select_row(d::Decoder) :: Int
 end
 
 doc"subtract rows[i] from rows[j]."
-function subtract!(d::Decoder, i::Int, j::Int)
+function subtract!(d::Decoder, i::Int, j::Int, coef)
     row1 = d.rows[i]
     row2 = d.rows[j]
-    d.rows[j] = subtract!(row2, row1)
+    d.rows[j] = subtract!(row2, row1, coef)
 
-    # zero values are only allocated when necessary
+    # zero values are allocated on-demand
     if !iszero(d.values[i])
         if !iszero(d.values[j])
-            d.values[j] = d.values[i] + d.values[j]
+            if coef == one(coef)
+                d.values[j] = d.values[j] + d.values[i]
+            else
+                d.values[j] = d.values[j] + coef*d.values[i]
+            end
         else
-            d.values[j] = copy(d.values[i])
+            if coef == one(coef)
+                d.values[j] = copy(d.values[i])
+            else
+                d.values[j] = coef*copy(d.values[i])
+            end
         end
     end
 
@@ -437,9 +457,10 @@ function gaussian_elimination!(d::Decoder)
             # zero out the elements below the diagonal
             for cj in d.p.L-d.num_inactivated+1:d.num_decoded
                 cpj = d.colperm[cj]
-                if getdense(d, rpj, cpj)
+                coef = getdense(d, rpj, cpj)
+                if !iszero(coef)
                     rpk = d.rowperm[cj]
-                    subtract!(d, rpk, rpj)
+                    subtract!(d, rpk, rpj, coef)
                 end
             end
 
@@ -466,8 +487,9 @@ function gaussian_elimination!(d::Decoder)
         # subtract this row from all rows in u_lower above this one
         for rj in d.p.L-d.num_inactivated+1:d.num_decoded
             rpj = d.rowperm[rj]
-            if getdense(d, rpj, d.colperm[d.num_decoded+1])
-                subtract!(d, d.rowperm[d.num_decoded+1], rpj)
+            coef = getdense(d, rpj, d.colperm[d.num_decoded+1])
+            if !iszero(coef)
+                subtract!(d, d.rowperm[d.num_decoded+1], rpj, coef)
             end
         end
         d.num_decoded += 1
@@ -483,9 +505,10 @@ function backsolve!(d::Decoder)
         # row = d.rows[rpi]
         for ci in d.p.L-d.num_inactivated+1:d.p.L
             cpi = d.colperm[ci]
-            if getdense(d, rpi, cpi)
+            coef = getdense(d, rpi, cpi)
+            if !iszero(coef)
                 rpj = d.rowperm[ci]
-                subtract!(d, rpj, rpi)
+                subtract!(d, rpj, rpi, coef)
             end
         end
     end
