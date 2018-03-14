@@ -159,6 +159,7 @@ end
             return RqRow(b.indices, b.values, b.dense)
         end
     end
+    return b
 end
 
 doc"subtract c*a from b"
