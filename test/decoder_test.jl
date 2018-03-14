@@ -41,7 +41,7 @@ function test_select_row_2()
     RaptorCodes.add!(d, R10Symbol(1, Vector{GF256}([1]), [1]))
     RaptorCodes.add!(d, R10Symbol(2, Vector{GF256}([1]), [1, 2]))
     RaptorCodes.add!(d, R10Symbol(3, Vector{GF256}([1]), [1, 2, 3, 4]))
-    RaptorCodes.subtract!(d, p.S+p.H+3, p.S+p.H+1)
+    RaptorCodes.subtract!(d, p.S+p.H+3, p.S+p.H+1, true)
     RaptorCodes.setpriority!(d, 1)
     i = RaptorCodes.select_row(d)
     correct = p.S + p.H + 2
