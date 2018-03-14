@@ -109,7 +109,7 @@ end
 @inline _ui2ci(d::Decoder, ui::Int) = d.p.L-ui+1
 
 doc"set an element of the dense part of the matrix."
-function setdense!(d::Decoder, rpi::Int, cpi::Int, v::Bool)
+function setdense!(d::Decoder, rpi::Int, cpi::Int, v)
     row = d.rows[rpi]
     ci = d.colperminv[cpi]
     ui = _ci2ui(d, ci)
@@ -118,7 +118,7 @@ function setdense!(d::Decoder, rpi::Int, cpi::Int, v::Bool)
 end
 
 doc"get an element from the dense part of the matrix."
-function getdense(d::Decoder, rpi::Int, cpi::Int) :: Bool
+function getdense(d::Decoder, rpi::Int, cpi::Int)
     row = d.rows[rpi]
     ci = d.colperminv[cpi]
     ui = _ci2ui(d, ci)
@@ -283,7 +283,7 @@ function select_row(d::Decoder) :: Int
 end
 
 doc"subtract rows[i] from rows[j]."
-function subtract!(d::Decoder{RBitVector}, i::Int, j::Int)
+function subtract!(d::Decoder, i::Int, j::Int)
     row1 = d.rows[i]
     row2 = d.rows[j]
     d.rows[j] = subtract!(row2, row1)
@@ -305,7 +305,7 @@ function subtract!(d::Decoder{RBitVector}, i::Int, j::Int)
 end
 
 doc"Inactivate a column of the constraint matrix."
-function inactivate_isymbol!(d::Decoder{RBitVector}, cpi::Int)
+function inactivate_isymbol!(d::Decoder, cpi::Int)
     rightmost_active_col = length(d.columns) - d.num_inactivated
     ci = d.colperminv[cpi]
     if ci > rightmost_active_col
