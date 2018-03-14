@@ -82,6 +82,7 @@ end
 doc"set an element of the dense part of the matrix."
 @inline function setdense!(row::RBitVector, upi::Int, v::Bool)
     row.inactive[upi] = v
+    return row
 end
 
 doc"get an element from the dense part of the matrix."
@@ -175,6 +176,7 @@ end
 doc"set an element of the dense part of the matrix."
 @inline function setdense!(row::RqRow, upi::Int, v)
     row.dense[upi] = v
+    return row
 end
 
 doc"get an element from the dense part of the matrix."

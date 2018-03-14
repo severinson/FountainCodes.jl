@@ -114,7 +114,8 @@ function setdense!(d::Decoder, rpi::Int, cpi::Int, v)
     ci = d.colperminv[cpi]
     ui = _ci2ui(d, ci)
     upi = d.uperm[ui]
-    return setdense!(row, upi, v)
+    d.rows[rpi] = setdense!(row, upi, v) # may allocate a new row object
+    return
 end
 
 doc"get an element from the dense part of the matrix."
