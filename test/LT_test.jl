@@ -78,19 +78,3 @@ function test_encode_gf256()
     return true
 end
 @test test_encode_gf256()
-
-function test_decode_gf256_1()
-    p, d, C = init_gf256()
-    for i in 1:15
-        s = RaptorCodes.lt_generate(C, i, p)
-        RaptorCodes.add!(d, s)
-    end
-    output = RaptorCodes.decode!(d)
-    for i in 1:p.K
-        if output[i] != C[i]
-            error("decoding failure. source[$i] is $(output[i]). should be $(C[i]).")
-        end
-    end
-    return true
-end
-@test test_decode_gf256_1()
