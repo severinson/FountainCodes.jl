@@ -12,6 +12,17 @@ function init(k=10)
     return p, d, C
 end
 
+function init_gf256(k=10)
+    dd = RaptorCodes.Soliton(k, Int(round(k*2/3)), 0.01)
+    p = RaptorCodes.QLTParameters(k, dd)
+    d = RaptorCodes.Decoder(p)
+    C = Vector{Vector{GF256}}(p.L)
+    for i = 1:p.K
+        C[i] = Vector{GF256}([i % 256])
+    end
+    return p, d, C
+end
+
 function test_select_row_1()
     p, d, C = init()
     RaptorCodes.add!(d, R10Symbol(1, Vector{GF256}([1]), [1]))
@@ -107,6 +118,33 @@ function test_diagonalize_2()
     return true
 end
 @test test_diagonalize_2()
+
+function test_diagonalize_gf256()
+    p, d, C = init_gf256(10)
+    for i in 1:20
+        s = RaptorCodes.lt_generate(C, i, p)
+        RaptorCodes.add!(d, s)
+    end
+    RaptorCodes.diagonalize!(d)
+    for i in 1:d.num_decoded
+        rpi = d.rowperm[i]
+        cpi = d.colperm[i]
+        correct = C[cpi]
+        row = d.rows[rpi]
+        for ci in 1:d.p.L
+            cpj = d.colperm[ci]
+            coefficient = RaptorCodes.getdense(d, rpi, cpj)
+            if !iszero(coefficient)
+                correct = correct + C[cpj] * coefficient
+            end
+        end
+        if d.values[rpi] != correct
+            error("diagonalization failed. values[$rpi] is $(d.values[rpi]) but should be $correct")
+        end
+    end
+    return true
+end
+@test test_diagonalize_gf256()
 
 function test_ge_1()
     p, d, C = init()
