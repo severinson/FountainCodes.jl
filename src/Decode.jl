@@ -174,21 +174,10 @@ function priority(row::Row) :: Float64
     return degree(row)
 end
 
-# doc"zero out any elements of rows[rpi] below the diagonal"
-# function zerodiag!(d::Decoder{RBitRow}, rpi::Int) :: Int
-#     for cpi in neighbours(d.rows[rpi])
-#         ci = d.colperminv[cpi]
-#         if ci < d.num_decoded+1 && ci <= d.p.L-d.num_inactivated
-#             rpj = d.rowperm[ci]
-#             subtract!(d, rpj, rpi)
-#         end
-#     end
-#     return rpi
-# end
-
 doc"zero out any elements of rows[rpi] below the diagonal"
 function zerodiag!(d::Decoder, rpi::Int) :: Int
-    for (cpi, coef) in zip(neighbours(d.rows[rpi]), coefficients(d.rows[rpi]))
+    row = d.rows[rpi]
+    for (cpi, coef) in zip(neighbours(row), coefficients(row))
         ci = d.colperminv[cpi]
         if ci < d.num_decoded+1 && ci <= d.p.L-d.num_inactivated
             rpj = d.rowperm[ci]
