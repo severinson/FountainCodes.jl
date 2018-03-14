@@ -43,3 +43,11 @@ doc"number of neighbouring intermediate symbols."
 function degree(cs::R10Symbol)
     return length(cs.neighbours)
 end
+
+doc"outer code symbol."
+struct QSymbol{VT,CT} <: CodeSymbol
+    esi::Int # encoded symbol id
+    value::Vector{VT} # value of the symbol
+    neighbours::Vector{Int}
+    coefficients::Vector{CT}
+end

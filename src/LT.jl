@@ -91,16 +91,19 @@ function lt_generate(C::Vector, X::Int, p::LTCode{NonBinary})
     while (b >= p.L)
         b = (b + a) % p.Lp
     end
-    neighbours = Vector{Int}(min(d, p.L))
-    neighbours[1] = b+1
-    value = C[b+1] * coefficient(p)
+    indices = Vector{Int}(min(d, p.L))
+    coefficients = Vector{GF256}(min(d, p.L))
+    indices[1] = b+1
+    coefficients[1] = coefficient(p)
+    value = C[b+1] * coefficients[1]
     for j in 1:min(d-1, p.L-1)
         b = (b + a) % p.Lp
         while (b >= p.L)
             b = (b + a) % p.Lp
         end
-        neighbours[j+1] = b+1
-        value = value + C[b+1] * coefficient(p)
+        indices[j+1] = b+1
+        coefficients[j+1] = coefficient(p)
+        value = value + C[b+1] * coefficients[j+1]
     end
-    return R10Symbol(X, value, neighbours)
+    return QSymbol(X, value, indices, coefficients)
 end
