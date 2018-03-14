@@ -29,7 +29,7 @@ end
 
 doc"addition over GF256 according to rfc6330."
 function Base.:*(a::GF256, b::GF256)
-    return RQ_OCT_EXP[RQ_OCT_LOG[a+1] + RQ_OCT_LOG[b+1]]
+    return iszero(a) || iszero(b) ? zero(a) : RQ_OCT_EXP[RQ_OCT_LOG[a] + RQ_OCT_LOG[b] + 1]
 end
 
 doc"outer code symbol."
