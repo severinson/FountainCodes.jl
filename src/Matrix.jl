@@ -90,18 +90,22 @@ doc"get an element from the dense part of the matrix."
 end
 
 doc"sparse binary/q-ary row"
-struct RqRow <: Row
+struct RqRow{CT} <: Row
     indices::Vector{Int} # sorted list of initial non-zero indices.
-    values::Vector{UInt8} # initial non-zero values for indices
-    dense::Union{BitVector,Vector{UInt8},Null} # dense part
-    function RqRow(indices::Vector{Int}, values::Vector{Int})
+    values::Vector{CT} # initial non-zero values for indices
+    dense::Union{BitVector,Vector{CT},Null} # dense part
+    function RqRow{CT}(indices::Vector{Int}, values::Vector{CT}) where CT
         p = sortperm(indices)
         return new(copy(indices)[p], copy(values)[p], null)
     end
 end
 
 function RqRow(s::R10Symbol)
-    return RqRow(s.neighbours, ones(length(s.neighbours)))
+    return RqRow{Bool}(s.neighbours, ones(length(s.neighbours)))
+end
+
+function RqRow{VT,CT}(s::QSymbol{VT,CT})
+    return RqRow{CT}(s.neighbours, s.coefficients)
 end
 
 @inline function degree(r::RqRow)
