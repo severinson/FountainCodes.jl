@@ -194,6 +194,30 @@ function test_ge_2()
 end
 @test test_ge_2()
 
+function test_ge_gf256()
+    p, d, C = init_gf256()
+    for i in 1:20
+        s = RaptorCodes.lt_generate(C, i, p)
+        RaptorCodes.add!(d, s)
+    end
+    RaptorCodes.diagonalize!(d)
+    RaptorCodes.gaussian_elimination!(d)
+    for i in d.p.L-d.num_inactivated+1:d.p.L
+        rpi = d.rowperm[i]
+        cpi = d.colperm[i]
+        correct = C[cpi]
+        if d.values[rpi] != correct
+            error("GE failed. values[$rpi] is $(d.values[rpi]) but should be $correct")
+        end
+        row = d.rows[rpi]
+        if RaptorCodes.inactive_degree(row) != 1
+            error("GE failed. row[$rpi]=$row does not sum to 1.")
+        end
+    end
+    return true
+end
+@test test_ge_gf256()
+
 function test_decoder_1()
     p, d, C = init()
     for i in 1:20
@@ -257,3 +281,19 @@ function test_decoder_4()
     return true
 end
 @test test_decoder_4()
+
+function test_decoder_gf256()
+    p, d, C = init_gf256()
+    for i in 1:20
+        s = RaptorCodes.lt_generate(C, i, p)
+        RaptorCodes.add!(d, s)
+    end
+    output = RaptorCodes.decode!(d)
+    for i in 1:p.K
+        if output[i] != C[i]
+            error("decoding failure. source[$i] is $(output[i]). should be $(C[i]).")
+        end
+    end
+    return true
+end
+@test test_decoder_gf256()
