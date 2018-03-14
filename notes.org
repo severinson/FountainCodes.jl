@@ -1,13 +1,15 @@
 * DONE 
   CLOSED: [2018-01-30 Tue 17:03]
 Gaussian elimination of a system of equations over F_2.
-* TODO  
+* DONE 
+  CLOSED: [2018-03-06 Tue 09:58]
 Separate value type, i.e., allow the value of a coded symbol have arbitrary
 type. Define the subtract operator for different value types.
-* TODO  
+* TODO  Allow different types of coded symbols
 Allow different types of coded symbols, where the difference is the field over
 which its coefficients are defined. For example, binary, q* TODO ary, real.
-* TODO Standard row selection
+* DONE Standard row selection
+  CLOSED: [2018-03-06 Tue 09:58]
 - If there's no row of active degree 2, choose any row with minimum degree. If
   several exist, pick the row with minimum original degree. I guess this is
   because these rows will have fewer inactivated neighbours.
@@ -28,4 +30,76 @@ which its coefficients are defined. For example, binary, q* TODO ary, real.
 
 * TODO Discard unneeded rows
 - After the GE step we can discard all only-zero rows.
-
+- Is there a point? These are not touched anyway. Only releases some memory a
+  bit earlier.
+- No point in doing this I think.
+* TODO Fast priority updates
+- Current row priority systems requires updating the priority of a number of
+  rows proportional to the total number of rows. This is slow.
+- Idea: sort the column lists according to priority and store the smallest
+  priority separately. All priorities in this list are updated at once when a
+  column in inactivated/decoded.
+* DONE Formalized row interface
+  CLOSED: [2018-03-14 Wed 09:16]
+- Subtract one row from another.
+- Subtract a multiple of one row from another.
+- Normalize a row.
+- Get the sparse degree.
+- Get the inactive degree.
+- Neighbors/indices
+* DONE Row members names
+  CLOSED: [2018-03-06 Tue 11:32]
+- Use indices instead of active. Indices contains all indices.
+- Use dense instead of inactive?
+* DONE Dense q-ary part
+  CLOSED: [2018-03-14 Wed 09:16]
+- Add a new member to rows.
+- Initialize this part to have zero length. Only allocate it when needed.
+- Update subtract method to also process this part.
+- Need to be able to get the coefficient of the row we're subtracting with. For
+  sorted lists this takes O(log n) operations. An empty values vector could
+  indicate that all non-zero elements have value 1. There's a built-in method
+  for this.
+- Subtracting a q-ary dense part from a binary part has to be defined.
+- It's confusing to have both a binary and q-ary dense part. You can't have both
+  a q-ary and binary element in the same column of a row.
+* TODO Grow dense binary part
+- Dense binary part is currently fixed size.
+- The decoder will fail if there's more than 64 inactivations.
+* TODO Test LT symbols against ground truth
+* TODO RBitVector constructor
+- variable names
+- use sort instead of sort! + copy
+* TODO Revisit complexity measurement
+- Current subtract method counts 1 XOR for the value.
+* DONE Parameters abstract type
+  CLOSED: [2018-03-14 Wed 09:16]
+* DONE asbytes isbits check
+  CLOSED: [2018-03-14 Wed 09:16]
+* TODO R10Symbol Vector{VT} should be VT
+* TODO Could use reinterpret rather than Union in RqRow
+- Avoids having to use a union. May be faster.
+- Addition is carried out as regular.
+- For multiplication we first reinterpret as a byte array and then do the
+  multiplication.
+* TODO Renaming
+- R10Symbol to 10Symbol
+- Everything with parameters into just the name of the code.
+- inactivate_isymbol
+* DONE Parametric q-ary codes
+  CLOSED: [2018-03-14 Wed 11:03]
+- Should be a parametric type.
+- One of the types is the coefficient type. Then we can use rand to generate
+  coefficients. Generalizes to any coefficient type and we don't have to deal
+  with sampleable objects.
+- R10Row, RqRow
+* TODO getdense type instability
+- Could be addressed by using 1 as true
+- Always promote binary elements into the larger field?
+- Need to use iszero instead of plain boolean comparison in decoder
+- Currently returns false if index is higher than num_inactivated. This should
+  probably be an error instead.
+* TODO Decoder tests in one file
+- Now some tests are among the LT code tests
+* TODO qary_from_binary
+- This method only works for GF256
