@@ -172,32 +172,26 @@ end
 @inline function subtract!{CT}(b::RqRow{CT}, a::RqRow{CT}, coef::CT) ::RqRow
     if a.dense isa BitVector
         if b.dense isa BitVector
-            println("1 b.dense=$(b.dense), coef*a.dense=$(coef*a.dense)")
             xor!(b.dense, a.dense)
-            return b
         elseif b.dense isa Vector{CT}
-            println("2 b.dense=$(b.dense), coef*a.dense=$(coef*a.dense)")
             qary = qary_from_binary(a.dense)
             xor!(b.dense, coef*qary)
-            return b
         else
-            println("3 b.dense=$(b.dense), coef*a.dense=$(coef*a.dense)")
-            return RqRow{CT}(b.indices, b.values, a.dense)
+            b = RqRow{CT}(b.indices, b.values, a.dense)
         end
     elseif a.dense isa Vector{CT}
         if b.dense isa BitVector
-            println("4 b.dense=$(b.dense), coef*a.dense=$(coef*a.dense)")
             qary = qary_from_binary(b.dense)
             qary = xor!(qary, coef*a.dense)
-            return RqRow{CT}(b.indices, b.values, qary)
+            b = RqRow{CT}(b.indices, b.values, qary)
         elseif b.dense isa Vector{CT}
-            println("5 b.dense=$(b.dense), coef*a.dense=$(coef*a.dense)")
+            # println("5 b.dense=$(b.dense), coef*a.dense=$(coef*a.dense)")
             xor!(b.dense, coef*a.dense)
-            return b
         else
-            println("6 b.dense=$(b.dense), coef*a.dense=$(coef*a.dense)")
-            return RqRow(b.indices, b.values, a.dense)
+            b = RqRow(b.indices, b.values, coef*a.dense)
         end
+    elseif !(a.dense isa Null)
+        error("a.dense must be either BitVector, Vector{CT} or null")
     end
     return b
 end
