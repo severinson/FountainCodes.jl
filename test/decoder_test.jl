@@ -180,21 +180,19 @@ function test_inactivate_gf256()
 end
 @test test_inactivate_gf256()
 
-function test_diagonalize_gf256()
+function test_diagonalize_gf256_1()
     p, d, C = init_gf256(10)
     for i in 1:15
         s = RaptorCodes.lt_generate(C, i, p)
         RaptorCodes.add!(d, s)
     end
     RaptorCodes.diagonalize!(d)
-    println("u=$(d.num_inactivated)")
     for i in 1:d.num_decoded
         rpi = d.rowperm[i]
         cpi = d.colperm[i]
         row = d.rows[rpi]
         coef = RaptorCodes.coefficient(row, cpi)
         correct = coef*C[cpi]
-        println()
         for ci in 1:d.p.L
             cpj = d.colperm[ci]
             coef = RaptorCodes.getdense(d, rpi, cpj)
@@ -202,16 +200,41 @@ function test_diagonalize_gf256()
                 correct = correct + coef * C[cpj]
             end
         end
-        println("row=$row")
         if d.values[rpi] != correct
-            println("---------------------------------------")
-            println("diagonalization failed. values[$rpi] is $(d.values[rpi]) but should be $correct")
-            println("---------------------------------------")
+            error("diagonalization failed. values[$rpi] is $(d.values[rpi]) but should be $correct")
         end
     end
-    return false
+    return true
 end
-@test test_diagonalize_gf256()
+@test test_diagonalize_gf256_1()
+
+function test_diagonalize_gf256_2()
+    p, d, C = init_gf256(20)
+    for i in 1:22
+        s = RaptorCodes.lt_generate(C, i, p)
+        RaptorCodes.add!(d, s)
+    end
+    RaptorCodes.diagonalize!(d)
+    for i in 1:d.num_decoded
+        rpi = d.rowperm[i]
+        cpi = d.colperm[i]
+        row = d.rows[rpi]
+        coef = RaptorCodes.coefficient(row, cpi)
+        correct = coef*C[cpi]
+        for ci in 1:d.p.L
+            cpj = d.colperm[ci]
+            coef = RaptorCodes.getdense(d, rpi, cpj)
+            if !iszero(coef)
+                correct = correct + coef * C[cpj]
+            end
+        end
+        if d.values[rpi] != correct
+            error("diagonalization failed. values[$rpi] is $(d.values[rpi]) but should be $correct")
+        end
+    end
+    return true
+end
+@test test_diagonalize_gf256_2()
 
 function test_ge_1()
     p, d, C = init()
@@ -261,7 +284,7 @@ function test_ge_2()
 end
 @test test_ge_2()
 
-function test_ge_gf256()
+function test_ge_gf256_1()
     p, d, C = init_gf256()
     for i in 1:15
         s = RaptorCodes.lt_generate(C, i, p)
@@ -269,7 +292,6 @@ function test_ge_gf256()
     end
     RaptorCodes.diagonalize!(d)
     RaptorCodes.gaussian_elimination!(d)
-    println("L=$(d.p.L) u=$(d.num_inactivated)")
     for i in d.p.L-d.num_inactivated+1:d.p.L
         rpi = d.rowperm[i]
         cpi = d.colperm[i]
@@ -281,12 +303,62 @@ function test_ge_gf256()
         end
         row = d.rows[rpi]
         if RaptorCodes.inactive_degree(row) != 1
-            error("GE failed. row[$rpi]=$row does not sum to 1.")
+            error("GE failed. row[$rpi]=$row does not have degree 1.")
         end
     end
     return true
 end
-@test test_ge_gf256()
+@test test_ge_gf256_1()
+
+function test_ge_gf256_2()
+    p, d, C = init_gf256(20)
+    for i in 1:22
+        s = RaptorCodes.lt_generate(C, i, p)
+        RaptorCodes.add!(d, s)
+    end
+    RaptorCodes.diagonalize!(d)
+    RaptorCodes.gaussian_elimination!(d)
+    for i in d.p.L-d.num_inactivated+1:d.p.L
+        rpi = d.rowperm[i]
+        cpi = d.colperm[i]
+        row = d.rows[rpi]
+        coef = RaptorCodes.getdense(d, rpi, cpi)
+        correct = coef*C[cpi]
+        if d.values[rpi] != correct
+            error("GE failed. values[$rpi] is $(d.values[rpi]) but should be $correct")
+        end
+        row = d.rows[rpi]
+        if RaptorCodes.inactive_degree(row) != 1
+            error("GE failed. row[$rpi]=$row does not have degree 1.")
+        end
+    end
+    return true
+end
+@test test_ge_gf256_2()
+
+function test_backsolve_gf256()
+    p, d, C = init_gf256(15)
+    for i in 1:15
+        s = RaptorCodes.lt_generate(C, i, p)
+        RaptorCodes.add!(d, s)
+    end
+    RaptorCodes.diagonalize!(d)
+    RaptorCodes.gaussian_elimination!(d)
+    RaptorCodes.backsolve!(d)
+    for ri in 1:d.p.L-d.num_inactivated
+        rpi = d.rowperm[ri]
+        row = d.rows[rpi]
+        for ci in d.p.L-d.num_inactivated+1:d.p.L
+            cpi = d.colperm[ci]
+            coef = RaptorCodes.getdense(d, rpi, cpi)
+            if !iszero(coef)
+                error("backsolve failed. row $ri column $ci is non-zero.")
+            end
+        end
+    end
+    return true
+end
+@test test_backsolve_gf256()
 
 function test_decoder_1()
     p, d, C = init()
@@ -354,11 +426,15 @@ end
 
 function test_decoder_gf256()
     p, d, C = init_gf256()
-    for i in 1:20
+    for i in 1:15
         s = RaptorCodes.lt_generate(C, i, p)
         RaptorCodes.add!(d, s)
     end
     output = RaptorCodes.decode!(d)
+    for ri in 1:d.p.L
+        rpi = d.rowperm[ri]
+        row = d.rows[rpi]
+    end
     for i in 1:p.K
         if output[i] != C[i]
             error("decoding failure. source[$i] is $(output[i]). should be $(C[i]).")
