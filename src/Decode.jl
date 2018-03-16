@@ -452,7 +452,7 @@ function gaussian_elimination!(d::Decoder)
                 coef = getdense(d, rpj, cpj)
                 if !iszero(coef)
                     rpk = d.rowperm[cj]
-                    subtract!(d, rpk, rpj, coef)
+                    subtract!(d, rpk, rpj, coef / getdense(d, rpk, cpj))
                 end
             end
 
@@ -479,9 +479,11 @@ function gaussian_elimination!(d::Decoder)
         # subtract this row from all rows in u_lower above this one
         for rj in d.p.L-d.num_inactivated+1:d.num_decoded
             rpj = d.rowperm[rj]
-            coef = getdense(d, rpj, d.colperm[d.num_decoded+1])
+            cpj = d.colperm[d.num_decoded+1]
+            coef = getdense(d, rpj, cpj)
             if !iszero(coef)
-                subtract!(d, d.rowperm[d.num_decoded+1], rpj, coef)
+                rpk = d.rowperm[d.num_decoded+1]
+                subtract!(d, rpk, rpj, coef / getdense(d, rpk, cpj))
             end
         end
         d.num_decoded += 1
@@ -494,13 +496,12 @@ function backsolve!(d::Decoder)
     # TODO: findnext would be more efficient
     for ri in 1:d.p.L-d.num_inactivated
         rpi = d.rowperm[ri]
-        # row = d.rows[rpi]
         for ci in d.p.L-d.num_inactivated+1:d.p.L
             cpi = d.colperm[ci]
             coef = getdense(d, rpi, cpi)
             if !iszero(coef)
                 rpj = d.rowperm[ci]
-                subtract!(d, rpj, rpi, coef)
+                subtract!(d, rpj, rpi, coef / getdense(d, rpj, cpi))
             end
         end
     end
@@ -510,13 +511,31 @@ end
 doc"return the decoded source symbols."
 function get_source{RT,VT}(d::Decoder{RT,VT})
     C = Vector{VT}(d.p.K)
-    for i in 1:d.p.L
+    for i in 1:d.p.L-d.num_inactivated
         rpi = d.rowperm[i]
         cpi = d.colperm[i]
         if cpi > d.p.K
             continue
         end
-        C[cpi] = d.values[rpi]
+        coef = coefficient(d.rows[rpi], cpi)
+        if coef == one(coef)
+            C[cpi] = d.values[rpi]
+        else
+            C[cpi] = d.values[rpi] / coef
+        end
+    end
+    for i in d.p.L-d.num_inactivated+1:d.p.L
+        rpi = d.rowperm[i]
+        cpi = d.colperm[i]
+        if cpi > d.p.K
+            continue
+        end
+        coef = getdense(d, rpi, cpi)
+        if coef == one(coef)
+            C[cpi] = d.values[rpi]
+        else
+            C[cpi] = d.values[rpi] / coef
+        end
     end
     return C
 end
