@@ -344,36 +344,6 @@ function setpriority!(d::Decoder, i::Int)
     end
 end
 
-doc"Print the constraint matrix and its metadata. Used for debugging."
-function print_state(d::Decoder)
-    # TODO: this function makes less sense now that we no longer subtract
-    # elements.
-    println("------------------------------")
-    println("I=", d.num_decoded, " u=", d.num_inactivated)
-    println(d.pq)
-    for i in 1:length(d.colperm)
-        @printf "%d:%d " i d.colperm[i]
-    end
-    println()
-    for i in 1:length(d.colperminv)
-        @printf "%d:%d " i d.colperminv[i]
-    end
-    println()
-    for i in 1:length(d.rowperm)
-        cs = d.rows[d.rowperm[i]]
-        @printf "%d, %d\t[" d.rowperm[i] i
-        for j in 1:length(d.colperm)
-            if has_neighbour(cs, d.colperm[j])
-                @printf "1 "
-            else
-                @printf "0 "
-            end
-        end
-        println("] = $(d.values[d.rowperm[i]])")
-    end
-    println("------------------------------")
-end
-
 doc"Perform row/column operations such that there are non-zero entries only
     along the diagonal and in the rightmost d.num_inactivated columns."
 function diagonalize!(d::Decoder)
