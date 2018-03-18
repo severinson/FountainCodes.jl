@@ -1,6 +1,5 @@
-# R10-compliant decoder. Counts the number of XORs. Counts the number of
-# multiplications as if all elements were drawn from a field of order larger
-# than 2.
+# Inactivation decoder based on the IETF standards proposals RFC5053 and
+# RFC6330. Currently supports binary and q-ary codes.
 
 using DataStructures
 
