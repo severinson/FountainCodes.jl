@@ -169,10 +169,6 @@ doc"Swap rows ri and rj of the constraint matrix."
     d.rowperminv[d.rowperm[rj]] = rj
 end
 
-function priority(row::Row) :: Float64
-    return degree(row)
-end
-
 doc"zero out any elements of rows[rpi] below the diagonal"
 function zerodiag!(d::Decoder, rpi::Int) :: Int
     row = d.rows[rpi]
