@@ -1,13 +1,4 @@
-using Primes, Nulls
-
-export R10Parameters
-
-# R10 encoding instructions:
-# - Allocate an array C of length L.
-# - Assign the K source symbols to the first K entries of C.
-# - Call r10_ldpc_encode with C as its argument to generate the LDPC symbols.
-# - Call r10_hdpc_encode with C as its argument to generate the HDPC symbols.
-# - Call r10_lt_encode with C as its argument to generate an LT symbol.
+export R10Parameters, precode!, ltgenerate
 
 doc"R10 parameters container."
 struct R10Parameters <: RaptorCode{Binary}
@@ -42,13 +33,48 @@ end
 
 Base.repr(p::R10Parameters) = "R10Parameters($(p.K))"
 
+doc"pre-code input data. C must be an array of source symbols of length L."
+function precode!(C::Vector, p::R10Parameters)
+    C = r10_ldpc_encode!(C, p, null)
+    C = r10_hdpc_encode!(C, p, null)
+    return C
+end
+
+doc"pre-code input data. C must be an array of source symbols of length L."
+function precode!(C::Vector, p::R10Parameters, indices::Vector{Set{Int}})
+    C = r10_ldpc_encode!(C, p, indices)
+    C = r10_hdpc_encode!(C, p, indices)
+    return C
+end
+
+doc"generate an LT symbol from the intermediate symbols."
+function ltgenerate(C::Vector, X::Int, p::Code)
+    d, a, b = trip(X, p)
+    while (b >= p.L)
+        b = (b + a) % p.Lp
+    end
+    indices = Vector{Int}(min(d, p.L))
+    indices[1] = b+1
+    value = C[b+1]
+    for j in 1:min(d-1, p.L-1)
+        b = (b + a) % p.Lp
+        while (b >= p.L)
+            b = (b + a) % p.Lp
+        end
+        indices[j+1] = b+1
+        value = value + C[b+1]
+    end
+    return BSymbol(X, value, indices)
+end
+
 doc"Generate R10 precode LDPC symbols in-place at indices (K+1) to (K+S)."
-function r10_ldpc_encode!(C::Vector, p::R10Parameters, neighbours::Union{Vector{Set{Int}},Null}=null)
+# function r10_ldpc_encode!(C::Vector, p::R10Parameters, neighbours::Union{Vector{Set{Int}},Null}=null)
+function r10_ldpc_encode!(C::Vector, p::R10Parameters, indices)
     if length(C) != p.L
         error("C must have length p.L = $p.L")
     end
-    if !(neighbours isa Null) && length(neighbours) != p.L
-        error("neighbours must have length p.L = $p.L")
+    if !(indices isa Null) && length(indices) != p.L
+        error("indices must have length p.L = $p.L")
     end
     for i in 1:p.S
         C[p.K+i] = zero(C[1])
@@ -58,30 +84,31 @@ function r10_ldpc_encode!(C::Vector, p::R10Parameters, neighbours::Union{Vector{
         a = 1 + Int64((floor(i/p.S) % (p.S-1)))
         b = i % p.S
         C[p.K+b+1] = C[p.K+b+1] + v
-        if !(neighbours isa Null)
-            push!(neighbours[p.K+b+1], i+1)
+        if !(indices isa Null)
+            push!(indices[p.K+b+1], i+1)
         end
         b = (b + a) % p.S
         C[p.K+b+1] = C[p.K+b+1] + v
-        if !(neighbours isa Null)
-            push!(neighbours[p.K+b+1], i+1)
+        if !(indices isa Null)
+            push!(indices[p.K+b+1], i+1)
         end
         b = (b + a) % p.S
         C[p.K+b+1] = C[p.K+b+1] + v
-        if !(neighbours isa Null)
-            push!(neighbours[p.K+b+1], i+1)
+        if !(indices isa Null)
+            push!(indices[p.K+b+1], i+1)
         end
     end
     return C
 end
 
 doc"Generate R10 precode HDPC symbols in-place at indices (K+S+1) to (K+S+H)."
-function r10_hdpc_encode!(C::Vector, p::R10Parameters, neighbours::Union{Vector{Set{Int}},Null}=null)
+# function r10_hdpc_encode!(C::Vector, p::R10Parameters, indices::Union{Vector{Set{Int}},Null}=null)
+function r10_hdpc_encode!(C::Vector, p::R10Parameters, indices)
     if length(C) != p.L
         error("C must have length p.L = $p.L")
     end
-    if !(neighbours isa Null) && length(neighbours) != p.L
-        error("neighbours must have length p.L = $p.L")
+    if !(indices isa Null) && length(indices) != p.L
+        error("indices must have length p.L = $p.L")
     end
     for i in 1:p.H
         C[p.K+p.S+i] = zero(C[1])
@@ -91,8 +118,8 @@ function r10_hdpc_encode!(C::Vector, p::R10Parameters, neighbours::Union{Vector{
         for g in gray(p.K+p.S+1, p.Hp)
             if !iszero(g & (1 << h))
                 C[p.K+p.S+h+1] = C[p.K+p.S+h+1] + C[j+1]
-                if !(neighbours isa Null)
-                    push!(neighbours[p.K+p.S+h+1], j+1)
+                if !(indices isa Null)
+                    push!(indices[p.K+p.S+h+1], j+1)
                 end
             end
             j += 1
@@ -144,24 +171,4 @@ function trip(X::Int, p::R10Parameters)
     a = 1 + r10_rand(Y, 1, p.Lp-1)
     b = r10_rand(Y, 2, p.Lp)
     return d, a, b
-end
-
-doc"Generate an LT symbol from the intermediate symbols."
-function lt_generate(C::Vector, X::Int, p::Code)
-    d, a, b = trip(X, p)
-    while (b >= p.L)
-        b = (b + a) % p.Lp
-    end
-    neighbours = Vector{Int}(min(d, p.L))
-    neighbours[1] = b+1
-    value = C[b+1]
-    for j in 1:min(d-1, p.L-1)
-        b = (b + a) % p.Lp
-        while (b >= p.L)
-            b = (b + a) % p.Lp
-        end
-        neighbours[j+1] = b+1
-        value = value + C[b+1]
-    end
-    return BSymbol(X, value, neighbours)
 end
