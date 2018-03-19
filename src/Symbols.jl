@@ -51,7 +51,7 @@ end
 doc"outer code symbol."
 struct R10Symbol{VT} <: CodeSymbol
     esi::Int # encoded symbol id
-    value::Vector{VT} # value of the symbol
+    value::VT # value of the symbol
     neighbours::Vector{Int}
 end
 
@@ -63,7 +63,7 @@ end
 doc"outer code symbol."
 struct QSymbol{VT,CT} <: CodeSymbol
     esi::Int # encoded symbol id
-    value::Vector{VT} # value of the symbol
+    value::VT # value of the symbol
     neighbours::Vector{Int}
     coefficients::Vector{CT}
 end
