@@ -1,5 +1,3 @@
-using Primes, Distributions
-
 export LTParameters, QLTParameters
 
 doc"LT code parameters."
@@ -29,9 +27,13 @@ struct QLTParameters{DT <: Sampleable{Univariate, Discrete}, CT} <: LTCode{NonBi
         new(K, K, Lp, dd)
     end
 end
-
 function QLTParameters(K::Integer, dd::DT) where DT <: Sampleable{Univariate, Discrete}
     QLTParameters{DT,GF256}(K, dd)
+end
+
+doc"LT codes have no pre-code, so do nothing."
+function precode!(C::Vector, p::LTCode)
+    return C
 end
 
 doc"Map a number 0 <= v <= 1 to a degree."
@@ -59,8 +61,8 @@ function trip(X::Int, p::LTCode)
     return d, a, b
 end
 
-doc"Generate an LT symbol from the intermediate symbols."
-function lt_generate(C::Vector, X::Int, p::LTCode{Binary})
+doc"generate an LT symbol from the intermediate symbols."
+function ltgenerate(C::Vector, X::Int, p::LTCode{Binary})
     d, a, b = trip(X, p)
     while (b >= p.L)
         b = (b + a) % p.Lp
@@ -79,8 +81,8 @@ function lt_generate(C::Vector, X::Int, p::LTCode{Binary})
     return BSymbol(X, value, neighbours)
 end
 
-doc"Generate an LT symbol from the intermediate symbols."
-function lt_generate(C::Vector, X::Int, p::LTCode{NonBinary})
+doc"generate an LT symbol from the intermediate symbols."
+function ltgenerate(C::Vector, X::Int, p::LTCode{NonBinary})
     d, a, b = trip(X, p)
     while (b >= p.L)
         b = (b + a) % p.Lp

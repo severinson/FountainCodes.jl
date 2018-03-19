@@ -7,8 +7,7 @@ function init(k=10)
     for i = 1:p.K
         C[i] = Vector{GF256}([i % 256])
     end
-    RaptorCodes.r10_ldpc_encode!(C, p)
-    RaptorCodes.r10_hdpc_encode!(C, p)
+    precode!(C, p)
     return p, d, C
 end
 
@@ -70,7 +69,7 @@ end
 function test_diagonalize_1()
     p, d, C = init()
     for i in 1:20
-        s = RaptorCodes.lt_generate(C, i, p)
+        s = RaptorCodes.ltgenerate(C, i, p)
         RaptorCodes.add!(d, s)
     end
     RaptorCodes.diagonalize!(d)
@@ -96,7 +95,7 @@ end
 function test_diagonalize_2()
     p, d, C = init(1024)
     for i in 1:1030
-        s = RaptorCodes.lt_generate(C, i, p)
+        s = RaptorCodes.ltgenerate(C, i, p)
         RaptorCodes.add!(d, s)
     end
     RaptorCodes.diagonalize!(d)
@@ -121,7 +120,7 @@ end
 
 function test_subtract_gf256_1()
     p, d, C = init_gf256(10)
-    s = RaptorCodes.lt_generate(C, 1, p)
+    s = RaptorCodes.ltgenerate(C, 1, p)
     RaptorCodes.add!(d, s)
     RaptorCodes.add!(d, s)
     RaptorCodes.subtract!(d, 1, 2, GF256(1))
@@ -183,7 +182,7 @@ end
 function test_diagonalize_gf256_1()
     p, d, C = init_gf256(10)
     for i in 1:15
-        s = RaptorCodes.lt_generate(C, i, p)
+        s = RaptorCodes.ltgenerate(C, i, p)
         RaptorCodes.add!(d, s)
     end
     RaptorCodes.diagonalize!(d)
@@ -211,7 +210,7 @@ end
 function test_diagonalize_gf256_2()
     p, d, C = init_gf256(20)
     for i in 1:22
-        s = RaptorCodes.lt_generate(C, i, p)
+        s = RaptorCodes.ltgenerate(C, i, p)
         RaptorCodes.add!(d, s)
     end
     RaptorCodes.diagonalize!(d)
@@ -239,7 +238,7 @@ end
 function test_ge_1()
     p, d, C = init()
     for i in 1:20
-        s = RaptorCodes.lt_generate(C, i, p)
+        s = RaptorCodes.ltgenerate(C, i, p)
         RaptorCodes.add!(d, s)
     end
     RaptorCodes.diagonalize!(d)
@@ -263,7 +262,7 @@ end
 function test_ge_2()
     p, d, C = init(20)
     for i in 1:25
-        s = RaptorCodes.lt_generate(C, i, p)
+        s = RaptorCodes.ltgenerate(C, i, p)
         RaptorCodes.add!(d, s)
     end
     RaptorCodes.diagonalize!(d)
@@ -287,7 +286,7 @@ end
 function test_ge_gf256_1()
     p, d, C = init_gf256()
     for i in 1:15
-        s = RaptorCodes.lt_generate(C, i, p)
+        s = RaptorCodes.ltgenerate(C, i, p)
         RaptorCodes.add!(d, s)
     end
     RaptorCodes.diagonalize!(d)
@@ -313,7 +312,7 @@ end
 function test_ge_gf256_2()
     p, d, C = init_gf256(20)
     for i in 1:22
-        s = RaptorCodes.lt_generate(C, i, p)
+        s = RaptorCodes.ltgenerate(C, i, p)
         RaptorCodes.add!(d, s)
     end
     RaptorCodes.diagonalize!(d)
@@ -339,7 +338,7 @@ end
 function test_backsolve_gf256()
     p, d, C = init_gf256(15)
     for i in 1:15
-        s = RaptorCodes.lt_generate(C, i, p)
+        s = RaptorCodes.ltgenerate(C, i, p)
         RaptorCodes.add!(d, s)
     end
     RaptorCodes.diagonalize!(d)
@@ -363,7 +362,7 @@ end
 function test_decoder_1()
     p, d, C = init()
     for i in 1:20
-        s = RaptorCodes.lt_generate(C, i, p)
+        s = RaptorCodes.ltgenerate(C, i, p)
         RaptorCodes.add!(d, s)
     end
     output = RaptorCodes.decode!(d)
@@ -379,7 +378,7 @@ end
 function test_decoder_2()
     p, d, C = init()
     for i in 1:15
-        s = RaptorCodes.lt_generate(C, i, p)
+        s = RaptorCodes.ltgenerate(C, i, p)
         RaptorCodes.add!(d, s)
     end
     output = RaptorCodes.decode!(d)
@@ -395,7 +394,7 @@ end
 function test_decoder_3()
     p, d, C = init(20)
     for i in 1:25
-        s = RaptorCodes.lt_generate(C, i, p)
+        s = RaptorCodes.ltgenerate(C, i, p)
         RaptorCodes.add!(d, s)
     end
     output = RaptorCodes.decode!(d)
@@ -411,7 +410,7 @@ end
 function test_decoder_4()
     p, d, C = init(1024)
     for i in 1:1030
-        s = RaptorCodes.lt_generate(C, i, p)
+        s = RaptorCodes.ltgenerate(C, i, p)
         RaptorCodes.add!(d, s)
     end
     output = RaptorCodes.decode!(d)
@@ -427,7 +426,7 @@ end
 function test_decoder_gf256()
     p, d, C = init_gf256()
     for i in 1:15
-        s = RaptorCodes.lt_generate(C, i, p)
+        s = RaptorCodes.ltgenerate(C, i, p)
         RaptorCodes.add!(d, s)
     end
     output = RaptorCodes.decode!(d)

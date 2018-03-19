@@ -5,8 +5,7 @@ function init(k=10)
         C[i] = Vector{GF256}([i % 256])
     end
     N = [Set{Int}() for _ in 1:length(C)]
-    RaptorCodes.r10_ldpc_encode!(C, p, N)
-    RaptorCodes.r10_hdpc_encode!(C, p, N)
+    precode!(C, p, N)
     return p, C, N
 end
 
@@ -18,7 +17,7 @@ function test_encode_1()
             error("intermediate symbol at index $i not assigned.")
         end
     end
-    s = RaptorCodes.lt_generate(C, 1, p)
+    s = RaptorCodes.ltgenerate(C, 1, p)
     deg = RaptorCodes.degree(s)
     if deg != 2
         error("LT degree is $deg bout should be 2")

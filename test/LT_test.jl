@@ -18,7 +18,7 @@ function test_encode()
             error("intermediate symbol at index $i not assigned.")
         end
     end
-    s = RaptorCodes.lt_generate(C, 1, p)
+    s = RaptorCodes.ltgenerate(C, 1, p)
     return true
 end
 @test test_encode()
@@ -26,7 +26,7 @@ end
 function test_decode_1()
     p, d, C = init()
     for i in 1:15
-        s = RaptorCodes.lt_generate(C, i, p)
+        s = RaptorCodes.ltgenerate(C, i, p)
         RaptorCodes.add!(d, s)
     end
     output = RaptorCodes.decode!(d)
@@ -42,7 +42,7 @@ end
 function test_decoder_2()
     p, d, C = init(1024)
     for i in 1:1300
-        s = RaptorCodes.lt_generate(C, i, p)
+        s = RaptorCodes.ltgenerate(C, i, p)
         RaptorCodes.add!(d, s)
     end
     output = RaptorCodes.decode!(d)
@@ -74,7 +74,7 @@ function test_encode_gf256()
             error("intermediate symbol at index $i not assigned.")
         end
     end
-    s = RaptorCodes.lt_generate(C, 1, p)
+    s = RaptorCodes.ltgenerate(C, 1, p)
     return true
 end
 @test test_encode_gf256()

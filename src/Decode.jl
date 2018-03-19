@@ -50,14 +50,13 @@ doc"R10 decoder constructor. Automatically adds constraint symbols."
 function Decoder(p::R10Parameters)
     d = Decoder{RBitVector,Vector{GF256}}(p)
     C = [Vector{GF256}() for _ in 1:p.L]
-    neighbours = [Set{Int}() for _ in 1:p.L]
-    r10_ldpc_encode!(C, p, neighbours)
-    r10_hdpc_encode!(C, p, neighbours)
+    indices = [Set{Int}() for _ in 1:p.L]
+    precode!(C, p, indices)
     for i in (p.K+1):(p.K+p.S+p.H)
         cs = BSymbol(
             -1,
             Vector{GF256}(),
-            sort!(push!(collect(neighbours[i]), i)),
+            sort!(push!(collect(indices[i]), i)),
         )
         add!(d, cs)
     end
