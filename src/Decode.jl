@@ -306,9 +306,12 @@ function subtract!(d::Decoder, rpi::Int, rpj::Int, coef)
 
     # track metrics for later analysis
     weight = inactive_degree(row1)
-    push!(d.metrics, "decoding_additions", weight+1)
-    push!(d.metrics, "decoding_multiplications", weight+1)
-    push!(d.metrics, "rowops", 1)
+    push!(d.metrics, "decoding_additions", weight)
+    push!(d.metrics, "rowadds", 1)
+    if coef != one(coef)
+        push!(d.metrics, "decoding_multiplications", weight)
+        push!(d.metrics, "rowmuls", 1)
+    end
 end
 
 doc"Inactivate a column of the constraint matrix."
