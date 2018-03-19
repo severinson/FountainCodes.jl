@@ -163,5 +163,5 @@ function lt_generate(C::Vector, X::Int, p::Code)
         neighbours[j+1] = b+1
         value = value + C[b+1]
     end
-    return R10Symbol(X, value, neighbours)
+    return BSymbol(X, value, neighbours)
 end

@@ -54,7 +54,7 @@ function Decoder(p::R10Parameters)
     r10_ldpc_encode!(C, p, neighbours)
     r10_hdpc_encode!(C, p, neighbours)
     for i in (p.K+1):(p.K+p.S+p.H)
-        cs = R10Symbol(
+        cs = BSymbol(
             -1,
             Vector{GF256}(),
             sort!(push!(collect(neighbours[i]), i)),

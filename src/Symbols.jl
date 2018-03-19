@@ -1,4 +1,4 @@
-export R10Value, R10Symbol, QSymbol, GF256
+export BSymbol, QSymbol, GF256
 
 # TODO: this method overrides the default behavior of UInt8
 const GF256 = UInt8
@@ -48,19 +48,19 @@ function Base.:/(a::GF256, b::GF256)
     end
 end
 
-doc"outer code symbol."
-struct R10Symbol{VT} <: CodeSymbol
+doc"outer code symbol with binary coefficients."
+struct BSymbol{VT} <: CodeSymbol
     esi::Int # encoded symbol id
     value::VT # value of the symbol
     neighbours::Vector{Int}
 end
 
 doc"number of neighbouring intermediate symbols."
-function degree(cs::R10Symbol)
+function degree(cs::CodeSymbol)
     return length(cs.neighbours)
 end
 
-doc"outer code symbol."
+doc"outer code symbol with arbitrary coefficient type."
 struct QSymbol{VT,CT} <: CodeSymbol
     esi::Int # encoded symbol id
     value::VT # value of the symbol
