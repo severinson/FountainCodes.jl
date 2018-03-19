@@ -1,5 +1,5 @@
 module RaptorCodes
-using Distributions
+using Distributions, Nulls, Primes
 
 # type system
 abstract type CoefficientType end
