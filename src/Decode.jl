@@ -315,7 +315,7 @@ function subtract!(d::Decoder, rpi::Int, rpj::Int, coef)
 end
 
 doc"Inactivate a column of the constraint matrix."
-function inactivate_isymbol!(d::Decoder, cpi::Int)
+function inactivate!(d::Decoder, cpi::Int)
     rightmost_active_col = length(d.columns) - d.num_inactivated
     ci = d.colperminv[cpi]
     if ci > rightmost_active_col
@@ -385,7 +385,7 @@ function diagonalize!(d::Decoder)
             cpi = active[j]
             ci = d.colperminv[cpi]
             if (d.num_decoded+1 < ci <= d.p.L-d.num_inactivated)
-                inactivate_isymbol!(d, cpi)
+                inactivate!(d, cpi)
             end
         end
         d.num_decoded += 1
