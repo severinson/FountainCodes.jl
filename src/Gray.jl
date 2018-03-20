@@ -1,13 +1,22 @@
-using ResumableFunctions
+# gray-code implementation
 
-# Gray-sequence generators.
+export grayencode, graydecode, hamming_weight, nextgray
 
-doc"Gray-encode an integer."
-function grayencode(i::Integer)
-    return xor(i, i >> 1)
+doc"gray-encode an integer."
+function grayencode(n::Int) :: Int
+    return xor(n, n >> 1)
 end
 
-doc"Return the number of ones in the base-2 representation of n."
+doc"decode a gray-sequence integer"
+function graydecode(n::Int) :: Int
+    r = n
+    while (n >>= 1) != 0
+        r = xor(r, n)
+    end
+    return r
+end
+
+doc"return the number of ones in the base-2 representation of n."
 function hamming_weight(n::Int) :: Int
     weight = 0
     i = one(n)
@@ -20,32 +29,15 @@ function hamming_weight(n::Int) :: Int
     return weight
 end
 
-@resumable function gray(n::Int) :: Int
-    for i in 0:n-1
-        @yield grayencode(i)
-    end
-    grayencode(n)
-end
-
-@resumable function gray(n::Int, hw::Int) :: Int
-    wl = length(bits(n))
-    i = 1
-    for g in gray(1 << (wl-2))
+doc"return the first number after g in the gray sequence with hamming weight hw"
+function nextgray(g::Int, hw::Int) :: Int
+    wl = length(bits(g))
+    n = graydecode(g)
+    for i in n+1:(1 << (wl-2))
+        g = grayencode(i)
         if hamming_weight(g) == hw
-            if i == n
-                return g
-            else
-                @yield g
-            end
-            i += 1
+            return g
         end
     end
-    error("could not produce $n elements of weight $hw")
+    error("no number after $g of hamming weight $hw")
 end
-
-# function nextgray(n::Int, hw::Int) :: Int
-#     wl = length(bits(n))
-#     for i in n:(1 << (wl-2))
-#         if 
-#     end
-# end

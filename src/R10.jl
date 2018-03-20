@@ -112,15 +112,15 @@ function r10_hdpc_encode!(C::Vector, p::R10Parameters, N=null)
         C[p.K+p.S+i] = zero(C[1])
     end
     for h in 0:p.H-1
-        j = 0
-        for g in gray(p.K+p.S+1, p.Hp)
+        g = 0
+        for j in 0:p.K+p.S-1
+            g = nextgray(g, p.Hp)
             if !iszero(g & (1 << h))
                 C[p.K+p.S+h+1] = C[p.K+p.S+h+1] + C[j+1]
                 if !(N isa Null)
                     push!(N[p.K+p.S+h+1], j+1)
                 end
             end
-            j += 1
         end
     end
     return C
