@@ -4,7 +4,7 @@ function init(k=10)
     for i = 1:p.K
         C[i] = Vector{GF256}([i % 256])
     end
-    N = [Set{Int}() for _ in 1:length(C)]
+    N = [Set{Int}() for _ in 1:p.L]
     precode!(C, p, N)
     return p, C, N
 end
@@ -28,7 +28,7 @@ end
 
 "test that the encoder produces a correct R10 constraint matrix"
 function test_encode_2()
-    p, C, N = init()
+    p, C, N = init(10)
     ri = p.K+1
     correct = [1, 6, 7, 8]
     indices = sort!(collect(N[ri]))
