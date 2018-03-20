@@ -1,5 +1,3 @@
-using Distributions
-
 export Soliton
 
 "Soliton distribution."
