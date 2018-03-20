@@ -11,9 +11,7 @@ struct LTParameters{T <: Sampleable{Univariate, Discrete}} <: LTCode{Binary}
         new(K, K, Lp, dd)
     end
 end
-
 LTParameters(K::Integer, dd::T) where {T <: Sampleable{Univariate, Discrete}} = LTParameters{T}(K, dd)
-
 Base.repr(p::LTParameters) = "LTParameters($(p.K), $(repr(p.dd)))"
 
 doc"q-ary LT code parameters."
@@ -30,6 +28,7 @@ end
 function QLTParameters(K::Integer, dd::DT) where DT <: Sampleable{Univariate, Discrete}
     QLTParameters{DT,GF256}(K, dd)
 end
+Base.repr{DT,CT}(p::QLTParameters{DT,CT}) = "QLTParameters{DT,$CT}($(p.K), $(repr(p.dd)))"
 
 doc"LT codes have no pre-code, so do nothing."
 function precode!(C::Vector, p::LTCode)
