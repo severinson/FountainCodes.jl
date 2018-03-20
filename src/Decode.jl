@@ -41,7 +41,9 @@ mutable struct Decoder{RT<:Row,VT}
         d.metrics["success"] = 0
         d.metrics["decoding_additions"] = 0
         d.metrics["decoding_multiplications"] = 0
-        d.metrics["rowops"] = 0
+        d.metrics["rowadds"] = 0
+        d.metrics["rowmuls"] = 0
+        d.metrics["inactivations"] = 0
         return d
     end
 end
@@ -333,6 +335,7 @@ function inactivate!(d::Decoder, cpi::Int)
         end
     end
     d.num_inactivated += 1
+    push!(d.metrics, "inactivations", 1)
     return
 end
 
