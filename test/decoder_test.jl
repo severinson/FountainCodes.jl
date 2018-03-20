@@ -1,4 +1,4 @@
-using RaptorCodes, Base.Test
+using RaptorCodes, Distributions, Base.Test
 
 function init(k=10)
     p = RaptorCodes.R10Parameters(k)
@@ -442,3 +442,41 @@ function test_decoder_gf256()
     return true
 end
 @test test_decoder_gf256()
+
+doc"test decoding a dense binary LT code"
+function test_dense_1()
+    K = 100
+    dd = DiscreteUniform(K/2, K)
+    p = RaptorCodes.LTParameters(K, dd)
+    d = RaptorCodes.Decoder(p)
+    C = Vector{Vector{GF256}}(p.L)
+    for i = 1:p.K
+        C[i] = Vector{GF256}([i % 256])
+    end
+    for i in 1:K+10
+        s = RaptorCodes.ltgenerate(C, i, p)
+        RaptorCodes.add!(d, s)
+    end
+    output = RaptorCodes.decode!(d)
+    return true
+end
+@test test_dense_1()
+
+doc"test decoding a dense q-ary LT code"
+function test_dense_2()
+    K = 100
+    dd = DiscreteUniform(K/2, K)
+    p = RaptorCodes.QLTParameters(K, dd)
+    d = RaptorCodes.Decoder(p)
+    C = Vector{Vector{GF256}}(p.L)
+    for i = 1:p.K
+        C[i] = Vector{GF256}([i % 256])
+    end
+    for i in 1:K+10
+        s = RaptorCodes.ltgenerate(C, i, p)
+        RaptorCodes.add!(d, s)
+    end
+    output = RaptorCodes.decode!(d)
+    return true
+end
+@test test_dense_2()
