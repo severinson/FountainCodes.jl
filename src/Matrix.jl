@@ -1,7 +1,5 @@
 # matrix primitives and concrete row types
 
-using Nulls
-
 export RBitVector
 
 doc"True if cs neighbours the intermediate symbol with index i."
