@@ -5,7 +5,7 @@ using ProfileView
 
 function init_decoder(
     p::R10Parameters,
-    C::Vector{RaptorCodes.ISymbol{R10Value}},
+    C::Vector{Vector{GF256}},
     r::Int, n::Int) :: RaptorCodes.Decoder
     d = RaptorCodes.Decoder(p)
     for j in 1:p.K+r
@@ -15,9 +15,23 @@ function init_decoder(
     return d
 end
 
+# function init_gf256(
+#     p::QLTParameters,
+#     C::Vector{RaptorCodes.ISymbol{R10Value}},
+#     r::Int, n::Int) :: RaptorCodes.Decoder
+#     dd = RaptorCodes.Soliton(k, Int(round(k*2/3)), 0.01)
+#     p = RaptorCodes.QLTParameters(k, dd)
+#     d = RaptorCodes.Decoder(p)
+#     C = Vector{Vector{GF256}}(p.L)
+#     for i = 1:p.K
+#         C[i] = Vector{GF256}([i % 256])
+#     end
+#     return p, d, C
+# end
+
 function encode_benchmark(
     p::R10Parameters,
-    C::Vector{RaptorCodes.ISymbol{R10Value}},
+    C::Vector{Vector{GF256}},
     r::Int, n::Int)
     for i in 1:n
         RaptorCodes.r10_ldpc_encode!(C, p)
@@ -31,9 +45,9 @@ end
 function main(K=1000, r=500, n=10)
     Profile.clear()
     p = R10Parameters(K)
-    C = Vector{RaptorCodes.ISymbol{R10Value}}(p.L)
+    C = Vector{Vector{GF256}}(p.L)
     for i = 1:p.K
-        C[i] = RaptorCodes.ISymbol(R10Value(i), Set([i]))
+        C[i] = Vector{GF256}([i % 256])
     end
 
     println("warming up the JIT...")
