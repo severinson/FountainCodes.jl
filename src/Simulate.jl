@@ -12,24 +12,62 @@ function Base.repr(r::Simulation)
     return "Simulation($(RaptorCodes.repr(r.p)), $(r.overhead))"
 end
 
-doc"R10 code intermediate symbols"
-function intermediate(p::R10Parameters)
-    C = Vector{Vector{F256}}(p.L)
-    for i = 1:p.K
-        C[i] = Vector{F256}()
-    end
-    r10_ldpc_encode!(C, p)
-    r10_hdpc_encode!(C, p)
+function init(c::Code)
+    C = [Vector{GF256}([0]) for _ in 1:c.L]
+    precode!(C, c)
     return C
 end
 
-doc"LT code intermediate symbols"
-function intermediate(p::LTParameters)
-    C = Vector{Vector{F256}}(p.L)
-    for i = 1:p.K
-        C[i] = Vector{F256}()
+doc"attempt to decode using all symbols in S. return decoding metrics."
+function sample(S::AbstractArray, c::Code)
+    d = Decoder(c)
+    for s in S
+        add!(d, s)
     end
-    return C
+    decode!(d, false)
+    return d.metrics
+end
+
+function parameterdct(c::RaptorCode)
+    dct = Dict()
+    dct["num_inputs"] = c.K
+    return dct
+end
+
+function parameterdct(c::LTCode)
+    dct = Dict()
+    dct["num_inputs"] = c.K
+    dct["mode"] = c.dd.mode
+    dct["delta"] = c.dd.delta
+    return dct
+end
+
+doc""
+function linearsim(overheads::Vector{Int}, c::Code)
+    println("starting simulation for $(repr(c))")
+    filename = joinpath(
+        "./simulations",
+        "$(repr(c))",
+        "$(Base.Random.uuid4()).csv",
+    )
+    mkpath(dirname(filename))
+    C = init(c)
+    S = [ltgenerate(C, rand(1:(2<<16)), c) for _ in 1:(c.L+maximum(overheads))]
+    samples = DefaultDict(Vector)
+    dct = parameterdct(c)
+    for overhead in overheads
+        dct["overhead"] = overhead
+        for v in dct
+            push!(samples[v[1]], v[2])
+        end
+        for v in sample(view(S, 1:(c.L+overhead)), c)
+            push!(samples[v[1]], v[2])
+        end
+    end
+    df = DataFrame(samples)
+    CSV.write(filename, df)
+    println("finished simulation for $(repr(c))")
+    return df
 end
 
 function sample(sr::Simulation)
