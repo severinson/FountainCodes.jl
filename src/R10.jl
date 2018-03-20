@@ -41,9 +41,9 @@ function precode!(C::Vector, p::R10Parameters)
 end
 
 doc"pre-code input data. C must be an array of source symbols of length L."
-function precode!(C::Vector, p::R10Parameters, indices::Vector{Set{Int}})
-    C = r10_ldpc_encode!(C, p, indices)
-    C = r10_hdpc_encode!(C, p, indices)
+function precode!(C::Vector, p::R10Parameters, N::Vector)
+    C = r10_ldpc_encode!(C, p, N)
+    C = r10_hdpc_encode!(C, p, N)
     return C
 end
 
@@ -53,28 +53,27 @@ function ltgenerate(C::Vector, X::Int, p::Code)
     while (b >= p.L)
         b = (b + a) % p.Lp
     end
-    indices = Vector{Int}(min(d, p.L))
-    indices[1] = b+1
+    N = Vector{Int}(min(d, p.L))
+    N[1] = b+1
     value = C[b+1]
     for j in 1:min(d-1, p.L-1)
         b = (b + a) % p.Lp
         while (b >= p.L)
             b = (b + a) % p.Lp
         end
-        indices[j+1] = b+1
+        N[j+1] = b+1
         value = value + C[b+1]
     end
-    return BSymbol(X, value, indices)
+    return BSymbol(X, value, N)
 end
 
-doc"Generate R10 precode LDPC symbols in-place at indices (K+1) to (K+S)."
-# function r10_ldpc_encode!(C::Vector, p::R10Parameters, neighbours::Union{Vector{Set{Int}},Null}=null)
-function r10_ldpc_encode!(C::Vector, p::R10Parameters, indices)
+doc"Generate R10 precode LDPC symbols in-place at N (K+1) to (K+S)."
+function r10_ldpc_encode!(C::Vector, p::R10Parameters, N=null)
     if length(C) != p.L
         error("C must have length p.L = $p.L")
     end
-    if !(indices isa Null) && length(indices) != p.L
-        error("indices must have length p.L = $p.L")
+    if !(N isa Null) && length(N) != p.L
+        error("N must have length p.L = $p.L")
     end
     for i in 1:p.S
         C[p.K+i] = zero(C[1])
@@ -84,42 +83,41 @@ function r10_ldpc_encode!(C::Vector, p::R10Parameters, indices)
         a = 1 + Int64((floor(i/p.S) % (p.S-1)))
         b = i % p.S
         C[p.K+b+1] = C[p.K+b+1] + v
-        if !(indices isa Null)
-            push!(indices[p.K+b+1], i+1)
+        if !(N isa Null)
+            push!(N[p.K+b+1], i+1)
         end
         b = (b + a) % p.S
         C[p.K+b+1] = C[p.K+b+1] + v
-        if !(indices isa Null)
-            push!(indices[p.K+b+1], i+1)
+        if !(N isa Null)
+            push!(N[p.K+b+1], i+1)
         end
         b = (b + a) % p.S
         C[p.K+b+1] = C[p.K+b+1] + v
-        if !(indices isa Null)
-            push!(indices[p.K+b+1], i+1)
+        if !(N isa Null)
+            push!(N[p.K+b+1], i+1)
         end
     end
     return C
 end
 
-doc"Generate R10 precode HDPC symbols in-place at indices (K+S+1) to (K+S+H)."
-# function r10_hdpc_encode!(C::Vector, p::R10Parameters, indices::Union{Vector{Set{Int}},Null}=null)
-function r10_hdpc_encode!(C::Vector, p::R10Parameters, indices)
+doc"Generate R10 precode HDPC symbols in-place at N (K+S+1) to (K+S+H)."
+function r10_hdpc_encode!(C::Vector, p::R10Parameters, N=null)
     if length(C) != p.L
         error("C must have length p.L = $p.L")
     end
-    if !(indices isa Null) && length(indices) != p.L
-        error("indices must have length p.L = $p.L")
+    if !(N isa Null) && length(N) != p.L
+        error("N must have length p.L = $p.L")
     end
     for i in 1:p.H
         C[p.K+p.S+i] = zero(C[1])
     end
     for h in 0:p.H-1
         j = 0
-        for g in gray(p.K+p.S+1, p.Hp)
+        for g in gray(p.K+p.S, p.Hp)
             if !iszero(g & (1 << h))
                 C[p.K+p.S+h+1] = C[p.K+p.S+h+1] + C[j+1]
-                if !(indices isa Null)
-                    push!(indices[p.K+p.S+h+1], j+1)
+                if !(N isa Null)
+                    push!(N[p.K+p.S+h+1], j+1)
                 end
             end
             j += 1
