@@ -53,24 +53,24 @@ end
 
 doc"in-place XOR of two bit-vectors."
 function xor!(a::BitVector, b::BitVector)
-    length(b) > length(a) && throw(BoundsError(a, length(a)+1))
-    @inbounds begin
-        @simd for i in 1:length(b.chunks)
-            a.chunks[i] = xor(a.chunks[i], b.chunks[i])
-        end
+    a.chunks = xor.(a.chunks, b.chunks)
+    la, lb = length(a), length(b)
+    if lb > la
+        append!(a, view(b, (lb-la+1):lb))
     end
     return a
 end
 
 doc"in-place XOR of two UInt8-vectors."
 function xor!(a::Vector{UInt8}, b::Vector{UInt8})
+    la, lb = length(a), length(b)
     @inbounds begin
-        @simd for i in 1:length(a)
+        @simd for i in 1:la
             a[i] = xor(a[i], b[i])
         end
-        for i in length(a)+1:length(b)
-            push!(a, b[i])
-        end
+    end
+    if lb > la
+        append!(a, view(b, (lb-la+1):lb))
     end
     return a
 end
@@ -87,6 +87,9 @@ end
 
 doc"set an element of the dense part of the matrix."
 @inline function setdense!(row::RBitVector, upi::Int, v::Bool)
+    while upi > length(row.inactive) # dynamically grow the array
+        append!(row.inactive, falses(length(row.inactive)))
+    end
     row.inactive[upi] = v
     return row
 end
@@ -183,7 +186,6 @@ end
             qary = xor!(qary, coef*a.dense)
             b = RqRow{CT}(b.indices, b.values, qary)
         elseif b.dense isa Vector{CT}
-            # println("5 b.dense=$(b.dense), coef*a.dense=$(coef*a.dense)")
             xor!(b.dense, coef*a.dense)
         else
             b = RqRow(b.indices, b.values, coef*a.dense)
@@ -235,13 +237,8 @@ doc"set an element of the dense part of the matrix."
         end
         row.dense[upi] = v
     elseif row.dense isa Vector{CT}
-        if upi > length(row.dense)
-            j = max(upi, 64*((upi-1)>>6+1)) # closest multiple of 64
-            row = RqRow{CT}(
-                row.indices,
-                row.values,
-                zeros(CT, j),
-            )
+        while upi > length(row.dense)
+            append!(row.dense, zeros(CT, length(row.dense)))
         end
         row.dense[upi] = v
     else
