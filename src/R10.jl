@@ -35,8 +35,8 @@ Base.repr(p::R10Parameters) = "R10Parameters($(p.K))"
 
 doc"pre-code input data. C must be an array of source symbols of length L."
 function precode!(C::Vector, p::R10Parameters)
-    C = r10_ldpc_encode!(C, p, null)
-    C = r10_hdpc_encode!(C, p, null)
+    C = r10_ldpc_encode!(C, p, missing)
+    C = r10_hdpc_encode!(C, p, missing)
     return C
 end
 
@@ -68,11 +68,11 @@ function ltgenerate(C::Vector, X::Int, p::Code)
 end
 
 doc"Generate R10 precode LDPC symbols in-place at N (K+1) to (K+S)."
-function r10_ldpc_encode!(C::Vector, p::R10Parameters, N=null)
+function r10_ldpc_encode!(C::Vector, p::R10Parameters, N=missing)
     if length(C) != p.L
         error("C must have length p.L = $p.L")
     end
-    if !(N isa Null) && length(N) != p.L
+    if N !== missing && length(N) != p.L
         error("N must have length p.L = $p.L")
     end
     for i in 1:p.S
@@ -83,17 +83,17 @@ function r10_ldpc_encode!(C::Vector, p::R10Parameters, N=null)
         a = 1 + Int64((floor(i/p.S) % (p.S-1)))
         b = i % p.S
         C[p.K+b+1] = C[p.K+b+1] + v
-        if !(N isa Null)
+        if N !== missing
             push!(N[p.K+b+1], i+1)
         end
         b = (b + a) % p.S
         C[p.K+b+1] = C[p.K+b+1] + v
-        if !(N isa Null)
+        if N !== missing
             push!(N[p.K+b+1], i+1)
         end
         b = (b + a) % p.S
         C[p.K+b+1] = C[p.K+b+1] + v
-        if !(N isa Null)
+        if N !== missing
             push!(N[p.K+b+1], i+1)
         end
     end
@@ -101,11 +101,11 @@ function r10_ldpc_encode!(C::Vector, p::R10Parameters, N=null)
 end
 
 doc"Generate R10 precode HDPC symbols in-place at N (K+S+1) to (K+S+H)."
-function r10_hdpc_encode!(C::Vector, p::R10Parameters, N=null)
+function r10_hdpc_encode!(C::Vector, p::R10Parameters, N=missing)
     if length(C) != p.L
         error("C must have length p.L = $p.L")
     end
-    if !(N isa Null) && length(N) != p.L
+    if N !== missing && length(N) != p.L
         error("N must have length p.L = $p.L")
     end
     for i in 1:p.H
@@ -117,7 +117,7 @@ function r10_hdpc_encode!(C::Vector, p::R10Parameters, N=null)
             g = nextgray(g, p.Hp)
             if !iszero(g & (1 << h))
                 C[p.K+p.S+h+1] = C[p.K+p.S+h+1] + C[j+1]
-                if !(N isa Null)
+                if N!== missing
                     push!(N[p.K+p.S+h+1], j+1)
                 end
             end

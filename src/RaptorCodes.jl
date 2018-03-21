@@ -1,5 +1,5 @@
 module RaptorCodes
-using Distributions, Nulls, Primes
+using Distributions, Missings, Primes
 export CoefficientType, Binary, NonBinary, CodeStructure, LT, Raptor, Code
 
 # type system
