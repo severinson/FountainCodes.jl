@@ -70,13 +70,13 @@ function xor!(a::BitVector, b::BitVector)
 end
 
 doc"in-place XOR of two UInt8-vectors."
-function xor!(a::Vector{UInt8}, b::Vector{UInt8})
+function xor!(a::Vector{GF256}, b::Vector{GF256})
     la, lb = length(a), length(b)
-    @inbounds begin
-        @simd for i in 1:la
-            a[i] = xor(a[i], b[i])
-        end
+    # @inbounds begin
+    @simd for i in 1:min(la, lb)
+        a[i] = xor(a[i], b[i])
     end
+    # end
     if lb > la
         append!(a, view(b, (la+1):lb))
     end
@@ -185,6 +185,7 @@ end
 
 @inline function subtract!{CT}(b::RqRow{CT}, a::RqRow{CT}, coef::CT) ::RqRow
     if a.dense isa BitVector
+        error("not implemented")
         if b.dense isa BitVector
             xor!(b.dense, a.dense)
         elseif b.dense isa Vector{CT}
@@ -195,6 +196,7 @@ end
         end
     elseif a.dense isa Vector{CT}
         if b.dense isa BitVector
+            error("not implemented")
             qary = qary_from_binary(b.dense)
             qary = xor!(qary, coef*a.dense)
             b = RqRow{CT}(b.indices, b.values, qary)
@@ -216,6 +218,7 @@ end
 
 doc"set an element of the dense part of the matrix."
 @inline function setdense!{CT}(row::RqRow{CT}, upi::Int, v::Bool)
+    error("not implemented")
     if row.dense isa BitVector
         row.dense[upi] = v
     elseif row.dense isa Vector{CT}
@@ -237,7 +240,9 @@ end
 
 doc"set an element of the dense part of the matrix."
 @inline function setdense!{CT}(row::RqRow{CT}, upi::Int, v::CT)
+    @assert !iszero(v) "v must be non-zero"
     if row.dense isa BitVector
+        error("not implemented")
         l = find(row.dense)
         j = max(max(l), upi, 64)
         row = RqRow{CT}(
@@ -269,6 +274,7 @@ end
 doc"get an element from the dense part of the matrix."
 @inline function getdense{CT}(row::RqRow{CT}, upi::Int)
     if row.dense isa BitVector && upi <= length(row.dense)
+        error("not implemented")
         if row.dense[upi]
             return one(CT)
         else
