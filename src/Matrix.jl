@@ -118,15 +118,15 @@ doc"sparse binary/q-ary row"
 struct RqRow{CT} <: Row
     indices::Vector{Int} # sorted list of initial non-zero indices.
     values::Vector{CT} # initial non-zero values for indices
-    dense::Union{BitVector,Vector{CT},Null} # dense part
+    dense::Union{BitVector,Vector{CT}} # dense part
     function RqRow{CT}(indices::Vector{Int}, values::Vector{CT}) where CT
         p = sortperm(indices)
-        return new(copy(indices)[p], copy(values)[p], null)
+        return new(copy(indices)[p], copy(values)[p], Vector{CT}())
     end
-    function RqRow{CT}(indices::Vector{Int}, values::Vector{CT}, dense::BitVector) where CT
-        p = sortperm(indices)
-        return new(copy(indices)[p], copy(values)[p], copy(dense))
-    end
+    # function RqRow{CT}(indices::Vector{Int}, values::Vector{CT}, dense::BitVector) where CT
+    #     p = sortperm(indices)
+    #     return new(copy(indices)[p], copy(values)[p], copy(dense))
+    # end
     function RqRow{CT}(indices::Vector{Int}, values::Vector{CT}, dense::Vector{CT}) where CT
         p = sortperm(indices)
         return new(copy(indices)[p], copy(values)[p], copy(dense))
@@ -152,7 +152,7 @@ end
 @inline function inactive_degree{CT}(r::RqRow{CT})
     if r.dense isa BitVector
         return sum(r.dense)
-    elseif r.dense isa Vector{CT}
+    elseif r.dense isa Vector{CT} && length(r.dense) > 0
         return sum(!iszero(v) for v in r.dense)
     end
     return 0
@@ -184,13 +184,16 @@ function qary_from_binary(b::BitVector) :: Array{GF256}
 end
 
 @inline function subtract!{CT}(b::RqRow{CT}, a::RqRow{CT}, coef::CT) ::RqRow
+    if length(a.dense) == 0
+        return b
+    end
     if a.dense isa BitVector
         error("not implemented")
         if b.dense isa BitVector
             xor!(b.dense, a.dense)
         elseif b.dense isa Vector{CT}
             qary = qary_from_binary(a.dense)
-            xor!(b.dense, coef*qary)
+            xor!(b.dense, coef.*qary)
         else
             b = RqRow{CT}(b.indices, b.values, a.dense)
         end
@@ -198,15 +201,12 @@ end
         if b.dense isa BitVector
             error("not implemented")
             qary = qary_from_binary(b.dense)
-            qary = xor!(qary, coef*a.dense)
+            qary = xor!(qary, exprq.(logrq(coef) .+ logrq.(a.dense)))
+            # qary = xor!(qary, coef.*a.dense)
             b = RqRow{CT}(b.indices, b.values, qary)
         elseif b.dense isa Vector{CT}
-            xor!(b.dense, coef*a.dense)
-        else
-            b = RqRow(b.indices, b.values, coef*a.dense)
+            xor!(b.dense, coef.*a.dense)
         end
-    elseif !(a.dense isa Null)
-        error("a.dense must be either BitVector, Vector{CT} or null")
     end
     return b
 end
@@ -256,7 +256,7 @@ doc"set an element of the dense part of the matrix."
         row.dense[upi] = v
     elseif row.dense isa Vector{CT}
         while upi > length(row.dense)
-            append!(row.dense, zeros(CT, length(row.dense)))
+            append!(row.dense, zeros(CT, max(1, length(row.dense))))
         end
         row.dense[upi] = v
     else
