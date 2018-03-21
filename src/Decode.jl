@@ -431,7 +431,9 @@ function gaussian_elimination!(d::Decoder)
                 coef = getdense(d, rpj, cpj)
                 if !iszero(coef)
                     rpk = d.rowperm[cj]
-                    subtract!(d, rpk, rpj, coef, getdense(d, rpk, cpj))
+                    coef2 = getdense(d, rpk, cpj)
+                    @assert !iszero(coef2) "coef2 is $coef2, but must be non-zero. cj=$cj, cpj=$cpj, row=$row, row2=$(d.rows[rpk])"
+                    subtract!(d, rpk, rpj, coef, coef2)
                 end
             end
 
