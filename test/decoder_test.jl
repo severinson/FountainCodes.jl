@@ -490,7 +490,7 @@ function test_decoder_gf256_3()
     for i = 1:p.K
         C[i] = Vector{GF256}([i % 256])
     end
-    for i in 1:4135
+    for i in 1:6000
         s = RaptorCodes.ltgenerate(C, i, p)
         RaptorCodes.add!(d, s)
     end
