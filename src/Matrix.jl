@@ -23,7 +23,10 @@ struct RBitVector <: Row
     indices::Vector{Int} # sorted list of initial non-zero indices.
     inactive::BitVector # dense binary part
     function RBitVector(active::Vector{Int})
-        return new(sort!(copy(active)), BitVector(64))
+        return new(sort!(copy(active)), falses(64))
+    end
+    function RBitVector(active::Vector{Int}, inactive::BitVector)
+        return new(sort!(copy(active)), inactive)
     end
 end
 
@@ -53,11 +56,16 @@ end
 
 doc"in-place XOR of two bit-vectors."
 function xor!(a::BitVector, b::BitVector)
-    a.chunks = xor.(a.chunks, b.chunks)
-    la, lb = length(a), length(b)
-    if lb > la
-        append!(a, view(b, (lb-la+1):lb))
+    la, lb = length(a.chunks), length(b.chunks)
+    @inbounds begin
+        @simd for i in 1:min(la, lb)
+            a.chunks[i] = xor(a.chunks[i], b.chunks[i])
+        end
     end
+    if lb > la
+        append!(a.chunks, view(b.chunks, (la+1):lb))
+    end
+    a.len = 64*length(a.chunks)
     return a
 end
 
@@ -70,12 +78,13 @@ function xor!(a::Vector{UInt8}, b::Vector{UInt8})
         end
     end
     if lb > la
-        append!(a, view(b, (lb-la+1):lb))
+        append!(a, view(b, (la+1):lb))
     end
     return a
 end
 
-@inline function subtract!(b::RBitVector, a::RBitVector, coef)
+@inline function subtract!(b::RBitVector, a::RBitVector, coef::Bool)
+    @assert coef "coef must be true, but is $coef"
     xor!(b.inactive, a.inactive)
     return b
 end
@@ -87,6 +96,9 @@ end
 
 doc"set an element of the dense part of the matrix."
 @inline function setdense!(row::RBitVector, upi::Int, v::Bool)
+    if !v # unallocated elements are already assumed to be zero
+        return row
+    end
     while upi > length(row.inactive) # dynamically grow the array
         append!(row.inactive, falses(length(row.inactive)))
     end
@@ -96,6 +108,9 @@ end
 
 doc"get an element from the dense part of the matrix."
 @inline function getdense(row::RBitVector, upi::Int) :: Bool
+    if upi > length(row.inactive)
+        return false
+    end
     return row.inactive[upi]
 end
 
@@ -153,9 +168,7 @@ end
 
 @inline function coefficient(r::RqRow, cpi::Int)
     range = searchsorted(r.indices, cpi)
-    if length(range) != 1
-        error("$cpi must occur exactly once in row $r")
-    end
+    @assert length(range) == 1 "tried to find-non-existing or duplicate index $cpi in row $r"
     i = range[1]
     return r.values[i]
 end
@@ -255,13 +268,13 @@ end
 
 doc"get an element from the dense part of the matrix."
 @inline function getdense{CT}(row::RqRow{CT}, upi::Int)
-    if row.dense isa BitVector
+    if row.dense isa BitVector && upi <= length(row.dense)
         if row.dense[upi]
             return one(CT)
         else
             return zero(CT)
         end
-    elseif row.dense isa Vector{CT}
+    elseif row.dense isa Vector{CT} && upi <= length(row.dense)
         return row.dense[upi]
     end
     return zero(CT)
