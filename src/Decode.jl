@@ -301,15 +301,15 @@ function subtract!(d::Decoder, rpi::Int, rpj::Int, coefi, coefj)
     if !iszero(d.values[rpi])
         if !iszero(d.values[rpj])
             if coef == one(coef)
-                d.values[rpj] = d.values[rpj] + d.values[rpi]
+                d.values[rpj] = d.values[rpj] .+ d.values[rpi]
             else
-                d.values[rpj] = d.values[rpj] + coef*d.values[rpi]
+                d.values[rpj] = d.values[rpj] .+ exprq.(logrq(coef) .+ logrq.(d.values[rpi]))
             end
         else
             if coef == one(coef)
                 d.values[rpj] = copy(d.values[rpi])
             else
-                d.values[rpj] = coef*copy(d.values[rpi])
+                d.values[rpj] = exprq.(logrq(coef) .+ logrq.(d.values[rpi]))
             end
         end
     end
