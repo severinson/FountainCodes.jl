@@ -48,9 +48,50 @@ end
 # r10_degree()
 
 
-# c = R10Parameters(100)
-K = 100
-dd = RaptorCodes.Soliton(K, Int(round(K*2/3)), 0.01)
-c = QLTParameters(K, dd)
-df = RaptorCodes.linearsim([1,10,50], c)
-println(df)
+# make sure we have a random seed
+srand()
+
+function qltsim(overheads::Vector{Int})
+    mode = 3998
+    delta = 0.9999999701976676
+    dd = RaptorCodes.Soliton(K, mode, delta)
+    c = QLTParameters(K, dd)
+    for _ in 1:100
+        df = RaptorCodes.linearsims(overheads, c, 100)
+        println(df)
+    end
+end
+
+function ltsim(overheads::Vector{Int})
+    mode = 3998
+    delta = 0.9999999701976676
+    dd = RaptorCodes.Soliton(K, mode, delta)
+    c = LTParameters(K, dd)
+    for _ in 1:100
+        df = RaptorCodes.linearsims(overheads, c, 100)
+        println(df)
+    end
+end
+
+function r10sim(overheads::Vector{Int})
+    c = R10Parameters(K)
+    for _ in 1:100
+        df = RaptorCodes.linearsims(overheads, c, 100)
+        println(df)
+    end
+end
+
+K = 4000
+a = 0.01
+c = 1.5
+reloverheads = [a*c^i for i in 0:10]
+overheads = Vector{Int}(round.(K*reloverheads))
+
+
+reloverheads = linspace(0.25, 0.4, 100)
+overheads = Vector{Int}(round.(K*reloverheads))
+# qltsim(overheads)
+# ltsim(overheads)
+reloverheads = linspace(0, 0.05, 100)
+overheads = Vector{Int}(round.(K*reloverheads))
+r10sim(overheads)
