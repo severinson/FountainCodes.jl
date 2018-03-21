@@ -32,9 +32,51 @@ function Base.:-(a::GF256, b::GF256)
     return a + b
 end
 
+function logrq(a::GF256) :: Int
+    return iszero(a) ? error("logarithm of 0 undefined") : RQ_OCT_LOG[a]
+end
+
+function exprq(a::Int) :: GF256
+    return RQ_OCT_EXP[a+1]
+end
+
 doc"addition over GF256 according to rfc6330."
 function Base.:*(a::GF256, b::GF256)
     return iszero(a) || iszero(b) ? zero(a) : RQ_OCT_EXP[RQ_OCT_LOG[a] + RQ_OCT_LOG[b] + 1]
+end
+
+doc"division over GF256 according to rfc6330."
+function Base.:/(a::AbstractArray{GF256}, b::GF256)
+    if iszero(a)
+        return zero(a)
+    elseif iszero(b)
+        error("division by zero")
+    end
+    return exprq.(logrq.(a) - logrq(b) + 255)
+end
+
+function divrq!(a::GF256, b::GF256)
+    if iszero(b)
+        error("division by zero")
+    end
+    blog = logrq(b)
+    if !iszero(a)
+        a = exprq(logrq(a) - blog + 255)
+    end
+    return a
+end
+
+function divrq!(a::AbstractArray{GF256}, b::GF256)
+    if iszero(b)
+        error("division by zero")
+    end
+    blog = logrq(b)
+    for i in 1:length(a)
+        if !iszero(a[i])
+            a[i] = exprq(logrq(a[i]) - blog + 255)
+        end
+    end
+    return a
 end
 
 doc"division over GF256 according to rfc6330."
