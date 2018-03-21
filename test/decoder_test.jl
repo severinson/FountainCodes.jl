@@ -423,17 +423,37 @@ function test_decoder_4()
 end
 @test test_decoder_4()
 
-function test_decoder_gf256()
+function test_decoder_5()
+    p, d, C = init(100)
+    for i in 300:400 # simulate high loss rate
+        s = RaptorCodes.ltgenerate(C, i, p)
+        RaptorCodes.add!(d, s)
+    end
+    output = RaptorCodes.decode!(d)
+    for i in 1:p.K
+        if output[i] != C[i]
+            error("decoding failure. source[$i] is $(output[i]). should be $(C[i]).")
+        end
+    end
+    for row in d.rows
+        for upi in d.num_inactivated+1:p.L
+            coef = RaptorCodes.getdense(row, upi)
+            if !iszero(coef)
+                error("row $row has a non-zero entry at upi=$upi, when num_inactivated=$(d.num_inactivated)")
+            end
+        end
+    end
+    return true
+end
+@test test_decoder_5()
+
+function test_decoder_gf256_1()
     p, d, C = init_gf256()
     for i in 1:15
         s = RaptorCodes.ltgenerate(C, i, p)
         RaptorCodes.add!(d, s)
     end
     output = RaptorCodes.decode!(d)
-    for ri in 1:d.p.L
-        rpi = d.rowperm[ri]
-        row = d.rows[rpi]
-    end
     for i in 1:p.K
         if output[i] != C[i]
             error("decoding failure. source[$i] is $(output[i]). should be $(C[i]).")
@@ -441,7 +461,48 @@ function test_decoder_gf256()
     end
     return true
 end
-@test test_decoder_gf256()
+@test test_decoder_gf256_1()
+
+function test_decoder_gf256_2()
+    p, d, C = init_gf256(1000)
+    for i in 1:1300
+        s = RaptorCodes.ltgenerate(C, i, p)
+        RaptorCodes.add!(d, s)
+    end
+    output = RaptorCodes.decode!(d)
+    for i in 1:p.K
+        if output[i] != C[i]
+            error("decoding failure. source[$i] is $(output[i]). should be $(C[i]).")
+        end
+    end
+    return true
+end
+@test test_decoder_gf256_2()
+
+function test_decoder_gf256_3()
+    K = 4000
+    mode = 3998
+    delta = 0.9999999701976676
+    dd = RaptorCodes.Soliton(K, mode, delta)
+    p = QLTParameters(K, dd)
+    d = RaptorCodes.Decoder(p)
+    C = Vector{Vector{GF256}}(p.L)
+    for i = 1:p.K
+        C[i] = Vector{GF256}([i % 256])
+    end
+    for i in 1:4135
+        s = RaptorCodes.ltgenerate(C, i, p)
+        RaptorCodes.add!(d, s)
+    end
+    output = RaptorCodes.decode!(d)
+    for i in 1:p.K
+        if output[i] != C[i]
+            error("decoding failure. source[$i] is $(output[i]). should be $(C[i]).")
+        end
+    end
+    return true
+end
+@test test_decoder_gf256_3()
 
 doc"test decoding a dense binary LT code"
 function test_dense_1()
