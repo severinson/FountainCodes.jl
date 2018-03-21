@@ -57,7 +57,8 @@ function main(K=1000, r=500, n=10)
     end
     @printf "%.3fGbps\n" 256*8*p.K/(td/n)/1000/1000/1000
 
-    # ProfileView.view()
+    Profile.print()
+    ProfileView.view()
 end
 
 main()
