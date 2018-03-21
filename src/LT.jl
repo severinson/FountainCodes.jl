@@ -42,7 +42,11 @@ end
 
 doc"Map a number 0 <= v <= 1 to a coefficient."
 function coefficient{DT,CT}(p::QLTParameters{DT,CT})
-    return rand(CT)
+    c = zero(CT)
+    while iszero(c)
+        c = rand(CT)
+    end
+    return c
 end
 
 doc"Maps an encoding symbol ID X to a triple (d, a, b)"
