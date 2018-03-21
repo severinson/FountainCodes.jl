@@ -18,7 +18,7 @@ mutable struct Decoder{RT<:Row,VT}
     pq::PriorityQueue{Int,Float64} # used to select rows
     num_decoded::Int # denoted by i in the R10 spec.
     num_inactivated::Int # denoted by u in the R10 spec.
-    metrics::DataStructures.Accumulator
+    metrics::DataStructures.Accumulator{String,Int}
     status::String
     function Decoder{RT,VT}(p::Code) where RT<:Row where VT
         d = new(
@@ -178,8 +178,7 @@ function zerodiag!(d::Decoder, rpi::Int) :: Int
         if ci < d.num_decoded+1 && ci <= d.p.L-d.num_inactivated
             rpj = d.rowperm[ci]
             row = d.rows[rpj]
-            coef = coef / coefficient(row, cpi)
-            subtract!(d, rpj, rpi, coef)
+            subtract!(d, rpj, rpi, coef, coefficient(row, cpi))
         end
     end
     return rpi
@@ -283,9 +282,19 @@ function select_row(d::Decoder) :: Int
 end
 
 doc"subtract coef*rows[rpi] from rows[rpj]."
-function subtract!(d::Decoder, rpi::Int, rpj::Int, coef)
+function subtract!(d::Decoder, rpi::Int, rpj::Int, coef1)
+    return subtract!(d, rpi, rpj, coef1, one(coef1))
+end
+
+doc"subtract coef*rows[rpi] from rows[rpj]."
+function subtract!(d::Decoder, rpi::Int, rpj::Int, coefi, coefj)
     row1 = d.rows[rpi]
     row2 = d.rows[rpj]
+    coef = coefi
+    @assert !iszero(coefj) "coefj must be non-zero, but is $coefj and type $(typeof(coefj))"
+    if coefj != one(coefj)
+        coef /= coefj
+    end
     d.rows[rpj] = subtract!(row2, row1, coef)
 
     # zero values are allocated on-demand
@@ -324,6 +333,8 @@ function inactivate!(d::Decoder, cpi::Int)
     end
     push!(d.uperm, d.num_inactivated+1)
     push!(d.uperminv, d.num_inactivated+1)
+    d.num_inactivated += 1
+    push!(d.metrics, "inactivations", 1)
     swap_cols!(d, ci, rightmost_active_col)
     for rpi in d.columns[cpi]
         if d.rowperminv[rpi] > d.num_decoded
@@ -334,8 +345,6 @@ function inactivate!(d::Decoder, cpi::Int)
             end
         end
     end
-    d.num_inactivated += 1
-    push!(d.metrics, "inactivations", 1)
     return
 end
 
@@ -422,7 +431,7 @@ function gaussian_elimination!(d::Decoder)
                 coef = getdense(d, rpj, cpj)
                 if !iszero(coef)
                     rpk = d.rowperm[cj]
-                    subtract!(d, rpk, rpj, coef / getdense(d, rpk, cpj))
+                    subtract!(d, rpk, rpj, coef, getdense(d, rpk, cpj))
                 end
             end
 
@@ -440,6 +449,7 @@ function gaussian_elimination!(d::Decoder)
         # swap any non-zero entry into the i-th column of u_lower
         row = d.rows[rpi]
         upi = getinactive(row)
+        @assert upi <= d.num_inactivated "$upi must be <= $(d.num_inactivated) row=$row"
         ui = d.uperminv[upi]
         cj = _ui2ci(d, ui)
         uj = _ci2ui(d, ci)
@@ -453,10 +463,14 @@ function gaussian_elimination!(d::Decoder)
             coef = getdense(d, rpj, cpj)
             if !iszero(coef)
                 rpk = d.rowperm[d.num_decoded+1]
-                subtract!(d, rpk, rpj, coef / getdense(d, rpk, cpj))
+                subtract!(d, rpk, rpj, coef, getdense(d, rpk, cpj))
             end
         end
         d.num_decoded += 1
+        ri = d.num_decoded
+        rpi = d.rowperm[d.num_decoded]
+        cpi = d.colperm[d.num_decoded]
+        @assert !iszero(getdense(d, rpi, cpi)) "[$ri, $ri] is zero. row=$(d.rows[rpi])"
     end
     return d
 end
@@ -471,7 +485,7 @@ function backsolve!(d::Decoder)
             coef = getdense(d, rpi, cpi)
             if !iszero(coef)
                 rpj = d.rowperm[ci]
-                subtract!(d, rpj, rpi, coef / getdense(d, rpj, cpi))
+                subtract!(d, rpj, rpi, coef, getdense(d, rpj, cpi))
             end
         end
     end
