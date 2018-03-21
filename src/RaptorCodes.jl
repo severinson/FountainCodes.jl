@@ -1,5 +1,6 @@
 module RaptorCodes
 using Distributions, Nulls, Primes
+export CoefficientType, Binary, NonBinary, CodeStructure, LT, Raptor, Code
 
 # type system
 abstract type CoefficientType end
