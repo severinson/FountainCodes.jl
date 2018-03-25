@@ -211,6 +211,21 @@ end
     return b
 end
 
+@inline function subtract!{CT<:Float64}(b::RqRow{CT}, a::RqRow{CT}, coef::CT) ::RqRow
+    if iszero(a.dense) || iszero(coef)
+        return b
+    elseif iszero(b.dense)
+        return RqRow{CT}(b.indices, b.values, -coef.*a.dense)
+    else
+        # @inbounds begin
+        @simd for i in 1:length(a.dense)
+            b.dense[i] -= coef * a.dense[i]
+        end
+        # end
+    end
+    return b
+end
+
 doc"get the index of any non-zero inactive element"
 @inline function getinactive(r::RqRow)
     return findfirst(r.dense)
