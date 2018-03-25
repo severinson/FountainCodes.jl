@@ -24,11 +24,11 @@ end
 
 function init_float64(k=10)
     dd = RaptorCodes.Soliton(k, Int(round(k*2/3)), 0.01)
-    p = RaptorCodes.LTQ(k, dd)
+    p = RaptorCodes.LTQ{Float64}(k, dd)
     d = RaptorCodes.Decoder(p)
-    C = Vector{Vector{GF256}}(p.L)
+    C = Vector{Vector{Float64}}(p.L)
     for i = 1:p.K
-        C[i] = Vector{GF256}([i % 256])
+        C[i] = Vector{Float64}([i])
     end
     return p, d, C
 end
@@ -155,6 +155,19 @@ function test_subtract_gf256_2()
 end
 @test test_subtract_gf256_2()
 
+function test_subtract_float64_1()
+    p, d, C = init_float64(10)
+    s = RaptorCodes.ltgenerate(C, 1, p)
+    RaptorCodes.add!(d, s)
+    RaptorCodes.add!(d, s)
+    RaptorCodes.subtract!(d, 1, 2, Float64(1))
+    if !iszero(d.values[2])
+        error("values[2]=$(d.values[2]) should be zero")
+    end
+    return true
+end
+@test test_subtract_float64_1()
+
 function test_zerodiag_gf256()
     p, d, C = init_gf256(10)
     RaptorCodes.add!(d, QSymbol(1, [GF256(2)], [1], Vector{GF256}([2])))
@@ -245,6 +258,35 @@ function test_diagonalize_gf256_2()
     return true
 end
 @test test_diagonalize_gf256_2()
+
+function test_diagonalize_float64_1()
+    p, d, C = init_float64(10)
+    for i in 1:15
+        s = RaptorCodes.ltgenerate(C, i, p)
+        RaptorCodes.add!(d, s)
+    end
+    RaptorCodes.diagonalize!(d)
+    for i in 1:d.num_decoded
+        rpi = d.rowperm[i]
+        cpi = d.colperm[i]
+        row = d.rows[rpi]
+        coef = RaptorCodes.coefficient(row, cpi)
+        correct = coef*C[cpi]
+        for ci in 1:d.p.L
+            cpj = d.colperm[ci]
+            coef = RaptorCodes.getdense(d, rpi, cpj)
+            if !iszero(coef)
+                correct = correct + coef * C[cpj]
+            end
+        end
+        if !isapprox(d.values[rpi], correct, rtol=1e-3)
+            err = abs(d.values[rpi] - correct)
+            error("diagonalization failed. values[$rpi]=$(d.values[rpi]) but should be $correct. error is $err")
+        end
+    end
+    return true
+end
+@test test_diagonalize_float64_1()
 
 function test_ge_1()
     p, d, C = init()
@@ -552,3 +594,20 @@ function test_dense_2()
     return true
 end
 @test test_dense_2()
+
+function test_decoder_float64_1()
+    p, d, C = init_float64()
+    for i in 1:15
+        s = RaptorCodes.ltgenerate(C, i, p)
+        RaptorCodes.add!(d, s)
+    end
+    output = RaptorCodes.decode!(d)
+    for i in 1:p.K
+        if !isapprox(output[i], C[i], rtol=1e-3)
+            err = abs(output[i] - C[i])
+            error("decoding failure. source[$i] is $(output[i]). should be $(C[i]). error is $err.")
+        end
+    end
+    return true
+end
+@test test_decoder_float64_1()
