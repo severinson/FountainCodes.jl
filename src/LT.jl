@@ -15,20 +15,23 @@ LT(K::Integer, dd::T) where {T <: Sampleable{Univariate, Discrete}} = LT{T}(K, d
 Base.repr(p::LT) = "LT($(p.K), $(repr(p.dd)))"
 
 doc"q-ary LT code parameters."
-struct LTQ{DT <: Sampleable{Univariate, Discrete}, CT} <: NonBinaryCode
+struct LTQ{CT,DT <: Sampleable{Univariate, Discrete}} <: NonBinaryCode
     K::Integer # number of source symbols
     L::Integer # number of intermediate symbols
     Lp::Integer
     dd::DT # degree distribution
-    function LTQ{DT,CT}(K::Integer, dd::DT) where {DT, CT}
+    function LTQ{CT,DT}(K::Integer, dd::DT) where {CT,DT}
         Lp = Primes.nextprime(K)
         new(K, K, Lp, dd)
     end
 end
 function LTQ(K::Integer, dd::DT) where DT <: Sampleable{Univariate, Discrete}
-    LTQ{DT,GF256}(K, dd)
+    LTQ{GF256,DT}(K, dd)
 end
-Base.repr{DT,CT}(p::LTQ{DT,CT}) = "LTQ{DT,$CT}($(p.K), $(repr(p.dd)))"
+function LTQ{CT}(K::Integer, dd::DT) where {CT,DT <: Sampleable{Univariate, Discrete}}
+    LTQ{CT,DT}(K, dd)
+end
+Base.repr{CT,DT}(p::LTQ{CT,DT}) = "LTQ{$CT,DT}($(p.K), $(repr(p.dd)))"
 
 doc"LT codes have no pre-code, so do nothing."
 function precode!(C::Vector, p::Code)
@@ -41,7 +44,7 @@ function deg(v::Real, p::Code) :: Int
 end
 
 doc"Map a number 0 <= v <= 1 to a coefficient."
-function coefficient{DT,CT}(p::LTQ{DT,CT})
+function coefficient{CT,DT}(p::LTQ{CT,DT})
     c = zero(CT)
     while iszero(c)
         c = rand(CT)
@@ -84,13 +87,13 @@ function ltgenerate(C::Vector, X::Int, p::LT)
 end
 
 doc"generate an LT symbol from the intermediate symbols."
-function ltgenerate(C::Vector, X::Int, p::LTQ)
+function ltgenerate{CT}(C::Vector, X::Int, p::LTQ{CT})
     d, a, b = trip(X, p)
     while (b >= p.L)
         b = (b + a) % p.Lp
     end
     indices = Vector{Int}(min(d, p.L))
-    coefficients = Vector{GF256}(min(d, p.L))
+    coefficients = Vector{CT}(min(d, p.L))
     indices[1] = b+1
     coefficients[1] = coefficient(p)
     value = C[b+1] * coefficients[1]

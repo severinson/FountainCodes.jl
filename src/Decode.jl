@@ -70,9 +70,9 @@ function Decoder(p::LT)
     return Decoder{RBitVector,Vector{GF256}}(p)
 end
 
-doc"Default LT decoder constructor."
-function Decoder{DT}(p::LTQ{DT,GF256})
-    return Decoder{RqRow,Vector{GF256}}(p)
+doc"Default non-binary LT decoder constructor."
+function Decoder{CT,DT}(p::LTQ{CT,DT})
+    return Decoder{RqRow,Vector{CT}}(p)
 end
 
 doc"add a row to the decoder."
