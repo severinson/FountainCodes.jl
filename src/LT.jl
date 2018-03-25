@@ -52,6 +52,11 @@ function coefficient{CT,DT}(p::LTQ{CT,DT})
     return c
 end
 
+doc"Map a number 0 <= v <= 1 to a coefficient."
+function coefficient{CT<:Float64,DT}(p::LTQ{CT,DT})
+    return randn(CT)/1e10+1
+end
+
 doc"Maps an encoding symbol ID X to a triple (d, a, b)"
 function trip(X::Int, p::Union{LT,LTQ})
     Q = 65521 # the largest prime smaller than 2^16
