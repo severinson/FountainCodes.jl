@@ -212,16 +212,18 @@ end
 end
 
 @inline function subtract!{CT<:Float64}(b::RqRow{CT}, a::RqRow{CT}, coef::CT) ::RqRow
+    lb, la = length(b.dense), length(a.dense)
     if iszero(a.dense) || iszero(coef)
         return b
-    elseif iszero(b.dense)
+    elseif lb == 0
         return RqRow{CT}(b.indices, b.values, -coef.*a.dense)
     else
-        # @inbounds begin
-        @simd for i in 1:length(a.dense)
+        @simd for i in 1:min(lb, la)
             b.dense[i] -= coef * a.dense[i]
         end
-        # end
+        if la > lb
+            append!(b.dense, -coef*view(a.dense, (lb+1):la))
+        end
     end
     return b
 end
