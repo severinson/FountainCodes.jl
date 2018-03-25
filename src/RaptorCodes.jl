@@ -1,23 +1,14 @@
 module RaptorCodes
 using Distributions, Missings, Primes
-export CoefficientType, Binary, NonBinary, CodeStructure, LT, Raptor, Code
+export CoefficientType, Binary, NonBinary, Code
 
 # type system
 abstract type CoefficientType end
 mutable struct Binary <: CoefficientType end
 mutable struct NonBinary <: CoefficientType end
-
-abstract type CodeStructure end
-mutable struct LT <: CodeStructure end
-mutable struct Raptor <: CodeStructure end
-
-abstract type Code{T<:CoefficientType,S<:CodeStructure} end
-const BinaryRaptor = Code{Binary,Raptor}
-const BinaryLT = Code{Binary,LT}
-const NonBinaryRaptor = Code{NonBinary,Raptor}
-const NonBinaryLT = Code{NonBinary,LT}
-const LTCode{T<:CoefficientType} = Code{T,LT}
-const RaptorCode{T<:CoefficientType} = Code{T,Raptor}
+abstract type Code{T<:CoefficientType} end
+const BinaryCode = Code{Binary}
+const NonBinaryCode = Code{NonBinary}
 
 doc"symbol value"
 abstract type Value end

@@ -1,5 +1,5 @@
 function init(k=10)
-    p = RaptorCodes.R10Parameters(k)
+    p = RaptorCodes.R10(k)
     C = Vector{Vector{GF256}}(p.L)
     for i = 1:p.K
         C[i] = Vector{GF256}([i % 256])

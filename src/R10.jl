@@ -1,14 +1,14 @@
-export R10Parameters, precode!, ltgenerate
+export R10, precode!, ltgenerate
 
 doc"R10 parameters container."
-struct R10Parameters <: RaptorCode{Binary}
+struct R10 <: BinaryCode
     K::Integer # number of source symbols
     S::Integer # number of LDPC symbols
     H::Integer # number of HDPC symbols
     Hp:: Integer # hamming weight of HDPC symbols
     L::Integer # =K+S+H
     Lp::Integer # used by r10_trip
-    function R10Parameters(K::Integer)
+    function R10(K::Integer)
         if !(4 <= K <= 8192)
             error("R10 codes support 4 <= K <= 8192 source symbols.")
         end
@@ -31,17 +31,17 @@ struct R10Parameters <: RaptorCode{Binary}
     end
 end
 
-Base.repr(p::R10Parameters) = "R10Parameters($(p.K))"
+Base.repr(p::R10) = "R10($(p.K))"
 
 doc"pre-code input data. C must be an array of source symbols of length L."
-function precode!(C::Vector, p::R10Parameters)
+function precode!(C::Vector, p::R10)
     C = r10_ldpc_encode!(C, p, missing)
     C = r10_hdpc_encode!(C, p, missing)
     return C
 end
 
 doc"pre-code input data. C must be an array of source symbols of length L."
-function precode!(C::Vector, p::R10Parameters, N::Vector)
+function precode!(C::Vector, p::R10, N::Vector)
     C = r10_ldpc_encode!(C, p, N)
     C = r10_hdpc_encode!(C, p, N)
     return C
@@ -68,7 +68,7 @@ function ltgenerate(C::Vector, X::Int, p::Code)
 end
 
 doc"Generate R10 precode LDPC symbols in-place at N (K+1) to (K+S)."
-function r10_ldpc_encode!(C::Vector, p::R10Parameters, N=missing)
+function r10_ldpc_encode!(C::Vector, p::R10, N=missing)
     if length(C) != p.L
         error("C must have length p.L = $p.L")
     end
@@ -101,7 +101,7 @@ function r10_ldpc_encode!(C::Vector, p::R10Parameters, N=missing)
 end
 
 doc"Generate R10 precode HDPC symbols in-place at N (K+S+1) to (K+S+H)."
-function r10_hdpc_encode!(C::Vector, p::R10Parameters, N=missing)
+function r10_hdpc_encode!(C::Vector, p::R10, N=missing)
     if length(C) != p.L
         error("C must have length p.L = $p.L")
     end
@@ -158,7 +158,7 @@ function deg(v::Int) :: Int
 end
 
 doc"Maps an encoding symbol ID X to a triple (d, a, b)"
-function trip(X::Int, p::R10Parameters)
+function trip(X::Int, p::R10)
     Q = 65521 # the largest prime smaller than 2^16
     JK = J[p.K+1]
     A = (53591 + JK*997) % Q

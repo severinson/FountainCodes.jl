@@ -1,47 +1,47 @@
-export LTParameters, QLTParameters
+export LT, LTQ
 
 doc"LT code parameters."
-struct LTParameters{T <: Sampleable{Univariate, Discrete}} <: LTCode{Binary}
+struct LT{T <: Sampleable{Univariate, Discrete}} <: BinaryCode
     K::Integer # number of source symbols
     L::Integer # number of intermediate symbols
     Lp::Integer
     dd::T # degree distribution
-    function LTParameters{T}(K::Integer, dd::T) where T
+    function LT{T}(K::Integer, dd::T) where T
         Lp = Primes.nextprime(K)
         new(K, K, Lp, dd)
     end
 end
-LTParameters(K::Integer, dd::T) where {T <: Sampleable{Univariate, Discrete}} = LTParameters{T}(K, dd)
-Base.repr(p::LTParameters) = "LTParameters($(p.K), $(repr(p.dd)))"
+LT(K::Integer, dd::T) where {T <: Sampleable{Univariate, Discrete}} = LT{T}(K, dd)
+Base.repr(p::LT) = "LT($(p.K), $(repr(p.dd)))"
 
 doc"q-ary LT code parameters."
-struct QLTParameters{DT <: Sampleable{Univariate, Discrete}, CT} <: LTCode{NonBinary}
+struct LTQ{DT <: Sampleable{Univariate, Discrete}, CT} <: NonBinaryCode
     K::Integer # number of source symbols
     L::Integer # number of intermediate symbols
     Lp::Integer
     dd::DT # degree distribution
-    function QLTParameters{DT,CT}(K::Integer, dd::DT) where {DT, CT}
+    function LTQ{DT,CT}(K::Integer, dd::DT) where {DT, CT}
         Lp = Primes.nextprime(K)
         new(K, K, Lp, dd)
     end
 end
-function QLTParameters(K::Integer, dd::DT) where DT <: Sampleable{Univariate, Discrete}
-    QLTParameters{DT,GF256}(K, dd)
+function LTQ(K::Integer, dd::DT) where DT <: Sampleable{Univariate, Discrete}
+    LTQ{DT,GF256}(K, dd)
 end
-Base.repr{DT,CT}(p::QLTParameters{DT,CT}) = "QLTParameters{DT,$CT}($(p.K), $(repr(p.dd)))"
+Base.repr{DT,CT}(p::LTQ{DT,CT}) = "LTQ{DT,$CT}($(p.K), $(repr(p.dd)))"
 
 doc"LT codes have no pre-code, so do nothing."
-function precode!(C::Vector, p::LTCode)
+function precode!(C::Vector, p::Code)
     return C
 end
 
 doc"Map a number 0 <= v <= 1 to a degree."
-function deg(v::Real, p::LTCode) :: Int
+function deg(v::Real, p::Code) :: Int
     return quantile(p.dd, v)
 end
 
 doc"Map a number 0 <= v <= 1 to a coefficient."
-function coefficient{DT,CT}(p::QLTParameters{DT,CT})
+function coefficient{DT,CT}(p::LTQ{DT,CT})
     c = zero(CT)
     while iszero(c)
         c = rand(CT)
@@ -50,7 +50,7 @@ function coefficient{DT,CT}(p::QLTParameters{DT,CT})
 end
 
 doc"Maps an encoding symbol ID X to a triple (d, a, b)"
-function trip(X::Int, p::LTCode)
+function trip(X::Int, p::Union{LT,LTQ})
     Q = 65521 # the largest prime smaller than 2^16
     JK = J[p.K+1]
     A = (53591 + JK*997) % Q
@@ -64,7 +64,7 @@ function trip(X::Int, p::LTCode)
 end
 
 doc"generate an LT symbol from the intermediate symbols."
-function ltgenerate(C::Vector, X::Int, p::LTCode{Binary})
+function ltgenerate(C::Vector, X::Int, p::LT)
     d, a, b = trip(X, p)
     while (b >= p.L)
         b = (b + a) % p.Lp
@@ -84,7 +84,7 @@ function ltgenerate(C::Vector, X::Int, p::LTCode{Binary})
 end
 
 doc"generate an LT symbol from the intermediate symbols."
-function ltgenerate(C::Vector, X::Int, p::LTCode{NonBinary})
+function ltgenerate(C::Vector, X::Int, p::LTQ)
     d, a, b = trip(X, p)
     while (b >= p.L)
         b = (b + a) % p.Lp

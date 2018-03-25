@@ -17,13 +17,13 @@ function sample(S::AbstractArray, c::Code)
     return d.metrics
 end
 
-function parameterdct(c::RaptorCode)
+function parameterdct(c::R10)
     dct = Dict{String,Int}()
     dct["num_inputs"] = c.K
     return dct
 end
 
-function parameterdct(c::LTCode)
+function parameterdct(c::Union{LT,LTQ})
     dct = Dict{String,Float64}()
     dct["num_inputs"] = c.K
     dct["mode"] = c.dd.mode

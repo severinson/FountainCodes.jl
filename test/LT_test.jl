@@ -2,7 +2,7 @@ using Base.Test, Distributions, RaptorCodes
 
 function init(k=10)
     dd = RaptorCodes.Soliton(k, Int(round(k*2/3)), 0.01)
-    p = RaptorCodes.LTParameters(k, dd)
+    p = RaptorCodes.LT(k, dd)
     d = RaptorCodes.Decoder(p)
     C = Vector{Vector{GF256}}(p.L)
     for i = 1:p.K
@@ -57,7 +57,7 @@ end
 
 function init_gf256(k=10)
     dd = RaptorCodes.Soliton(k, Int(round(k*2/3)), 0.01)
-    p = RaptorCodes.QLTParameters(k, dd)
+    p = RaptorCodes.LTQ(k, dd)
     d = RaptorCodes.Decoder(p)
     C = Vector{Vector{GF256}}(p.L)
     for i = 1:p.K

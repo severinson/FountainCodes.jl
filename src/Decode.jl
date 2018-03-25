@@ -49,7 +49,7 @@ mutable struct Decoder{RT<:Row,VT}
 end
 
 doc"R10 decoder constructor. Automatically adds constraint symbols."
-function Decoder(p::R10Parameters)
+function Decoder(p::R10)
     d = Decoder{RBitVector,Vector{GF256}}(p)
     C = [Vector{GF256}() for _ in 1:p.L]
     indices = [Set{Int}() for _ in 1:p.L]
@@ -66,12 +66,12 @@ function Decoder(p::R10Parameters)
 end
 
 doc"Default LT decoder constructor."
-function Decoder(p::LTCode{Binary})
+function Decoder(p::LT)
     return Decoder{RBitVector,Vector{GF256}}(p)
 end
 
 doc"Default LT decoder constructor."
-function Decoder{DT}(p::QLTParameters{DT,GF256})
+function Decoder{DT}(p::LTQ{DT,GF256})
     return Decoder{RqRow,Vector{GF256}}(p)
 end
 
