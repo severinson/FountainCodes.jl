@@ -572,6 +572,11 @@ function test_dense_1()
         RaptorCodes.add!(d, s)
     end
     output = RaptorCodes.decode!(d)
+    for i in 1:p.K
+        if output[i] != C[i]
+            error("decoding failure. source[$i] is $(output[i]). should be $(C[i]).")
+        end
+    end
     return true
 end
 @test test_dense_1()
@@ -591,9 +596,39 @@ function test_dense_2()
         RaptorCodes.add!(d, s)
     end
     output = RaptorCodes.decode!(d)
+    for i in 1:p.K
+        if output[i] != C[i]
+            error("decoding failure. source[$i] is $(output[i]). should be $(C[i]).")
+        end
+    end
     return true
 end
 @test test_dense_2()
+
+doc"test decoding a dense LT code over the reals"
+function test_dense_float64_1()
+    K = 100
+    dd = DiscreteUniform(K/2, K)
+    p = RaptorCodes.LTQ{Float64}(K, dd)
+    d = RaptorCodes.Decoder(p)
+    C = Vector{Vector{Float64}}(p.L)
+    for i = 1:p.K
+        C[i] = Vector{Float64}([i])
+    end
+    for i in 1:K+10
+        s = RaptorCodes.ltgenerate(C, i, p)
+        RaptorCodes.add!(d, s)
+    end
+    output = RaptorCodes.decode!(d)
+    for i in 1:p.K
+        if !isapprox(output[i], C[i], rtol=1e-3)
+            err = abs(output[i] - C[i])
+            error("decoding failure. source[$i] is $(output[i]). should be $(C[i]). error is $err.")
+        end
+    end
+    return true
+end
+@test test_dense_float64_1()
 
 function test_decoder_float64_1()
     p, d, C = init_float64()
