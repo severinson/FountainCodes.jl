@@ -44,6 +44,7 @@ mutable struct Decoder{RT<:Row,VT}
         d.metrics["rowadds"] = 0
         d.metrics["rowmuls"] = 0
         d.metrics["inactivations"] = 0
+        d.metrics["status"] = 0
         return d
     end
 end
@@ -144,6 +145,7 @@ doc"Check if all intermediate symbols are covered."
 function check_cover(d::Decoder)
     for i in 1:d.p.L
         if !iscovered(d, i)
+            push!(d.metrics, "status", -1)
             error("intermediate symbol with index $i not covered.")
         end
     end
@@ -224,6 +226,7 @@ function select_row_2(d::Decoder) :: Int
             end
         end
         if i != 3
+            push!(d.metrics, "status", -2)
             error("selected row did not have exactly 2 non-zero entries in V")
         end
         union!(a, n[1], n[2])
@@ -252,6 +255,7 @@ function select_row_2(d::Decoder) :: Int
         end
     end
     if k == 0
+        push!(d.metrics, "status", -2)
         error("could not find neighbouring row")
     end
 
@@ -275,6 +279,7 @@ function select_row(d::Decoder) :: Int
         k = dequeue!(d.pq)
     end
     if k == 0
+        push!(d.metrics, "status", -3)
         error("no coded symbols of non-zero weight")
     end
     zerodiag!(d, k)
@@ -380,6 +385,7 @@ function diagonalize!(d::Decoder)
             ci = d.colperminv[cpi]
         end
         if !(d.num_decoded < ci <= d.p.L-d.num_inactivated)
+            push!(d.metrics, "status", -3)
             error("incorrectly selected a row with no neighbours in V.")
         end
         swap_cols!(d, ci, d.num_decoded+1)
@@ -432,6 +438,7 @@ function solve_dense!{RT<:RqRow{Float64},VT}(d::Decoder{RT,VT})
     # check for full rank
     r = rank(A)
     if r < d.num_inactivated
+        push!(d.metrics, "status", -4)
         error("least-squares failed due to rank deficiency. rank estimate is $r, but needs to be $(d.num_inactivated).")
     end
 
@@ -491,6 +498,7 @@ function solve_dense!{RT,VT}(d::Decoder{RT,VT})
             end
         end
         if ri == 0
+            push!(d.metrics, "status", -4)
             error("GE failed due to rank deficiency.")
         end
         swap_rows!(d, d.num_decoded+1, ri)
