@@ -558,7 +558,7 @@ end
 @test test_decoder_gf256_3()
 
 doc"test decoding a dense binary LT code"
-function test_dense_1()
+function test_dense_binary()
     K = 100
     dd = DiscreteUniform(K/2, K)
     p = RaptorCodes.LT(K, dd)
@@ -579,10 +579,10 @@ function test_dense_1()
     end
     return true
 end
-@test test_dense_1()
+@test test_dense_binary()
 
 doc"test decoding a dense q-ary LT code"
-function test_dense_2()
+function test_dense_GF256()
     K = 100
     dd = DiscreteUniform(K/2, K)
     p = RaptorCodes.LTQ(K, dd)
@@ -603,10 +603,10 @@ function test_dense_2()
     end
     return true
 end
-@test test_dense_2()
+@test test_dense_GF256()
 
 doc"test decoding a dense LT code over the reals"
-function test_dense_float64_1()
+function test_dense_float64()
     K = 100
     dd = DiscreteUniform(K/2, K)
     p = RaptorCodes.LTQ{Float64}(K, dd)
@@ -628,7 +628,7 @@ function test_dense_float64_1()
     end
     return true
 end
-@test test_dense_float64_1()
+@test test_dense_float64()
 
 function test_decoder_float64_1()
     p, d, C = init_float64()
