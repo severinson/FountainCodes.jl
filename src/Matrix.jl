@@ -127,7 +127,7 @@ function RqRow(s::BSymbol)
     return RqRow{Bool}(s.neighbours, ones(length(s.neighbours)))
 end
 
-function RqRow{VT,CT}(s::QSymbol{VT,CT})
+function RqRow{CT}(s::QSymbol{VT,CT}) where {VT,CT}
     return RqRow{CT}(s.neighbours, s.coefficients)
 end
 

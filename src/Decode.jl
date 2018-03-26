@@ -5,10 +5,10 @@ using DataStructures
 
 doc"R10-compliant decoder."
 mutable struct Decoder{RT<:Row,VT}
-    p::Code
+    p::Code # type of code
     values::Vector{VT} # source values may be of any type, including arrays
     columns::Vector{Vector{Int}}
-    rows::Vector{RT}
+    rows::Vector{RT} # binary and q-ary codes use different row types
     colperm::Vector{Int} # maps column indices to their respective objects
     colperminv::Vector{Int} # maps column object indices to their column indices
     rowperm::Vector{Int} # maps row indices to their respective objects
@@ -19,7 +19,7 @@ mutable struct Decoder{RT<:Row,VT}
     num_decoded::Int # denoted by i in the R10 spec.
     num_inactivated::Int # denoted by u in the R10 spec.
     metrics::DataStructures.Accumulator{String,Int}
-    status::String
+    status::String # indicates success or stores the reason for decoding failure.
     function Decoder{RT,VT}(p::Code) where RT<:Row where VT
         d = new(
             p,
@@ -72,7 +72,7 @@ end
 
 doc"Default non-binary LT decoder constructor."
 function Decoder{CT,DT}(p::LTQ{CT,DT})
-    return Decoder{RqRow,Vector{CT}}(p)
+    return Decoder{RqRow{CT},Vector{CT}}(p)
 end
 
 doc"add a row to the decoder."
@@ -400,8 +400,55 @@ function diagonalize!(d::Decoder)
     return d
 end
 
-doc"Solve for the inactivated intermediate symbols using GE."
-function gaussian_elimination!(d::Decoder)
+doc"solve for the inactivated intermediate symbols using least-squares."
+function solve_dense!{RT<:RqRow{Float64},VT}(d::Decoder{RT,VT})
+    firstrow = d.num_decoded+1 # first row of the dense matrix
+    lastrow = length(d.rows) # last row of the dense matrix
+    firstcol = d.p.L-d.num_inactivated+1 # first column of the dense matrix
+    lastcol = d.p.L # last column of the dense matrix
+    @assert firstrow == firstcol "firstrow=$firstrow must be equal to firstcol=$firstcol"
+
+    # copy the matrix u_lower into a separate array
+    A = zeros(
+        eltype(VT),
+        lastrow-firstrow+1,
+        d.num_inactivated,
+    )
+    b = zeros(
+        eltype(VT),
+        lastrow-firstrow+1,
+        1,
+        # length(d.values[1]), # assuming all entries have the same length
+    )
+    for ri in firstrow:lastrow
+        rpi = d.rowperm[ri]
+        zerodiag!(d, rpi)
+        for ci in firstcol:lastcol
+            cpi = d.colperm[ci]
+            A[ri-firstrow+1, ci-firstcol+1] = getdense(d, rpi, cpi)
+        end
+        # b[ri-firstrow+1,:] = d.values[rpi]
+        b[ri-firstrow+1,1] = d.values[rpi][1]
+    end
+
+    # solve for x using least squares
+    x = A\b
+
+    # store the results and set the coefficients along the diagonal to 1.0
+    for i in firstrow:lastcol
+        rpi = d.rowperm[i]
+        cpi = d.colperm[i]
+        row = d.rows[rpi]
+        d.rows[rpi] = RqRow{Float64}(row.indices, row.values)
+        setdense!(d, rpi, cpi, 1.0)
+        d.values[rpi] = x[i-firstrow+1,:]
+    end
+    d.num_decoded += d.num_inactivated
+    return d
+end
+
+doc"solve for the inactivated intermediate symbols using Gaussian elimination."
+function solve_dense!{RT,VT}(d::Decoder{RT,VT})
 
     # add all remaining rows to the priority queue
     for ri in d.num_decoded+1:length(d.rows)
@@ -428,7 +475,7 @@ function gaussian_elimination!(d::Decoder)
                 if !iszero(coef)
                     rpk = d.rowperm[cj]
                     coef2 = getdense(d, rpk, cpj)
-                    @assert !iszero(coef2) "coef2 is $coef2, but must be non-zero. cj=$cj, cpj=$cpj, row=$row, row2=$(d.rows[rpk])"
+                    @assert !iszero(coef2) "coef=$coef, coef2=$coef2, but coef2 must be non-zero. cj=$cj, cpj=$cpj, row=$row, row2=$(d.rows[rpk])"
                     subtract!(d, rpk, rpj, coef, coef2)
                 end
             end
@@ -527,7 +574,7 @@ function decode!{RT,VT}(d::Decoder{RT,VT}, raise_on_error=true)
     try
         check_cover(d)
         diagonalize!(d)
-        gaussian_elimination!(d)
+        solve_dense!(d)
         backsolve!(d)
         d.metrics["success"] = 1
         return get_source(d)
