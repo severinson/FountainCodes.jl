@@ -69,20 +69,6 @@ function xor!(a::BitVector, b::BitVector)
     return a
 end
 
-doc"in-place XOR of two UInt8-vectors."
-function xor!(a::Vector{GF256}, b::Vector{GF256})
-    la, lb = length(a), length(b)
-    # @inbounds begin
-    @simd for i in 1:min(la, lb)
-        a[i] = xor(a[i], b[i])
-    end
-    # end
-    if lb > la
-        append!(a, view(b, (la+1):lb))
-    end
-    return a
-end
-
 @inline function subtract!(b::RBitVector, a::RBitVector, coef::Bool)
     @assert coef "coef must be true, but is $coef"
     xor!(b.inactive, a.inactive)
@@ -181,6 +167,20 @@ function qary_from_binary(b::BitVector) :: Array{GF256}
         qary[i] = one(GF256)
     end
     return qary
+end
+
+doc"in-place XOR of two UInt8-vectors."
+function xor!(a::Vector{GF256}, b::Vector{GF256})
+    la, lb = length(a), length(b)
+    # @inbounds begin
+    @simd for i in 1:min(la, lb)
+        a[i] = xor(a[i], b[i])
+    end
+    # end
+    if lb > la
+        append!(a, view(b, (la+1):lb))
+    end
+    return a
 end
 
 @inline function subtract!{CT}(b::RqRow{CT}, a::RqRow{CT}, coef::CT) ::RqRow
