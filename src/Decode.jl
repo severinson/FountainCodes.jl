@@ -429,6 +429,12 @@ function solve_dense!{RT<:RqRow{Float64},VT}(d::Decoder{RT,VT})
         b[ri-firstrow+1,:] = d.values[rpi]
     end
 
+    # check for full rank
+    r = rank(A)
+    if r < d.num_inactivated
+        error("least-squares failed due to rank deficiency. rank estimate is $r, but needs to be $(d.num_inactivated).")
+    end
+
     # solve for x using least squares
     x = A\b
 
