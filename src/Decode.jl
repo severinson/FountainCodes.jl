@@ -417,8 +417,7 @@ function solve_dense!{RT<:RqRow{Float64},VT}(d::Decoder{RT,VT})
     b = zeros(
         eltype(VT),
         lastrow-firstrow+1,
-        1,
-        # length(d.values[1]), # assuming all entries have the same length
+        length(d.values[1]), # assuming all entries have the same length
     )
     for ri in firstrow:lastrow
         rpi = d.rowperm[ri]
@@ -427,8 +426,7 @@ function solve_dense!{RT<:RqRow{Float64},VT}(d::Decoder{RT,VT})
             cpi = d.colperm[ci]
             A[ri-firstrow+1, ci-firstcol+1] = getdense(d, rpi, cpi)
         end
-        # b[ri-firstrow+1,:] = d.values[rpi]
-        b[ri-firstrow+1,1] = d.values[rpi][1]
+        b[ri-firstrow+1,:] = d.values[rpi]
     end
 
     # solve for x using least squares
