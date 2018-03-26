@@ -260,8 +260,8 @@ end
 @test test_diagonalize_gf256_2()
 
 function test_diagonalize_float64_1()
-    p, d, C = init_float64(10)
-    for i in 1:15
+    p, d, C = init_float64(100)
+    for i in 1:110
         s = RaptorCodes.ltgenerate(C, i, p)
         RaptorCodes.add!(d, s)
     end
@@ -295,7 +295,7 @@ function test_ge_1()
         RaptorCodes.add!(d, s)
     end
     RaptorCodes.diagonalize!(d)
-    RaptorCodes.gaussian_elimination!(d)
+    RaptorCodes.solve_dense!(d)
     for i in d.p.L-d.num_inactivated+1:d.p.L
         rpi = d.rowperm[i]
         cpi = d.colperm[i]
@@ -319,7 +319,7 @@ function test_ge_2()
         RaptorCodes.add!(d, s)
     end
     RaptorCodes.diagonalize!(d)
-    RaptorCodes.gaussian_elimination!(d)
+    RaptorCodes.solve_dense!(d)
     for i in d.p.L-d.num_inactivated+1:d.p.L
         rpi = d.rowperm[i]
         cpi = d.colperm[i]
@@ -343,7 +343,7 @@ function test_ge_gf256_1()
         RaptorCodes.add!(d, s)
     end
     RaptorCodes.diagonalize!(d)
-    RaptorCodes.gaussian_elimination!(d)
+    RaptorCodes.solve_dense!(d)
     for i in d.p.L-d.num_inactivated+1:d.p.L
         rpi = d.rowperm[i]
         cpi = d.colperm[i]
@@ -369,7 +369,7 @@ function test_ge_gf256_2()
         RaptorCodes.add!(d, s)
     end
     RaptorCodes.diagonalize!(d)
-    RaptorCodes.gaussian_elimination!(d)
+    RaptorCodes.solve_dense!(d)
     for i in d.p.L-d.num_inactivated+1:d.p.L
         rpi = d.rowperm[i]
         cpi = d.colperm[i]
@@ -395,7 +395,7 @@ function test_backsolve_gf256()
         RaptorCodes.add!(d, s)
     end
     RaptorCodes.diagonalize!(d)
-    RaptorCodes.gaussian_elimination!(d)
+    RaptorCodes.solve_dense!(d)
     RaptorCodes.backsolve!(d)
     for ri in 1:d.p.L-d.num_inactivated
         rpi = d.rowperm[ri]
@@ -622,7 +622,7 @@ function test_dense_float64_1()
     output = RaptorCodes.decode!(d)
     for i in 1:p.K
         if !isapprox(output[i], C[i], rtol=1e-3)
-            err = abs(output[i] - C[i])
+            err = abs.(output[i] - C[i])
             error("decoding failure. source[$i] is $(output[i]). should be $(C[i]). error is $err.")
         end
     end
@@ -639,7 +639,7 @@ function test_decoder_float64_1()
     output = RaptorCodes.decode!(d)
     for i in 1:p.K
         if !isapprox(output[i], C[i], rtol=1e-3)
-            err = abs(output[i] - C[i])
+            err = abs.(output[i] - C[i])
             error("decoding failure. source[$i] is $(output[i]). should be $(C[i]). error is $err.")
         end
     end
