@@ -74,13 +74,13 @@ function subeq!(a::AbstractArray{GF256}, b::AbstractArray{GF256}, c::GF256)
         return a
     end
     clog = logrq(c)
-    @inbounds begin
-        @simd for i in 1:length(a)
-            if !iszero(b[i])
-                a[i] -= exprq(logrq(b[i])+clog)
-            end
+    #@inbounds begin
+    @simd for i in 1:length(a)
+        if !iszero(b[i])
+            a[i] -= exprq(logrq(b[i])+clog)
         end
     end
+    # end
     return a
 end
 
