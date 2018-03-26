@@ -646,3 +646,20 @@ function test_decoder_float64_1()
     return true
 end
 @test test_decoder_float64_1()
+
+function test_decoder_float64_2()
+    p, d, C = init_float64(100)
+    for i in 1:120
+        s = RaptorCodes.ltgenerate(C, i, p)
+        RaptorCodes.add!(d, s)
+    end
+    output = RaptorCodes.decode!(d)
+    for i in 1:p.K
+        if !isapprox(output[i], C[i], rtol=1e-3)
+            err = abs.(output[i] - C[i])
+            error("decoding failure. source[$i] is $(output[i]). should be $(C[i]). error is $err.")
+        end
+    end
+    return true
+end
+@test test_decoder_float64_2()
