@@ -413,6 +413,10 @@ function solve_dense!{RT<:RqRow{Float64},VT}(d::Decoder{RT,VT})
     firstcol = d.p.L-d.num_inactivated+1 # first column of the dense matrix
     lastcol = d.p.L # last column of the dense matrix
     @assert firstrow == firstcol "firstrow=$firstrow must be equal to firstcol=$firstcol"
+    if lastrow-firstrow+1 < d.num_inactivated
+        push!(d.metrics, "status", -4)
+        error("least-squares failed. u_lower must at least as many rows as there are inactivations.")
+    end
 
     # copy the matrix u_lower into a separate array
     A = zeros(
@@ -433,13 +437,6 @@ function solve_dense!{RT<:RqRow{Float64},VT}(d::Decoder{RT,VT})
             A[ri-firstrow+1, ci-firstcol+1] = getdense(d, rpi, cpi)
         end
         b[ri-firstrow+1,:] = d.values[rpi]
-    end
-
-    # check for full rank
-    r = rank(A)
-    if r < d.num_inactivated
-        push!(d.metrics, "status", -4)
-        error("least-squares failed due to rank deficiency. rank estimate is $r, but needs to be $(d.num_inactivated).")
     end
 
     # solve for x using least squares
