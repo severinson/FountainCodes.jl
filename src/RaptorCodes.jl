@@ -22,6 +22,7 @@ abstract type Row end
 # set the random seed
 srand(3)
 
+include("Bound.jl")
 include("Numinv.jl")
 include("Soliton.jl")
 include("Symbols.jl")

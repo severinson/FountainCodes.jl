@@ -2,7 +2,7 @@
 
 using RaptorCodes, Base.Test
 println("Starting tests")
-# @time @testset "Gaussian elimination" begin include("solve_test.jl") end
+@time @testset "Bounds tests" begin include("Bound_test.jl") end
 @time @testset "Numerical function inversion" begin include("Numinv_test.jl") end
 @time @testset "Finite field arithmetic" begin include("Arithmetic_test.jl") end
 @time @testset "Soliton distribution" begin include("Soliton_test.jl") end
