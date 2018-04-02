@@ -1,7 +1,7 @@
 export Soliton
 
 "Soliton distribution."
-struct Soliton <: Sampleable{Univariate, Discrete}
+struct Soliton <: Distribution{Univariate, Discrete}
     K::Int64 # number of input symbols
     mode::Int64 # robust component spike location
     delta::Float64 # interpreted as the decoder failure probability
@@ -87,6 +87,15 @@ end
 "Soliton distribution cumulative density function."
 function cdf(f::Soliton, i::Int)
     return sum(pdf(f, j) for j=1:i)
+end
+
+"Soliton distribution mean."
+function Base.mean(f::Soliton)
+    r = 0.0
+    for i in 1:f.K
+        r += i * pdf(f, i)
+    end
+    return r
 end
 
 "Soliton distribution inverse cdf."
