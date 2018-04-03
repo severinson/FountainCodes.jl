@@ -1,6 +1,6 @@
 # matrix primitives and concrete row types
 
-export RBitVector
+export BRow, QRow
 
 doc"True if cs neighbours the intermediate symbol with index i."
 function has_neighbour(row::Row, i::Int) :: Bool
@@ -19,38 +19,38 @@ function findall(b::BitVector)
 end
 
 doc"Sparse binary row."
-struct RBitVector <: Row
+struct BRow <: Row
     indices::Vector{Int} # sorted list of initial non-zero indices.
     inactive::BitVector # dense binary part
-    function RBitVector(active::Vector{Int})
+    function BRow(active::Vector{Int})
         return new(sort!(copy(active)), falses(64))
     end
-    function RBitVector(active::Vector{Int}, inactive::BitVector)
+    function BRow(active::Vector{Int}, inactive::BitVector)
         return new(sort!(copy(active)), inactive)
     end
 end
 
-function row(::Type{RBitVector}, s::BSymbol)
-    return RBitVector(s.neighbours)
+function row(::Type{BRow}, s::BSymbol)
+    return BRow(s.neighbours)
 end
 
-@inline function degree(r::RBitVector)
+@inline function degree(r::BRow)
     return length(r.indices)
 end
 
-@inline function inactive_degree(r::RBitVector)
+@inline function inactive_degree(r::BRow)
     return sum(r.inactive)
 end
 
-@inline function neighbours(r::RBitVector)
+@inline function neighbours(r::BRow)
     return r.indices
 end
 
-@inline function coefficients(r::RBitVector)
+@inline function coefficients(r::BRow)
     return trues(length(r.indices))
 end
 
-@inline function coefficient(r::RBitVector, cpi::Int)
+@inline function coefficient(r::BRow, cpi::Int)
     return true
 end
 
@@ -69,19 +69,19 @@ function xor!(a::BitVector, b::BitVector)
     return a
 end
 
-@inline function subtract!(b::RBitVector, a::RBitVector, coef::Bool)
+@inline function subtract!(b::BRow, a::BRow, coef::Bool)
     @assert coef "coef must be true, but is $coef"
     xor!(b.inactive, a.inactive)
     return b
 end
 
 doc"get the index of any non-zero inactive element"
-@inline function getinactive(r::RBitVector)
+@inline function getinactive(r::BRow)
     return findfirst(r.inactive)
 end
 
 doc"set an element of the dense part of the matrix."
-@inline function setdense!(row::RBitVector, upi::Int, v::Bool)
+@inline function setdense!(row::BRow, upi::Int, v::Bool)
     if !v # unallocated elements are already assumed to be zero
         return row
     end
@@ -93,7 +93,7 @@ doc"set an element of the dense part of the matrix."
 end
 
 doc"get an element from the dense part of the matrix."
-@inline function getdense(row::RBitVector, upi::Int) :: Bool
+@inline function getdense(row::BRow, upi::Int) :: Bool
     if upi > length(row.inactive)
         return false
     end
@@ -101,56 +101,56 @@ doc"get an element from the dense part of the matrix."
 end
 
 doc"matrix row with arbitrary coefficients"
-struct RqRow{CT} <: Row
+struct QRow{CT} <: Row
     indices::Vector{Int} # sorted list of initial non-zero indices.
     values::Vector{CT} # initial non-zero values for indices
     dense::Vector{CT} # dense part of the row
-    function RqRow{CT}(indices::Vector{Int}, values::Vector{CT}) where CT
+    function QRow{CT}(indices::Vector{Int}, values::Vector{CT}) where CT
         p = sortperm(indices)
         return new(copy(indices)[p], copy(values)[p], Vector{CT}())
     end
-    # function RqRow{CT}(indices::Vector{Int}, values::Vector{CT}, dense::BitVector) where CT
+    # function QRow{CT}(indices::Vector{Int}, values::Vector{CT}, dense::BitVector) where CT
     #     p = sortperm(indices)
     #     return new(copy(indices)[p], copy(values)[p], copy(dense))
     # end
-    function RqRow{CT}(indices::Vector{Int}, values::Vector{CT}, dense::Vector{CT}) where CT
+    function QRow{CT}(indices::Vector{Int}, values::Vector{CT}, dense::Vector{CT}) where CT
         p = sortperm(indices)
         return new(copy(indices)[p], copy(values)[p], copy(dense))
     end
 end
 
-function RqRow{CT}(indices::Vector{Int}, values::Vector{CT}, dense::Vector{CT})
-    return RqRow{CT}(indices::Vector{Int}, values::Vector{CT}, dense::Vector{CT})
+function QRow{CT}(indices::Vector{Int}, values::Vector{CT}, dense::Vector{CT})
+    return QRow{CT}(indices::Vector{Int}, values::Vector{CT}, dense::Vector{CT})
 end
 
-function row{CT}(::Type{RqRow{CT}}, s::BSymbol)
-    return RqRow{CT}(s.neighbours, ones(CT, length(s.neighbours)))
+function row{CT}(::Type{QRow{CT}}, s::BSymbol)
+    return QRow{CT}(s.neighbours, ones(CT, length(s.neighbours)))
 end
 
-function row{CT,VT}(::Type{RqRow{CT}}, s::QSymbol{VT,CT})
-    return RqRow{CT}(s.neighbours, s.coefficients)
+function row{CT,VT}(::Type{QRow{CT}}, s::QSymbol{VT,CT})
+    return QRow{CT}(s.neighbours, s.coefficients)
 end
 
-@inline function degree(r::RqRow)
+@inline function degree(r::QRow)
     return length(r.indices)
 end
 
-@inline function inactive_degree{CT}(r::RqRow{CT}) :: Int
+@inline function inactive_degree{CT}(r::QRow{CT}) :: Int
     if length(r.dense) == 0
         return 0
     end
     return sum(!iszero(v) for v in r.dense)
 end
 
-@inline function neighbours(r::RqRow)
+@inline function neighbours(r::QRow)
     return r.indices
 end
 
-@inline function coefficients(r::RqRow)
+@inline function coefficients(r::QRow)
     return r.values
 end
 
-@inline function coefficient(r::RqRow, cpi::Int)
+@inline function coefficient(r::QRow, cpi::Int)
     range = searchsorted(r.indices, cpi)
     @assert length(range) == 1 "tried to find-non-existing or duplicate index $cpi in row $r"
     i = range[1]
@@ -179,7 +179,7 @@ function xor!(a::Vector{GF256}, b::Vector{GF256})
     return a
 end
 
-@inline function subtract!{CT}(b::RqRow{CT}, a::RqRow{CT}, coef::CT) ::RqRow
+@inline function subtract!{CT}(b::QRow{CT}, a::QRow{CT}, coef::CT) ::QRow
     if length(a.dense) == 0
         return b
     end
@@ -187,12 +187,12 @@ end
     return b
 end
 
-@inline function subtract!{CT<:Float64}(b::RqRow{CT}, a::RqRow{CT}, coef::CT) ::RqRow
+@inline function subtract!{CT<:Float64}(b::QRow{CT}, a::QRow{CT}, coef::CT) ::QRow
     lb, la = length(b.dense), length(a.dense)
     if iszero(a.dense) || iszero(coef)
         return b
     elseif lb == 0
-        return RqRow{CT}(b.indices, b.values, -coef.*a.dense)
+        return QRow{CT}(b.indices, b.values, -coef.*a.dense)
     else
         @simd for i in 1:min(lb, la)
             b.dense[i] -= coef * a.dense[i]
@@ -205,12 +205,12 @@ end
 end
 
 doc"get the index of any non-zero inactive element"
-@inline function getinactive(r::RqRow)
+@inline function getinactive(r::QRow)
     return findfirst(r.dense)
 end
 
 doc"set an element of the dense part of the matrix."
-@inline function setdense!{CT}(row::RqRow{CT}, upi::Int, v::CT)
+@inline function setdense!{CT}(row::QRow{CT}, upi::Int, v::CT)
     @assert !iszero(v) "v must be non-zero"
     while upi > length(row.dense)
         append!(row.dense, zeros(CT, max(1, length(row.dense))))
@@ -220,7 +220,7 @@ doc"set an element of the dense part of the matrix."
 end
 
 doc"get an element from the dense part of the matrix."
-@inline function getdense{CT}(row::RqRow{CT}, upi::Int)
+@inline function getdense{CT}(row::QRow{CT}, upi::Int)
     if upi <= length(row.dense)
         return row.dense[upi]
     end

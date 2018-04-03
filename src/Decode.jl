@@ -51,7 +51,7 @@ end
 
 doc"R10 decoder constructor. Automatically adds constraint symbols."
 function Decoder(p::R10)
-    d = Decoder{RBitVector,Vector{GF256}}(p)
+    d = Decoder{BRow,Vector{GF256}}(p)
     C = [Vector{GF256}() for _ in 1:p.L]
     N = [Dict{Int,Bool}() for _ in 1:p.L]
     precode!(C, p, N)
@@ -68,7 +68,7 @@ end
 
 doc"R10_256 decoder constructor. Automatically adds constraint symbols."
 function Decoder(c::R10_256)
-    d = Decoder{RqRow{GF256},Vector{GF256}}(c)
+    d = Decoder{QRow{GF256},Vector{GF256}}(c)
     C = [Vector{GF256}() for _ in 1:c.L]
     N = [Dict{Int,GF256}() for _ in 1:c.L]
     precode!(C, c, N)
@@ -89,12 +89,12 @@ end
 
 doc"Default LT decoder constructor."
 function Decoder(p::LT)
-    return Decoder{RBitVector,Vector{GF256}}(p)
+    return Decoder{BRow,Vector{GF256}}(p)
 end
 
 doc"Default non-binary LT decoder constructor."
 function Decoder{CT,DT}(p::LTQ{CT,DT})
-    return Decoder{RqRow{CT},Vector{CT}}(p)
+    return Decoder{QRow{CT},Vector{CT}}(p)
 end
 
 doc"add a row to the decoder."
@@ -428,7 +428,7 @@ function diagonalize!(d::Decoder)
 end
 
 doc"solve for the inactivated intermediate symbols using least-squares."
-function solve_dense!{RT<:RqRow{Float64},VT}(d::Decoder{RT,VT})
+function solve_dense!{RT<:QRow{Float64},VT}(d::Decoder{RT,VT})
     firstrow = d.num_decoded+1 # first row of the dense matrix
     lastrow = length(d.rows) # last row of the dense matrix
     firstcol = d.p.L-d.num_inactivated+1 # first column of the dense matrix
@@ -468,7 +468,7 @@ function solve_dense!{RT<:RqRow{Float64},VT}(d::Decoder{RT,VT})
         rpi = d.rowperm[i]
         cpi = d.colperm[i]
         row = d.rows[rpi]
-        d.rows[rpi] = RqRow{Float64}(row.indices, row.values)
+        d.rows[rpi] = QRow{Float64}(row.indices, row.values)
         setdense!(d, rpi, cpi, 1.0)
         d.values[rpi] = x[i-firstrow+1,:]
     end
