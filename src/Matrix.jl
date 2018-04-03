@@ -2,22 +2,6 @@
 
 export BRow, QRow
 
-doc"True if cs neighbours the intermediate symbol with index i."
-function has_neighbour(row::Row, i::Int) :: Bool
-    return i in neighbours(row)
-end
-
-doc"find all non-zero entries."
-function findall(b::BitVector)
-    i = findfirst(b)
-    v = Vector{Int}()
-    while i != 0 && i <= length(b)
-        push!(v, i)
-        i = findnext(b, i+1)
-    end
-    return v
-end
-
 doc"Sparse binary row."
 struct BRow <: Row
     indices::Vector{Int} # sorted list of initial non-zero indices.
