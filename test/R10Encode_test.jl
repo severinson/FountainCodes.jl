@@ -4,7 +4,7 @@ function init(k=10)
     for i = 1:p.K
         C[i] = Vector{GF256}([i % 256])
     end
-    N = [Set{Int}() for _ in 1:p.L]
+    N = [Dict{Int,Bool}() for _ in 1:p.L]
     precode!(C, p, N)
     return p, C, N
 end
@@ -31,28 +31,28 @@ function test_encode_2()
     p, C, N = init(10)
     ri = p.K+1
     correct = [1, 6, 7, 8]
-    indices = sort!(collect(N[ri]))
+    indices = sort!(collect(keys(N[ri])))
     if indices != correct
         error("R10 LDPC encoder failed. row $ri is $indices but should be $correct")
     end
 
     ri = p.K+7
     correct = [5, 6, 7, 10]
-    indices = sort!(collect(N[ri]))
+    indices = sort!(collect(keys(N[ri])))
     if indices != correct
         error("R10 LDPC encoder failed. row $ri is $indices but should be $correct")
     end
 
     ri = p.K+8
     correct = [1, 2, 4, 5, 8, 10, 11, 15]
-    indices = sort!(collect(N[ri]))
+    indices = sort!(collect(keys(N[ri])))
     if indices != correct
         error("R10 HDPC encoder failed. row $ri is $indices but should be $correct")
     end
 
     ri = p.K+11
     correct = [2, 3, 4, 5, 6, 7, 14, 15, 16, 17]
-    indices = sort!(collect(N[ri]))
+    indices = sort!(collect(keys(N[ri])))
     if indices != correct
         error("R10 HDPC encoder failed. row $ri is $indices but should be $correct")
     end
@@ -60,7 +60,7 @@ function test_encode_2()
 
     ri = p.K+13
     correct = [11, 12, 13, 14, 15, 16, 17]
-    indices = sort!(collect(N[ri]))
+    indices = sort!(collect(keys(N[ri])))
     if indices != correct
         error("R10 HDPC encoder failed. row $ri is $indices but should be $correct")
     end

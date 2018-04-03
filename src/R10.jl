@@ -1,4 +1,4 @@
-export R10, precode!, ltgenerate
+export R10, R10_256, precode!, ltgenerate
 
 doc"R10 parameters container."
 struct R10 <: BinaryCode
@@ -9,6 +9,38 @@ struct R10 <: BinaryCode
     L::Integer # =K+S+H
     Lp::Integer # used by r10_trip
     function R10(K::Integer)
+        # if !(4 <= K <= 8192)
+        #     error("R10 codes support 4 <= K <= 8192 source symbols.")
+        # end
+
+        # X is the smallest positive integer such that X(X-1) >= 2K
+        X = ceil(1/2 + sqrt(1/4+2K))
+
+        # S is the smallest prime integer such that S >= ceil(0.01K) + X
+        S = Primes.nextprime(Int64(ceil(0.01K)+X))
+
+        # H is the smallest integer such that choose(H,ceil(H/2)) >= K + S
+        H = 0
+        while binomial(H,Int64(ceil(H/2))) < K + S
+            H += 1
+        end
+        Hp = ceil(H/2)
+        L = K+S+H
+        Lp = Primes.nextprime(L)
+        new(K, S, H, Hp, L, Lp)
+    end
+end
+Base.repr(p::R10) = "R10($(p.K))"
+
+"R10 code, where the HDPC row coefficients are drawn from GF256."
+struct R10_256 <: NonBinaryCode
+    K::Integer # number of source symbols
+    S::Integer # number of LDPC symbols
+    H::Integer # number of HDPC symbols
+    Hp:: Integer # hamming weight of HDPC symbols
+    L::Integer # =K+S+H
+    Lp::Integer # used by r10_trip
+    function R10_256(K::Integer)
         if !(4 <= K <= 8192)
             error("R10 codes support 4 <= K <= 8192 source symbols.")
         end
@@ -30,20 +62,12 @@ struct R10 <: BinaryCode
         new(K, S, H, Hp, L, Lp)
     end
 end
-
-Base.repr(p::R10) = "R10($(p.K))"
-
-doc"pre-code input data. C must be an array of source symbols of length L."
-function precode!(C::Vector, p::R10)
-    C = r10_ldpc_encode!(C, p, missing)
-    C = r10_hdpc_encode!(C, p, missing)
-    return C
-end
+Base.repr(p::R10_256) = "R10_256($(p.K))"
 
 doc"pre-code input data. C must be an array of source symbols of length L."
-function precode!(C::Vector, p::R10, N::Vector)
-    C = r10_ldpc_encode!(C, p, N)
-    C = r10_hdpc_encode!(C, p, N)
+function precode!(C::Vector, c::Union{R10,R10_256}, N=missing)
+    C = r10_ldpc_encode!(C, c, N)
+    C = r10_hdpc_encode!(C, c, N)
     return C
 end
 
@@ -68,7 +92,7 @@ function ltgenerate(C::Vector, X::Int, p::Code)
 end
 
 doc"Generate R10 precode LDPC symbols in-place at N (K+1) to (K+S)."
-function r10_ldpc_encode!(C::Vector, p::R10, N=missing)
+function r10_ldpc_encode!(C::Vector, p::Union{R10,R10_256}, N=missing)
     if length(C) != p.L
         error("C must have length p.L = $p.L")
     end
@@ -84,24 +108,32 @@ function r10_ldpc_encode!(C::Vector, p::R10, N=missing)
         b = i % p.S
         C[p.K+b+1] = C[p.K+b+1] + v
         if N !== missing
-            push!(N[p.K+b+1], i+1)
+            N[p.K+b+1][i+1] = true
         end
         b = (b + a) % p.S
         C[p.K+b+1] = C[p.K+b+1] + v
         if N !== missing
-            push!(N[p.K+b+1], i+1)
+            N[p.K+b+1][i+1] = true
         end
         b = (b + a) % p.S
         C[p.K+b+1] = C[p.K+b+1] + v
         if N !== missing
-            push!(N[p.K+b+1], i+1)
+            N[p.K+b+1][i+1] = true
         end
     end
     return C
 end
 
+function coefficient(X::Int, p::R10)
+    return true
+end
+
+function coefficient(X::Int, p::R10_256)
+    return GF256(r10_rand(X, 1, 256))
+end
+
 doc"Generate R10 precode HDPC symbols in-place at N (K+S+1) to (K+S+H)."
-function r10_hdpc_encode!(C::Vector, p::R10, N=missing)
+function r10_hdpc_encode!(C::Vector, p::Union{R10,R10_256}, N=missing)
     if length(C) != p.L
         error("C must have length p.L = $p.L")
     end
@@ -116,9 +148,14 @@ function r10_hdpc_encode!(C::Vector, p::R10, N=missing)
         for j in 0:p.K+p.S-1
             g = nextgray(g, p.Hp)
             if !iszero(g & (1 << h))
-                C[p.K+p.S+h+1] = C[p.K+p.S+h+1] + C[j+1]
+                coef = coefficient(h^2+j, p)
+                if coef != one(coef)
+                    C[p.K+p.S+h+1] = C[p.K+p.S+h+1] .+ coef.*C[j+1]
+                else
+                    C[p.K+p.S+h+1] = C[p.K+p.S+h+1] .+ C[j+1]
+                end
                 if N!== missing
-                    push!(N[p.K+p.S+h+1], j+1)
+                    N[p.K+p.S+h+1][j+1] = coef
                 end
             end
         end
@@ -126,7 +163,13 @@ function r10_hdpc_encode!(C::Vector, p::R10, N=missing)
     return C
 end
 
-doc"R10 standardized rand function."
+"""
+    r10_rand(X::Int, i::Int, m::Int)
+
+R10 standardized psuedo-random number generator. Generates a number between 0
+and m-1 from the integers X and i.
+
+"""
 function r10_rand(X::Int, i::Int, m::Int) :: Int
     if X < 0
         error("X must be non-negative")
@@ -158,7 +201,7 @@ function deg(v::Int) :: Int
 end
 
 doc"Maps an encoding symbol ID X to a triple (d, a, b)"
-function trip(X::Int, p::R10)
+function trip(X::Int, p::Union{R10,R10_256})
     Q = 65521 # the largest prime smaller than 2^16
     JK = J[p.K+1]
     A = (53591 + JK*997) % Q

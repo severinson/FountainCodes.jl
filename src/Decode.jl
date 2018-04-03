@@ -53,13 +53,34 @@ doc"R10 decoder constructor. Automatically adds constraint symbols."
 function Decoder(p::R10)
     d = Decoder{RBitVector,Vector{GF256}}(p)
     C = [Vector{GF256}() for _ in 1:p.L]
-    indices = [Set{Int}() for _ in 1:p.L]
-    precode!(C, p, indices)
+    N = [Dict{Int,Bool}() for _ in 1:p.L]
+    precode!(C, p, N)
     for i in (p.K+1):(p.K+p.S+p.H)
         cs = BSymbol(
             -1,
             Vector{GF256}(),
-            sort!(push!(collect(indices[i]), i)),
+            sort!(push!(collect(keys(N[i])), i)),
+        )
+        add!(d, cs)
+    end
+    return d
+end
+
+doc"R10_256 decoder constructor. Automatically adds constraint symbols."
+function Decoder(c::R10_256)
+    d = Decoder{RqRow{GF256},Vector{GF256}}(c)
+    C = [Vector{GF256}() for _ in 1:c.L]
+    N = [Dict{Int,GF256}() for _ in 1:c.L]
+    precode!(C, c, N)
+    for i in (c.K+1):(c.K+c.S+c.H)
+        indices = push!(collect(keys(N[i])), i)
+        coefs = push!(collect(values(N[i])), one(GF256))
+        p = sortperm(indices)
+        cs = QSymbol(
+            -1,
+            Vector{GF256}(),
+            indices[p],
+            coefs[p],
         )
         add!(d, cs)
     end
@@ -101,7 +122,7 @@ end
 
 doc"add a coded symbol to the decoder."
 function add!{RT}(d::Decoder{RT}, s::CodeSymbol)
-    add!(d, RT(s), s.value)
+    add!(d, row(RT, s), s.value)
 end
 
 # the inactivated part is stored as dense bit vectors. these are indexed from

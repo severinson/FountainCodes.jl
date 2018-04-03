@@ -33,6 +33,17 @@ function init_float64(k=10)
     return p, d, C
 end
 
+function init_R10_256(k=10)
+    p = RaptorCodes.R10_256(k)
+    d = RaptorCodes.Decoder(p)
+    C = Vector{Vector{GF256}}(p.L)
+    for i = 1:p.K
+        C[i] = Vector{GF256}([i % 256])
+    end
+    precode!(C, p)
+    return p, d, C
+end
+
 function test_select_row_1()
     p, d, C = init()
     RaptorCodes.add!(d, BSymbol(1, Vector{GF256}([1]), [1]))
@@ -663,3 +674,22 @@ function test_decoder_float64_2()
     return true
 end
 @test test_decoder_float64_2()
+
+function test_decoder_R10_256_1()
+    p, d, C = init_R10_256()
+    for i in 1:20
+        s = RaptorCodes.ltgenerate(C, i, p)
+        RaptorCodes.add!(d, s)
+    end
+    output = RaptorCodes.decode!(d)
+    println(p)
+    println(C)
+    println(output)
+    for i in 1:p.K
+        if output[i] != C[i]
+            error("decoding failure. source[$i] is $(output[i]). should be $(C[i]).")
+        end
+    end
+    return true
+end
+@test test_decoder_R10_256_1()

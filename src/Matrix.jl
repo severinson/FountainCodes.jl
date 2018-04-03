@@ -30,7 +30,7 @@ struct RBitVector <: Row
     end
 end
 
-function RBitVector(s::BSymbol)
+function row(::Type{RBitVector}, s::BSymbol)
     return RBitVector(s.neighbours)
 end
 
@@ -123,11 +123,11 @@ function RqRow{CT}(indices::Vector{Int}, values::Vector{CT}, dense::Vector{CT})
     return RqRow{CT}(indices::Vector{Int}, values::Vector{CT}, dense::Vector{CT})
 end
 
-function RqRow(s::BSymbol)
-    return RqRow{Bool}(s.neighbours, ones(length(s.neighbours)))
+function row{CT}(::Type{RqRow{CT}}, s::BSymbol)
+    return RqRow{CT}(s.neighbours, ones(CT, length(s.neighbours)))
 end
 
-function RqRow{CT}(s::QSymbol{VT,CT}) where {VT,CT}
+function row{CT,VT}(::Type{RqRow{CT}}, s::QSymbol{VT,CT})
     return RqRow{CT}(s.neighbours, s.coefficients)
 end
 
