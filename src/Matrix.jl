@@ -66,11 +66,11 @@ end
 
 doc"set an element of the dense part of the matrix."
 @inline function setdense!(row::BRow, upi::Int, v::Bool)
-    if !v # unallocated elements are already assumed to be zero
+    if !v && upi > length(row.inactive) # unallocated elements are implicitly zero
         return row
     end
     while upi > length(row.inactive) # dynamically grow the array
-        append!(row.inactive, falses(length(row.inactive)))
+        append!(row.inactive, falses(max(1, length(row.inactive))))
     end
     row.inactive[upi] = v
     return row
