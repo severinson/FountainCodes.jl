@@ -141,16 +141,6 @@ end
     return r.values[i]
 end
 
-doc"convert a binary array to a q-ary array"
-function qary_from_binary(b::BitVector) :: Array{GF256}
-    indices = find(b)
-    qary = zeros(GF256, maximum(indices))
-    for i in indices
-        qary[i] = one(GF256)
-    end
-    return qary
-end
-
 doc"in-place XOR of two UInt8-vectors."
 function xor!(a::Vector{GF256}, b::Vector{GF256})
     la, lb = length(a), length(b)
