@@ -29,9 +29,9 @@ end
 
 function main(K=1000, r=500, n=10)
     Profile.clear()
-    # p = R10Parameters(K)
-    dd = RaptorCodes.Soliton(K, Int(round(K*2/3)), 0.01)
-    p = RaptorCodes.QLTParameters(K, dd)
+    p = R10_256(K)
+    # dd = Soliton(K, Int(round(K*2/3)), 0.01)
+    # p = RaptorCodes.LTQ(K, dd)
     C = Vector{Vector{GF256}}(p.L)
     for i = 1:p.K
         C[i] = Vector{GF256}([i % 256])
