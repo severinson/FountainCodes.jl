@@ -1,4 +1,10 @@
-# matrix primitives and concrete row types
+ """
+
+This module defines two concrete row types: Brow for rows with only binary
+coefficients and QRow for rows with arbitrary coefficients of the same type.
+This module also defines row operations for these rows.
+
+"""
 
 export BRow, QRow
 
@@ -93,10 +99,6 @@ struct QRow{CT} <: Row
         p = sortperm(indices)
         return new(copy(indices)[p], copy(values)[p], Vector{CT}())
     end
-    # function QRow{CT}(indices::Vector{Int}, values::Vector{CT}, dense::BitVector) where CT
-    #     p = sortperm(indices)
-    #     return new(copy(indices)[p], copy(values)[p], copy(dense))
-    # end
     function QRow{CT}(indices::Vector{Int}, values::Vector{CT}, dense::Vector{CT}) where CT
         p = sortperm(indices)
         return new(copy(indices)[p], copy(values)[p], copy(dense))
@@ -113,6 +115,14 @@ end
 
 function row{CT,VT}(::Type{QRow{CT}}, s::QSymbol{VT,CT})
     return QRow{CT}(s.neighbours, s.coefficients)
+end
+
+function row{CT,VT}(::Type{Union{BRow,QRow{CT}}}, s::QSymbol{VT,CT})
+    return QRow{CT}(s.neighbours, s.coefficients)
+end
+
+function row{CT}(::Type{Union{BRow,QRow{CT}}}, s::BSymbol)
+    return BRow(s.neighbours)
 end
 
 @inline function degree(r::QRow)
@@ -141,8 +151,20 @@ end
     return r.values[i]
 end
 
-doc"in-place XOR of two UInt8-vectors."
-function xor!(a::Vector{GF256}, b::Vector{GF256})
+doc"in-place XOR of two vectors."
+function xor!(a::Vector, b::Vector)
+    la, lb = length(a), length(b)
+    @simd for i in 1:min(la, lb)
+        a[i] = xor(a[i], b[i])
+    end
+    if lb > la
+        append!(a, view(b, (la+1):lb))
+    end
+    return a
+end
+
+doc"in-place XOR of a vector with a BitVector."
+function xor!(a::Vector, b::BitVector)
     la, lb = length(a), length(b)
     @simd for i in 1:min(la, lb)
         a[i] = xor(a[i], b[i])
@@ -176,6 +198,37 @@ end
         end
     end
     return b
+end
+
+@inline function subtract!{CT}(a::QRow{CT}, b::BRow, coef::Union{Bool,CT}) ::QRow
+    if iszero(coef)
+        return a
+    end
+    if coef == one(coef)
+        xor!(a.dense, b.inactive)
+    else
+        xor!(a.dense, coef.*b.inactive)
+    end
+    return a
+end
+
+@inline function subtract!{CT}(a::BRow, b::QRow{CT}, coef::Union{Bool,CT}) ::QRow
+    if iszero(coef)
+        return a
+    end
+    if coef == one(coef)
+        return QRow(
+            a.indices,
+            ones(CT, length(a.indices)),
+            xor.(a.inactive, b.dense),
+        )
+    else
+        return QRow(
+            a.indices,
+            ones(CT, length(a.indices)),
+            xor.(a.inactive, coef.*b.dense),
+        )
+    end
 end
 
 doc"get the index of any non-zero inactive element"
