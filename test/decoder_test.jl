@@ -682,9 +682,6 @@ function test_decoder_R10_256_1()
         RaptorCodes.add!(d, s)
     end
     output = RaptorCodes.decode!(d)
-    println(p)
-    println(C)
-    println(output)
     for i in 1:p.K
         if output[i] != C[i]
             error("decoding failure. source[$i] is $(output[i]). should be $(C[i]).")
@@ -693,3 +690,19 @@ function test_decoder_R10_256_1()
     return true
 end
 @test test_decoder_R10_256_1()
+
+function test_decoder_R10_256_2()
+    p, d, C = init_R10_256(50)
+    for i in 1:55
+        s = RaptorCodes.ltgenerate(C, i, p)
+        RaptorCodes.add!(d, s)
+    end
+    output = RaptorCodes.decode!(d)
+    for i in 1:p.K
+        if output[i] != C[i]
+            error("decoding failure. source[$i] is $(output[i]). should be $(C[i]).")
+        end
+    end
+    return true
+end
+@test test_decoder_R10_256_2()
