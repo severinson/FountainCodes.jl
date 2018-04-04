@@ -68,11 +68,24 @@ end
 
 doc"R10_256 decoder constructor. Automatically adds constraint symbols."
 function Decoder(c::R10_256)
-    d = Decoder{QRow{GF256},Vector{GF256}}(c)
+    d = Decoder{Union{BRow,QRow{GF256}},Vector{GF256}}(c)
     C = [Vector{GF256}() for _ in 1:c.L]
     N = [Dict{Int,GF256}() for _ in 1:c.L]
     precode!(C, c, N)
-    for i in (c.K+1):(c.K+c.S+c.H)
+
+    # LDPC rows are binary
+    for i in (c.K+1):(c.K+c.S)
+        indices = push!(collect(keys(N[i])), i)
+        cs = BSymbol(
+            -1,
+            Vector{GF256}(),
+            sort!(indices),
+        )
+        add!(d, cs)
+    end
+
+    # HDPC rows are q-ary
+    for i in (c.K+c.S+1):(c.K+c.S+c.H)
         indices = push!(collect(keys(N[i])), i)
         coefs = push!(collect(values(N[i])), one(GF256))
         p = sortperm(indices)
