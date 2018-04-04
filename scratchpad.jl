@@ -51,47 +51,70 @@ end
 # make sure we have a random seed
 srand()
 
-function qltsim(overheads::Vector{Int})
+function ltqsim(K::Int, overheads::Vector{Int})
     mode = 3998
     delta = 0.9999999701976676
+    # delta = 0.999
+
+    # mode = 998
+    # delta = 0.9999999701976676
     dd = RaptorCodes.Soliton(K, mode, delta)
-    c = QLTParameters(K, dd)
+    c = LTQ{GF256}(K, dd)
     for _ in 1:100
-        df = RaptorCodes.linearsims(overheads, c, 100)
+        df = RaptorCodes.linearsims(overheads, c, 1)
         println(df)
     end
 end
 
-function ltsim(overheads::Vector{Int})
-    mode = 3998
+function ltqrsim(K::Int, overheads::Vector{Int})
+    @assert K == 8000
+    # mode = 3998
+    mode = K-2
     delta = 0.9999999701976676
     dd = RaptorCodes.Soliton(K, mode, delta)
-    c = LTParameters(K, dd)
+    c = LTQ{Float64}(K, dd)
     for _ in 1:100
         df = RaptorCodes.linearsims(overheads, c, 100)
         println(df)
     end
 end
 
-function r10sim(overheads::Vector{Int})
-    c = R10Parameters(K)
+function ltsim(K::Int, overheads::Vector{Int})
+    # mode = 3998
+    # delta = 0.9999999701976676
+    # delta = 0.999
+
+    mode = 998
+    delta = 0.9999999701976676
+    dd = RaptorCodes.Soliton(K, mode, delta)
+    c = LT(K, dd)
     for _ in 1:100
-        df = RaptorCodes.linearsims(overheads, c, 100)
+        df = RaptorCodes.linearsims(overheads, c, 10)
         println(df)
     end
 end
 
-K = 4000
-a = 0.01
-c = 1.5
-reloverheads = [a*c^i for i in 0:10]
-overheads = Vector{Int}(round.(K*reloverheads))
+function r10sim(K::Int, overheads::Vector{Int})
+    c = R10(K)
+    for _ in 1:100
+        df = RaptorCodes.linearsims(overheads, c, 10)
+        println(df)
+    end
+end
 
+K = 8000
+reloverheads = linspace(0.25, 0.4, 10)
+overheads = Vector{Int}(round.(K*reloverheads))
+ltqrsim(K, overheads)
 
-reloverheads = linspace(0.25, 0.4, 100)
-overheads = Vector{Int}(round.(K*reloverheads))
-# qltsim(overheads)
-# ltsim(overheads)
-reloverheads = linspace(0, 0.05, 100)
-overheads = Vector{Int}(round.(K*reloverheads))
-r10sim(overheads)
+# ltsim(K, overheads)
+# reloverheads = linspace(0.05, 0.5, 100)
+# overheads = Vector{Int}(round.(K*reloverheads))
+
+# overheads = collect(0:20)
+
+# reloverheads = linspace(0, 0.5, 100)
+# for K in [20000]
+#     overheads = Vector{Int}(round.(K*reloverheads))
+#     r10sim(K, overheads)
+# end
