@@ -12,6 +12,7 @@ plt.rc('pgf',  texsystem='pdflatex')
 plt.rc('text', usetex=True)
 plt.rcParams['text.latex.preamble'] = [r'\usepackage{lmodern}']
 plt.rcParams["figure.figsize"] = (6,6)
+plt.rcParams["figure.dpi"] = 200
 
 def success_filter(df):
     return df.loc[df['success'] == 1.0, :]
@@ -36,13 +37,6 @@ def load(directory=None, multiplier=1, only_success=True, refresh=False):
     if only_success:
         df = success_filter(df)
 
-    # if "status" in df:
-    #     print()
-    #     print(df['success'].sum())
-    #     df['success'] = df.apply(lambda row: row['status'] == -4 or row['success'] == 1, axis=1)
-    #     # df.loc[df['status'] == -4.0, :].loc[df['success'] ] = 1.0
-    #     print(df['success'].sum())
-
     # average by overhead
     df = pd.DataFrame(
         [df[df['overhead']==x].mean() for x in df['overhead'].unique()]
@@ -57,7 +51,7 @@ def load(directory=None, multiplier=1, only_success=True, refresh=False):
     df['inactivations'] /= df['num_inputs']
     df['failure'] = 1-df[['success']]
 
-    # add complexity
+    # compute complexity
     df['complexity'] = df['decoding_additions']
     df['complexity'] += df['decoding_multiplications']
     df['complexity'] *= multiplier
@@ -71,59 +65,33 @@ def load(directory=None, multiplier=1, only_success=True, refresh=False):
 def failure_plot(dfs=None, descriptors=None):
     plt.figure()
     ax = plt.subplot()
-    popts = list()
     for df, descriptor in zip(dfs, descriptors):
         print("{}:".format(descriptor))
         x = df['reloverhead']
         y = df['failure']
         plt.semilogy(x, y, '.', label=descriptor)
 
-        # fit a*exp(bx)
-        df_opt = df
-        df_opt = df_opt.loc[df_opt['failure'] < 1e-1, :]
-        df_opt = df_opt.loc[df_opt['failure'] > 1e-3, :]
-
-        x = df_opt['reloverhead']
-        y = df_opt['failure']
-        plt.semilogy(x, y, '.')
-
-        x_opt = df_opt['reloverhead']
-        y_opt = df_opt['failure']
-
-        f = lambda t,a,b: a*np.exp(b*t)
-        ff = lambda t,p: p[0]*np.exp(p[1]*t)
-
-        p0 = None
-        if popts:
-            p0 = (popts[-1]["a"], popts[-1]["b"])
-        try:
-            popt, _ = sp.optimize.curve_fit(f, x_opt, y_opt, p0=p0, bounds=([1, -np.inf], [np.inf, -1]))
-        except RuntimeError:
-            continue
-
-        a, b = popt
-        popts.append({"a": a, "b": b, "num_inputs": df['num_inputs'].mean()})
-        t = np.linspace(0, x_opt.max())
-        # plt.semilogy(t, ff(t,popt))
-
-        f = lambda t,a,b: a*np.exp(b*t)
-        n = df["num_inputs"].mean()
-        # am = np.exp(0.005161818711756707*n)
-        bm = -594.2043276421593
-        am = 10*np.exp(4.06755643e-03*n)
-        # plt.semilogy(t, f(t, am, bm))
-
-        # plt.semilogy(x, y-f(x, am, bm), '.', label=descriptor)
-
-
-
     # plot binary random fountain
-    overhead = np.arange(0, 10)
-    plt.semilogy(overhead/df['num_inputs'].mean(), 1/np.power(2, overhead), label="$2^{-\delta}$")
+    # overhead = np.arange(0, 10)
+    # plt.semilogy(overhead/df['num_inputs'].mean(), 1/np.power(2, overhead), label="$2^{-\delta}$")
 
     # plot lower bound
-    # K = 4000
-    # M = 3998
+    K = 4000
+    M = 3998
+    delta = 0.9999999701976676
+    soliton = pyrateless.Soliton(delta=delta, symbols=K, mode=M)
+    overheads = np.linspace(0.25, 0.4, 10)
+    failure = [
+        pyrateless.optimize.decoding_failure_prob_estimate(
+            soliton=soliton,
+            num_inputs=K,
+            overhead=1+x,
+        ) for x in overheads
+    ]
+    plt.semilogy(overheads, failure, label="Bound, 4000")
+
+    # K = 8000
+    # M = K-2
     # delta = 0.9999999701976676
     # soliton = pyrateless.Soliton(delta=delta, symbols=K, mode=M)
     # overheads = np.linspace(0.25, 0.4, 10)
@@ -134,64 +102,19 @@ def failure_plot(dfs=None, descriptors=None):
     #         overhead=1+x,
     #     ) for x in overheads
     # ]
-    # plt.semilogy(overheads, failure, label="bound")
+    # plt.semilogy(overheads, failure, label="Bound, 8000")
 
-    plt.setp(ax.get_xticklabels(), fontsize=25)
-    plt.setp(ax.get_yticklabels(), fontsize=25)
-    plt.xlabel("Overhead", fontsize=25)
-    plt.ylabel("Failure Probability", fontsize=25)
-    plt.ylim(ymax=1, ymin=1e-6)
-    plt.xlim(xmin=0, xmax=0.1)
-    # plt.xlim([0, 0.5])
-    plt.grid()
+    plt.setp(ax.get_xticklabels())
+    plt.setp(ax.get_yticklabels())
+    plt.xlabel("Relative Overhead")
+    plt.ylabel("Failure Probability")
+    plt.xlim((0.25, 0.40))
+    plt.ylim((1e-3, 1))
     plt.legend()
+    plt.title("R10 Failure-Overhead Curves")
     # plt.autoscale(enable=True)
-    # plt.tight_layout()
-    # plt.savefig("failure.png")
-
-    # plot optimized parameters
-    # filter out noise
-    popts = pd.DataFrame(popts)
-    popts = popts.loc[popts["a"] > 0, :]
-    # popts = popts.loc[popts["a"] < 1e10, :]
-    popts = popts.loc[popts["b"] < 0, :]
-    # popts = popts.loc[popts["num_inputs"] <= 4000, :]
-
-    # fit curve to parameter a
-    x_opt = popts["num_inputs"]
-    y_opt = popts["a"]
-    fa = lambda t,a,b: a*np.exp(b*t)
-    ffa = lambda t,p: p[0]*np.exp(p[1]*t)
-    a0 = 1
-    b0 = np.log(y_opt)
-    b0 /= x_opt
-    b0 = b0.mean()
-    print("(a0, b0)=({}, {})".format(a0, b0))
-    popt, _ = sp.optimize.curve_fit(
-        fa, x_opt, y_opt, p0=(a0, b0), bounds=(0, [1e2, np.inf]),
-    )
-
-    print("meta-fit parameters to a: {}".format(popt))
-
-    plt.figure()
-    ax = plt.subplot()
-    t = np.linspace(x_opt.min(), x_opt.max())
-    plt.semilogy(t, ffa(t, popt))
-    plt.semilogy(t, fa(t, a0, b0), '--')
-    plt.semilogy(x_opt, y_opt, '.')
-    plt.title("$a$")
-
-    plt.figure()
-    ax = plt.subplot()
-    x_opt = popts["num_inputs"]
-    y_opt = popts["b"]
-    c0 = y_opt.mean()
-    print("meta-fit parameters to b: {}".format(c0))
-    t = np.linspace(x_opt.min(), x_opt.max())
-    plt.plot(t, c0*np.ones(len(t)))
-    plt.plot(popts["num_inputs"], popts["b"], '.')
-    plt.title("$b$")
-
+    plt.tight_layout()
+    plt.savefig("r10-failure-overhead.png", dpi="figure")
     return
 
 def required_overhead_plot(dfs=None, descriptors=None, tfps=[1e-1, 1e-2, 1e-3]):
@@ -208,40 +131,66 @@ def required_overhead_plot(dfs=None, descriptors=None, tfps=[1e-1, 1e-2, 1e-3]):
         r.append(dct)
 
     df = pd.DataFrame(r)
+    print("Failure-Overhead")
     print(df.head())
     plt.figure()
     ax = plt.subplot()
     for tfp in tfps:
-        plt.plot(df["x"], df[str(tfp)], '.', label="tfp={}".format(tfp))
+        x, y = df["x"], df[str(tfp)]
+        plt.plot(x, y, '.', label="$P_F={}$".format(tfp))
+        f = lambda t,a,b: a+b*t
+        ff = lambda t,p: p[0]+p[1]*t
+        popt, _ = sp.optimize.curve_fit(f, x, y)
+        print("found parameters {} for fp={}".format(popt, tfp))
+        t = np.linspace(x.min(), x.max())
+        plt.plot(t, ff(t, popt))
 
-    plt.grid()
-    plt.title("required overhead")
+    plt.xlim((1000, 8000))
+    plt.ylim((0.01, 0.08))
+    plt.title("Overhead at Given Failure Probability")
+    plt.xlabel("\# Source Symbols")
+    plt.ylabel("Relative Overhead")
     plt.legend()
+    plt.tight_layout()
+    plt.savefig("r10_required_overhead.png", dpi="figure")
+    return
 
     plt.figure()
     ax = plt.subplot()
     for tfp in tfps:
-        plt.semilogy(df["x"], np.abs(tfp-df[str(tfp)+"-actual"]), '.', label="tfp={}".format(tfp))
+        plt.semilogy(df["x"], np.abs(tfp-df[str(tfp)+"-actual"])/tfp, '.', label="tfp={}".format(tfp))
 
-    plt.grid()
     plt.title("tfp error")
     plt.legend()
 
+    print("Complexity")
     plt.figure()
     ax = plt.subplot()
     for tfp in tfps:
-        plt.plot(df["x"], df[str(tfp)+"-complexity"], '.', label="tfp={}".format(tfp))
+        x, y = df["x"], df[str(tfp)+"-complexity"]
+        plt.plot(x, y, '.', label="tfp={}".format(tfp))
+        f = lambda t,a,b: a+b*t
+        ff = lambda t,p: p[0]+p[1]*t
+        popt, _ = sp.optimize.curve_fit(f, x, y)
+        print("found parameters {} for fp={}".format(popt, tfp))
+        t = np.linspace(x.min(), x.max())
+        plt.plot(t, ff(t, popt))
 
-    plt.grid()
-    plt.title("complexity")
+    plt.xlim((1000, 8000))
+    plt.ylim((150, 550))
+    plt.title("Complexity at Given Failure Probability")
+    plt.xlabel("\# Source Symbols")
+    plt.ylabel("Decoding Complexity")
     plt.legend()
+    plt.tight_layout()
+    # plt.savefig("r10_complexity.png", dpi="figure")
+    return
 
     plt.figure()
     ax = plt.subplot()
     plt.plot(df["x"], (df[str(1e-2)] / df[str(1e-1)] - 1), '.', label="1e-1/1e-2")
     plt.plot(df["x"], (df[str(1e-3)] / df[str(1e-2)] - 1), '.', label="1e-2/1e-3")
     plt.plot(df["x"], (df[str(1e-3)] / df[str(1e-1)] - 1)/2, '.', label="1e-1/1e-3")
-    plt.grid()
     plt.title("relative")
     plt.legend()
 
@@ -250,12 +199,138 @@ def required_overhead_plot(dfs=None, descriptors=None, tfps=[1e-1, 1e-2, 1e-3]):
     plt.plot(df["x"], (df[str(1e-2)] - df[str(1e-1)])/1, '.', label="1e-1, 1e-2")
     plt.plot(df["x"], (df[str(1e-3)] - df[str(1e-2)])/1, '.', label="1e-2, 1e-3")
     plt.plot(df["x"], (df[str(1e-3)] - df[str(1e-1)])/2, '.', label="1e-2, 1e-3")
-    plt.grid()
     plt.title("absolute")
     plt.legend()
+    return
 
-    # plt.xlabel("num_inputs")
-    # plt.ylabel("(required relative overhead)")
+def required_complexity_plot(dfs, descriptors):
+    pf = [1e-1, 1e-2, 1e-3]
+    a = [5.43476844e-03, 9.24066372e-03, 1.36168053e-02]
+
+    # average of 1e-1 and 1e-2 values since the distance to the measured pf is
+    # much smaller for these points.
+    b = (8.09230267e-06 + 8.01977332e-06) / 2
+    f = lambda t,a,b: a+b*t
+
+    r = list()
+    for df, descriptor in zip(dfs, descriptors):
+        K = df["num_inputs"].mean()
+        x1 = f(K, a[0], b) # 1e-1
+        x2 = f(K, a[1], b) # 1e-2
+        x3 = f(K, a[2], b) # 1e-3
+
+        dct = dict()
+        dct["x"] = df['num_inputs'].mean()
+
+        i = (df["reloverhead"]-x1).abs().idxmin(axis=1)
+        dct["1e-1"] = df["complexity"][i]
+
+        i = (df["reloverhead"]-x2).abs().idxmin(axis=1)
+        dct["1e-2"] = df["complexity"][i]
+
+        i = (df["reloverhead"]-x3).abs().idxmin(axis=1)
+        dct["1e-3"] = df["complexity"][i]
+        r.append(dct)
+
+    df = pd.DataFrame(r)
+    print(df)
+    plt.figure()
+    ax = plt.subplot()
+    for tfp in ["1e-1", "1e-2", "1e-3"]:
+        x, y = df["x"], df[tfp]
+        plt.plot(x, y, '.', label="$P_F={}$".format(tfp))
+        f = lambda t,a,b: a+b*t
+        ff = lambda t,p: p[0]+p[1]*t
+        popt, _ = sp.optimize.curve_fit(f, x, y)
+        print("found parameters {} for fp={}".format(popt, tfp))
+        t = np.linspace(x.min(), x.max())
+        plt.plot(t, ff(t, popt))
+
+        # x = [0, x1-eps, x1, x2, x3, x4]
+        # y = [0, 0, 1-1e-1, 1-1e-2, 1-1e-3, 1]
+        # l = ax.plot(x, y, label=descriptor)
+        # color = l[-1].get_color()
+        # x = df["reloverhead"]
+        # y = np.array(df["complexity"])
+        # plt.plot(x, y, '--', color=color)
+
+    plt.title("R10 Complexity")
+    plt.xlabel("\# Source Symbols")
+    plt.ylabel("Complexity")
+    plt.xlim((1000, 8000))
+    plt.ylim((2e2, 6e2))
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig("r10_required_complexity.png", dpi='figure')
+    return
+
+def cdf_plot(dfs, descriptors):
+    pf = [1e-1, 1e-2, 1e-3]
+    a = [5.43476844e-03, 9.24066372e-03, 1.36168053e-02]
+
+    # average of 1e-1 and 1e-2 values since the distance to the measured pf is
+    # much smaller for these points.
+    b = (8.09230267e-06 + 8.01977332e-06) / 2
+    f = lambda t,a,b: a+b*t
+    eps = np.finfo(float).eps
+    plt.figure()
+    ax = plt.subplot()
+    for df, descriptor in zip(dfs, descriptors):
+        K = df["num_inputs"].mean()
+        x1 = f(K, a[0], b)
+        x2 = f(K, a[1], b)
+        x3 = f(K, a[2], b)
+        x = [0, x1-eps, x1, x2, x3, 2*x3]
+        y = [0, 0, 1-1e-1, 1-1e-2, 1-1e-3, 1]
+        l = ax.plot(x, y, label=descriptor)
+        color = l[-1].get_color()
+        x = df["reloverhead"]
+        y = np.array(df["success"])
+        plt.plot(x, y, '--', color=color)
+
+    plt.title("R10 Completion CDF")
+    plt.xlabel("Relative Overhead")
+    plt.ylabel("Probability")
+    plt.xlim((0, 0.1))
+    plt.ylim((0, 1))
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig("cdf.png", dpi='figure')
+    return
+
+def complexity_prediction_plot(dfs, descriptors):
+    pf = [1e-1, 1e-2, 1e-3]
+    a = [2.22413913e+02, 1.95991293e+02, 1.68044631e+02]
+    b = [3.64861777e-02, 2.97971578e-02, 2.70341188e-02]
+    f = lambda t,a,b: a+b*t
+    plt.figure()
+    ax = plt.subplot()
+    for df, descriptor in zip(dfs, descriptors):
+        K = df["num_inputs"].mean()
+        y0 = 0
+        y1 = f(K, a[0], b[0])
+        y2 = f(K, a[1], b[1])
+        y3 = f(K, a[2], b[2])
+        x0 = 0
+        x1 = 1e-1
+        x2 = x1+1e-2
+        x3 = x2+1e-3
+        x = [x0, x1, x2, x3]
+        y = [y0, y1, y2, y3]
+        l = ax.plot(x, y, label=descriptor)
+        color = l[-1].get_color()
+        x = df["success"]
+        y = np.array(df["complexity"])
+        plt.plot(x, y, '--', color=color)
+
+    plt.title("R10 Complexity")
+    plt.xlabel("Failure Probability")
+    plt.ylabel("Complexity")
+    plt.xlim((0, 0.1))
+    plt.ylim((0, 1))
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig("cdf.png", dpi='figure')
     return
 
 def complexity_plot(dfs=None, descriptors=None, complexity_coefficients=None):
@@ -272,26 +347,42 @@ def complexity_plot(dfs=None, descriptors=None, complexity_coefficients=None):
     plt.setp(ax.get_yticklabels(), fontsize=25)
     plt.xlabel("Overhead", fontsize=25)
     plt.ylabel("Complexity", fontsize=25)
-    # plt.xlim([0, 0.5])
-    plt.grid()
+    plt.xlim((0, 0.1))
+    plt.ylim((1, 1e-3))
     plt.legend()
-    plt.autoscale(enable=True)
+    # plt.autoscale(enable=True)
     # plt.tight_layout()
     # plt.savefig("complexity.png")
     return
 
-# R10 failure-overhead curve approximation
-# R10(1000), 1e-1, 1e-2 at 1.5%, 2%
-# R10(2000), 1e-1, 1e-2 at 2.1%, 2.4%
-# R10(3000), 1e-1, 1e-2 at 2.9%, 3.3%
-# R10(4000), 1e-1, 1e-2 at 3.7%, 4.1%
-# R10(6000), 1e-1, 1e-2 at 5.4%, 5.6%
-# R10(4000), 1e-1, 1e-2 at 7%, 7.5%
 
+def check_status(directory=None, multiplier=1, only_success=True, refresh=True):
+    '''load df's from directory, average the columns and return a new df'''
 
-if __name__ == '__main__':
-    refresh = False
+    filename = directory + "-" + str(only_success) + ".csv"
+    if not refresh:
+        try:
+            return pd.read_csv(filename)
+        except FileNotFoundError:
+            pass
+
+    pattern = path.join(directory, "*.csv")
+    for f in glob.glob(pattern):
+        df = pd.read_csv(f)
+        if "status" not in df:
+            print("{} has no status field".format(f))
+
+        df = df.loc[df["success"] == 0]
+        df = df.loc[df["status"] != -1]
+        if len(df):
+            print(df)
+
+    return
+
+def main():
     prefix = "./simulations/"
+    refresh = True
+
     # directories = [d for d in glob.glob("./simulations/R10*") if path.isdir(d)]
     directories = [
         "R10(1000)",
@@ -323,9 +414,12 @@ if __name__ == '__main__':
         "R10(3600)",
         "R10(3700)",
         "R10(3800)",
+        "R10(3900)",
         "R10(4000)",
+        "R10(5000)",
         "R10(6000)",
         "R10(7000)",
+        "R10(8000)",
     ]
     directories = [
         "R10(1000)",
@@ -335,6 +429,10 @@ if __name__ == '__main__':
         "R10(6000)",
         "R10(7000)",
         "R10(8000)",
+    ]
+    directories = [
+        "LTQ{Float64,DT}(4000, Soliton(4000, 3998, 0.9999999701976676))",
+        # "LTQ{Float64,DT}(8000, Soliton(8000, 7998, 0.9999999701976676))",
     ]
     directories = [prefix + d for d in directories]
     descriptors = [d.strip(prefix) for d in directories]
@@ -383,4 +481,9 @@ if __name__ == '__main__':
     failure_plot(dfs_any, descriptors)
     # complexity_plot(dfs_success, descriptors, complexity_multipliers)
     # required_overhead_plot(dfs_any, descriptors)
+    # required_complexity_plot(dfs_success, descriptors)
+    # cdf_plot(dfs_any, descriptors)
     plt.show()
+
+if __name__ == '__main__':
+    main()
