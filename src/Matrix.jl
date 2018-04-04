@@ -1,10 +1,6 @@
- """
-
-This module defines two concrete row types: Brow for rows with only binary
-coefficients and QRow for rows with arbitrary coefficients of the same type.
-This module also defines row operations for these rows.
-
-"""
+# This module defines two concrete row types: Brow for rows with only binary
+# coefficients and QRow for rows with arbitrary coefficients of the same type.
+# This module also defines row operations for these rows.
 
 export BRow, QRow
 
