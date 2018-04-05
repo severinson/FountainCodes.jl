@@ -24,7 +24,7 @@ end
     return length(r.indices)
 end
 
-@inline function inactive_degree(r::BRow)
+@inline function inactive_degree(r::BRow) :: Int
     return sum(r.inactive)
 end
 
@@ -132,11 +132,11 @@ end
     return sum(!iszero(v) for v in r.dense)
 end
 
-@inline function neighbours(r::QRow)
+@inline function neighbours(r::QRow) :: Vector{Int}
     return r.indices
 end
 
-@inline function coefficients(r::QRow)
+@inline function coefficients{CT}(r::QRow{CT}) :: Vector{CT}
     return r.values
 end
 
