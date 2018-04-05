@@ -207,7 +207,7 @@ doc"Swap rows ri and rj of the constraint matrix."
 end
 
 doc"zero out any elements of rows[rpi] below the diagonal"
-function zerodiag!(d::Decoder, rpi::Int) :: Int
+function zerodiag_old!(d::Decoder, rpi::Int) :: Int
     row = d.rows[rpi]
     for (cpi, coef) in zip(neighbours(row), coefficients(row))
         ci = d.colperminv[cpi]
@@ -218,6 +218,31 @@ function zerodiag!(d::Decoder, rpi::Int) :: Int
         end
     end
     return rpi
+end
+
+doc"zero out any elements of rows[rpi] below the diagonal"
+function zerodiag!(d::Decoder, rpi::Int) :: Int
+    row = d.rows[rpi]
+    zerodiag!(d, row, rpi)
+    return rpi
+end
+
+function zerodiag!(d::Decoder, rowi::Row, rpi::Int)
+    for (cpi, coef) in zip(neighbours(rowi), coefficients(rowi))
+        zerodiag!(d, rowi, rpi, cpi, coef)
+    end
+    return rpi
+end
+
+function zerodiag!(d::Decoder, rowi::Row, rpi::Int, cpi::Int, coef)
+    ci = d.colperminv[cpi]
+    if ci < d.num_decoded+1 && ci <= d.p.L-d.num_inactivated
+        rpj = d.rowperm[ci]
+        rowj = d.rows[rpj]
+        subtract!(d, rpj, rpi, coef, coefficient(rowj, cpi))
+        # subtract!(d, rowi, d.rows[rpj], rpj, coef)
+        # function subtract!(d::Decoder, rowi::Row, rowj::Row, rpj::Int, coef)
+    end
 end
 
 doc"The R10 spec. gives a recommendation for which row to select in the case
@@ -327,30 +352,22 @@ end
 
 doc"subtract coef*rows[rpi] from rows[rpj]."
 function subtract!(d::Decoder, rpi::Int, rpj::Int, coefi, coefj)
-    row1 = d.rows[rpi]
-    row2 = d.rows[rpj]
     coef = coefi
     @assert !iszero(coefj) "coefj must be non-zero, but is $coefj and type $(typeof(coefj))"
     if coefj != one(coefj)
         coef /= coefj
     end
-    d.rows[rpj] = subtract!(row2, row1, coef)
-
-    # zero values are allocated on-demand
-    if !iszero(d.values[rpi])
-        if !iszero(d.values[rpj])
-            if coef == one(coef)
-                d.values[rpj] = d.values[rpj] .- d.values[rpi]
-            else
-                d.values[rpj] = subeq!(d.values[rpj], d.values[rpi], coef)
-            end
-        else
-            d.values[rpj] = subeq!(zeros(d.values[rpi]), d.values[rpi], coef)
-        end
+    d.rows[rpj] = subtract!(d.rows[rpj], d.rows[rpi], coef)
+    if iszero(d.values[rpj])
+        d.values[rpj] = zeros(d.values[rpi])
     end
+    d.values[rpj] = subeq!(d.values[rpj], d.values[rpi], coef)
+    update_metrics!(d, d.rows[rpi], coef)
+end
 
-    # track metrics for later analysis
-    weight = inactive_degree(row1)
+"""track performance metrics"""
+function update_metrics!(d::Decoder, row::Row, coef)
+    weight = inactive_degree(row)
     push!(d.metrics, "decoding_additions", weight)
     push!(d.metrics, "rowadds", 1)
     if coef != one(coef)
@@ -391,6 +408,7 @@ function setpriority!(d::Decoder, i::Int)
             d.pq[j] = d.pq[j] - 1.0
         end
     end
+    return
 end
 
 doc"Perform row/column operations such that there are non-zero entries only
