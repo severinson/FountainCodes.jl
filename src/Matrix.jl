@@ -41,12 +41,10 @@ end
 end
 
 doc"in-place XOR of two bit-vectors."
-function xor!(a::BitVector, b::BitVector)
+function xor!(a::BitVector, b::BitVector) :: BitVector
     la, lb = length(a.chunks), length(b.chunks)
-    @inbounds begin
-        @simd for i in 1:min(la, lb)
-            a.chunks[i] = xor(a.chunks[i], b.chunks[i])
-        end
+    @simd for i in 1:min(la, lb)
+        @inbounds a.chunks[i] = xor(a.chunks[i], b.chunks[i])
     end
     if lb > la
         append!(a.chunks, view(b.chunks, (la+1):lb))
@@ -161,17 +159,29 @@ end
 
 doc"in-place XOR of a vector with a BitVector."
 function xor!(a::Vector, b::BitVector)
-    la, lb = length(a), length(b)
-    @simd for i in 1:min(la, lb)
-        a[i] = xor(a[i], b[i])
+    lb = length(b)
+    while lb > length(a)
+        append!(a, zeros(eltype(a), max(1, length(a))))
     end
-    if lb > la
-        append!(a, view(b, (la+1):lb))
+    @simd for i in find(b)
+        @inbounds a[i] = xor(a[i], one(eltype(a)))
     end
     return a
 end
 
-@inline function subtract!{CT}(b::QRow{CT}, a::QRow{CT}, coef::CT) ::QRow
+doc"in-place XOR of a vector with a BitVector multiplied by coef."
+function xor!{CT}(a::Vector{CT}, b::BitVector, coef::CT)
+    lb = length(b)
+    while lb > length(a)
+        append!(a, zeros(eltype(a), max(1, length(a))))
+    end
+    @simd for i in find(b)
+        @inbounds a[i] = xor(a[i], coef)
+    end
+    return a
+end
+
+@inline function subtract!{CT}(b::QRow{CT}, a::QRow{CT}, coef::CT) ::QRow{CT}
     if length(a.dense) == 0
         return b
     end
@@ -179,7 +189,7 @@ end
     return b
 end
 
-@inline function subtract!{CT<:Float64}(b::QRow{CT}, a::QRow{CT}, coef::CT) ::QRow
+@inline function subtract!{CT<:Float64}(b::QRow{CT}, a::QRow{CT}, coef::CT) ::QRow{CT}
     lb, la = length(b.dense), length(a.dense)
     if iszero(a.dense) || iszero(coef)
         return b
@@ -196,19 +206,19 @@ end
     return b
 end
 
-@inline function subtract!{CT}(a::QRow{CT}, b::BRow, coef::Union{Bool,CT}) ::QRow
+@inline function subtract!{CT}(a::QRow{CT}, b::BRow, coef::Union{Bool,CT}) ::QRow{CT}
     if iszero(coef)
         return a
     end
     if coef == one(coef)
         xor!(a.dense, b.inactive)
     else
-        xor!(a.dense, coef.*b.inactive)
+        xor!(a.dense, b.inactive, coef)
     end
     return a
 end
 
-@inline function subtract!{CT}(a::BRow, b::QRow{CT}, coef::Union{Bool,CT}) ::QRow
+@inline function subtract!{CT}(a::BRow, b::QRow{CT}, coef::Union{Bool,CT}) ::QRow{CT}
     if iszero(coef)
         return a
     end
