@@ -392,20 +392,18 @@ function inactivate!(d::Decoder, cpi::Int)
         if d.rowperminv[rpi] > d.num_decoded
             coef = coefficient(d.rows[rpi], cpi)
             setdense!(d, rpi, cpi, coef)
-            if rpi in keys(d.pq)
-                d.pq[rpi] -= 1.0
-            end
         end
     end
+    setpriority!(d, cpi)
     return
 end
 
 doc"Decrement the priority of all rows neighbouring column i."
-function setpriority!(d::Decoder, i::Int)
+function setpriority!(d::Decoder, cpi::Int)
     k = keys(d.pq)
-    for j in d.columns[i]
-        if j in k
-            d.pq[j] = d.pq[j] - 1.0
+    for rpi in d.columns[cpi]
+        if rpi in k
+            d.pq[rpi] -= 1.0
         end
     end
     return
