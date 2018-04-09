@@ -5,7 +5,8 @@ Gaussian elimination of a system of equations over F_2.
   CLOSED: [2018-03-06 Tue 09:58]
 Separate value type, i.e., allow the value of a coded symbol have arbitrary
 type. Define the subtract operator for different value types.
-* TODO  Allow different types of coded symbols
+* DONE Allow different types of coded symbols
+  CLOSED: [2018-03-18 Sun 22:31]
 Allow different types of coded symbols, where the difference is the field over
 which its coefficients are defined. For example, binary, q* TODO ary, real.
 * DONE Standard row selection
@@ -28,7 +29,8 @@ which its coefficients are defined. For example, binary, q* TODO ary, real.
    CLOSED: [2018-01-31 Wed 14:39]
 ** TODO Separate sets for different kinds of neighbours
 
-* TODO Discard unneeded rows
+* DONE Discard unneeded rows
+  CLOSED: [2018-03-18 Sun 22:31]
 - After the GE step we can discard all only-zero rows.
 - Is there a point? These are not touched anyway. Only releases some memory a
   bit earlier.
@@ -39,6 +41,13 @@ which its coefficients are defined. For example, binary, q* TODO ary, real.
 - Idea: sort the column lists according to priority and store the smallest
   priority separately. All priorities in this list are updated at once when a
   column in inactivated/decoded.
+- This system is more complicated. Need to think about how to implement this
+  well. Interface is essentially just get_row.
+* TODO inactivate setdense every row
+- Inactivate_isymbol sets the inactivated element for every neighboring row.
+  It'd be more efficient to do this only when the row is selected.
+- Could be done by keeping a record of all inactivated symbols and checking for
+  them when a row is selected.
 * DONE Formalized row interface
   CLOSED: [2018-03-14 Wed 09:16]
 - Subtract one row from another.
@@ -70,22 +79,33 @@ which its coefficients are defined. For example, binary, q* TODO ary, real.
 * TODO RBitVector constructor
 - variable names
 - use sort instead of sort! + copy
-* TODO Revisit complexity measurement
+* DONE Revisit complexity measurement
+  CLOSED: [2018-03-25 Sun 17:59]
 - Current subtract method counts 1 XOR for the value.
 * DONE Parameters abstract type
   CLOSED: [2018-03-14 Wed 09:16]
 * DONE asbytes isbits check
   CLOSED: [2018-03-14 Wed 09:16]
-* TODO R10Symbol Vector{VT} should be VT
+* DONE R10Symbol Vector{VT} should be VT
+  CLOSED: [2018-03-25 Sun 17:59]
+- Changed Vector{VT} should be VT
+- The decoder constructors default to Vector{GF256. It would be better to allow
+  an arbitrary value type and let the user worry about defining addition etc.
+
 * TODO Could use reinterpret rather than Union in RqRow
 - Avoids having to use a union. May be faster.
 - Addition is carried out as regular.
 - For multiplication we first reinterpret as a byte array and then do the
   multiplication.
-* TODO Renaming
-- R10Symbol to 10Symbol
-- Everything with parameters into just the name of the code.
-- inactivate_isymbol
+* DONE Renaming
+  CLOSED: [2018-03-25 Sun 18:00]
+** DONE R10Symbol to BSymbol
+   CLOSED: [2018-03-19 Mon 17:00]
+** TODO Everything with parameters into just the name of the code.
+- QLTParameters to LTQ
+- LTParameters to LT10
+** DONE inactivate_isymbol
+   CLOSED: [2018-03-19 Mon 16:38]
 * DONE Parametric q-ary codes
   CLOSED: [2018-03-14 Wed 11:03]
 - Should be a parametric type.
@@ -94,7 +114,7 @@ which its coefficients are defined. For example, binary, q* TODO ary, real.
   with sampleable objects.
 - R10Row, RqRow
 * TODO getdense type instability
-- Could be addressed by using 1 as true
+- Could be addressed by using one(CT) instead of true for binary coefficients
 - Always promote binary elements into the larger field?
 - Need to use iszero instead of plain boolean comparison in decoder
 - Currently returns false if index is higher than num_inactivated. This should
@@ -103,3 +123,37 @@ which its coefficients are defined. For example, binary, q* TODO ary, real.
 - Now some tests are among the LT code tests
 * TODO qary_from_binary
 - This method only works for GF256
+* TODO Subtract BitVector * coef
+- RqRow subtract doesn't account for the coefficient when a.dense is a
+  BitVector. Need to promote to Vector{CT} is the coefficient isn't one.
+* DONE Benchmark uses ISymbol
+  CLOSED: [2018-03-19 Mon 16:33]
+* DONE Unified code interface
+  CLOSED: [2018-03-25 Sun 17:58]
+- All codes should have some sort of init function that makes the setup
+  identical.
+- Create parameters, precode, ltgen, (serialize/deserialize), decode.
+* TODO xor!
+- Should use GF256, not UInt8
+- Should investigate if this method is faster than using the standard dot
+  notation xor.(a, b).
+* TODO Deterministic coefficients
+- coefficient should use the ESI to generate deterministic coefficients.
+* DONE coef multiplied by an empty vector gives any
+  CLOSED: [2018-03-25 Sun 17:58]
+- Problem with the Q-ary ltegenrate function.
+- Returns a value of type any if an empty vector has been given as value.
+* TODO Rename LT to LT10
+* TODO GF256 subtract method
+- Seems inefficient. Does not use the new addeq functions
+* TODO Remove divrq et al. in favor for diveq
+- In Symbols.jl
+* TODO Test corner cases
+** TODO Attempt to decode before adding symbols
+** TODO Attempt to decode twice
+** TODO Attempt to decode after failing and having added symbols in between
+* TODO Row type instability
+- Row type is determined by its index. This is a performance issue since
+  dispatch works on types and not values.
+- We would want to get the types once and then call methods based on their
+  types.
