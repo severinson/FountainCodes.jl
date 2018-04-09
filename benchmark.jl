@@ -27,7 +27,7 @@ function encode_benchmark(
     end
 end
 
-function main(K=1000, r=500, n=10)
+function main(K=1000, r=500, n=100)
     Profile.clear()
     p = R10_256(K)
     # dd = Soliton(K, Int(round(K*2/3)), 0.01)
@@ -42,9 +42,9 @@ function main(K=1000, r=500, n=10)
     d = init_decoder(p, C, r, 1)
     RaptorCodes.decode!(d)
 
-    println("benchmarking encoding")
-    te = @elapsed @timev encode_benchmark(p, C, r, n)
-    @printf "%.3fGbps\n" 256*8*(p.K+r)/(te/n)/1000/1000/1000
+    # println("benchmarking encoding")
+    # te = @elapsed @timev encode_benchmark(p, C, r, n)
+    # @printf "%.3fGbps\n" 256*8*(p.K+r)/(te/n)/1000/1000/1000
 
     println()
     println("benchmarking decoding")
