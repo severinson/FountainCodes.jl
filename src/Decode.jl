@@ -100,6 +100,37 @@ function Decoder(c::R10_256)
     return d
 end
 
+"""
+    Decoder(c::RQ)
+
+Create a RaptorQ decoder and add the relevant constraint symbols.
+
+"""
+function Decoder(c::RQ)
+    d = Decoder{Union{BRow,QRow{GF256}},Vector{GF256}}(c)
+    C = zeros(GF256, c.L)
+    N = precode_relations(c)
+
+    # LDPC constraints
+    for (indices, _) in view(N, 1:c.S)
+        s = BSymbol(-1, Vector{GF256}(), indices)
+        add!(d, s)
+    end
+
+    # HDPC constrains
+    for (indices, coefs) in view(N, c.S+1:c.S+c.H)
+        s = QSymbol(-1, Vector{GF256}(), indices, coefs)
+        add!(d, s)
+    end
+
+    # permanent inactivations
+    # TODO: need a new strategy of setting dense values for this to work.
+    # for i in c.L-c.P+1:c.L
+    #     inactivate!(d, i)
+    # end
+    return d
+end
+
 doc"Default LT decoder constructor."
 function Decoder(p::LT)
     return Decoder{BRow,Vector{GF256}}(p)
@@ -350,7 +381,13 @@ function subtract!(d::Decoder, rpi::Int, rpj::Int, coef1)
     return subtract!(d, rpi, rpj, coef1, one(coef1))
 end
 
-doc"subtract coef*rows[rpi] from rows[rpj]."
+"""
+    subtract!(d::Decoder, rpi::Int, rpj::Int, coefi, coefj)
+
+Subtract coef*rows[rpi] from rows[rpj] and assign the result to rows[rpj]. New
+row objects are only allocated when needed.
+
+"""
 function subtract!(d::Decoder, rpi::Int, rpj::Int, coefi, coefj)
     coef = coefi
     @assert !iszero(coefj) "coefj must be non-zero, but is $coefj and type $(typeof(coefj))"
@@ -596,15 +633,33 @@ function backsolve!(d::Decoder)
     return d
 end
 
-doc"return the decoded source symbols."
+"""
+    get_source{RT,VT}(d::Decoder{RT,VT})
+
+Return the decoded intermediate symbols.
+
+# TODO: intermediate() would be a better name. for systematic codes the source
+symbols are the first K LT symbols.
+
+"""
 function get_source{RT,VT}(d::Decoder{RT,VT})
-    C = Vector{VT}(d.p.K)
+    C = Vector{VT}(d.p.L)
+    return get_source!(C, d)
+end
+
+"""
+    get_source!{RT,VT}(C::Vector, d::Decoder{RT,VT})
+
+In-place version of get_source()
+
+"""
+function get_source!{RT,VT}(C::Vector, d::Decoder{RT,VT})
+    if length(C) != d.p.L
+        error("C must have length L")
+    end
     for i in 1:d.p.L-d.num_inactivated
         rpi = d.rowperm[i]
         cpi = d.colperm[i]
-        if cpi > d.p.K
-            continue
-        end
         coef = coefficient(d.rows[rpi], cpi)
         if coef == one(coef)
             C[cpi] = d.values[rpi]
@@ -615,9 +670,6 @@ function get_source{RT,VT}(d::Decoder{RT,VT})
     for i in d.p.L-d.num_inactivated+1:d.p.L
         rpi = d.rowperm[i]
         cpi = d.colperm[i]
-        if cpi > d.p.K
-            continue
-        end
         coef = getdense(d, rpi, cpi)
         if coef == one(coef)
             C[cpi] = d.values[rpi]
