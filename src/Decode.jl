@@ -124,10 +124,9 @@ function Decoder(c::RQ)
     end
 
     # permanent inactivations
-    # TODO: need a new strategy of setting dense values for this to work.
-    # for i in c.L-c.P+1:c.L
-    #     inactivate!(d, i)
-    # end
+    for i in c.L-c.P+1:c.L
+        inactivate!(d, i)
+    end
     return d
 end
 
