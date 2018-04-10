@@ -8,6 +8,6 @@ println("Starting tests")
 @time @testset "Soliton distribution" begin include("Soliton_test.jl") end
 @time @testset "Gray sequence" begin include("gray_test.jl") end
 @time @testset "R10 encoder" begin include("R10Encode_test.jl") end
-@time @testset "RQ encoder" begin include("RQ_test.jl") end
 @time @testset "Raptor decoder" begin include("decoder_test.jl") end
+@time @testset "RQ encoder" begin include("RQ_test.jl") end
 @time @testset "LT encoder" begin include("LT_test.jl") end
