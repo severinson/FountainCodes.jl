@@ -9,9 +9,9 @@ struct R10 <: BinaryCode
     L::Integer # =K+S+H
     Lp::Integer # used by r10_trip
     function R10(K::Integer)
-        # if !(4 <= K <= 8192)
-        #     error("R10 codes support 4 <= K <= 8192 source symbols.")
-        # end
+        if !(4 <= K <= 8192)
+            error("R10 codes support 4 <= K <= 8192 source symbols.")
+        end
 
         # X is the smallest positive integer such that X(X-1) >= 2K
         X = ceil(1/2 + sqrt(1/4+2K))
@@ -71,7 +71,13 @@ function precode!(C::Vector, c::Union{R10,R10_256}, N=missing)
     return C
 end
 
-doc"generate an LT symbol from the intermediate symbols."
+"""
+    ltgenerate(C::Vector, X::Int, p::Code)
+
+Generate an LT symbol from the intermediate symbol vector C and its encoded
+symbol identifier, X.
+
+"""
 function ltgenerate(C::Vector, X::Int, p::Code)
     d, a, b = trip(X, p)
     while (b >= p.L)
@@ -99,8 +105,8 @@ function r10_ldpc_encode!(C::Vector, p::Union{R10,R10_256}, N=missing)
     if N !== missing && length(N) != p.L
         error("N must have length p.L = $p.L")
     end
-    for i in 1:p.S
-        C[p.K+i] = zero(C[1])
+    for i in p.K+1:p.K+p.S
+        C[i] = zero(C[1])
     end
     for i in 0:p.K-1
         v = C[i+1]
@@ -140,8 +146,8 @@ function r10_hdpc_encode!(C::Vector, p::Union{R10,R10_256}, N=missing)
     if N !== missing && length(N) != p.L
         error("N must have length p.L = $p.L")
     end
-    for i in 1:p.H
-        C[p.K+p.S+i] = zero(C[1])
+    for i in p.K+p.S+1:p.K+p.S+p.H
+        C[i] = zero(C[1])
     end
     for h in 0:p.H-1
         g = 0
