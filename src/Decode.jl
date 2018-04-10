@@ -174,7 +174,13 @@ end
 @inline _ci2ui(d::Decoder, ci::Int) = d.p.L-ci+1
 @inline _ui2ci(d::Decoder, ui::Int) = d.p.L-ui+1
 
-doc"set an element of the dense part of the matrix."
+"""
+    setdense!(d::Decoder, rpi::Int, cpi::Int, v)
+
+Set the element of the dense matrix corresponding to permuted row and column
+indices (rpi, cpi) to value v.
+
+"""
 function setdense!(d::Decoder, rpi::Int, cpi::Int, v)
     row = d.rows[rpi]
     ci = d.colperminv[cpi]
@@ -184,7 +190,13 @@ function setdense!(d::Decoder, rpi::Int, cpi::Int, v)
     return
 end
 
-doc"get an element from the dense part of the matrix."
+"""
+    getdense!(d::Decoder, rpi::Int, cpi::Int)
+
+Return the element of the dense matrix corresponding to permuted row and column
+indices (rpi, cpi).
+
+"""
 function getdense(d::Decoder, rpi::Int, cpi::Int)
     row = d.rows[rpi]
     ci = d.colperminv[cpi]
@@ -338,42 +350,44 @@ function select_row_2(d::Decoder) :: Int
     end
 
     # find any edge that connects to the root node of the largest component.
-    k = 0
+    rpi = 0
     for edge in edges
         if edge in d.columns[max_root]
-            k = edge
+            rpi = edge
         end
     end
-    if k == 0
+    if rpi == 0
         push!(d.metrics, "status", -2)
         error("could not find neighbouring row")
     end
 
     # add all other edges back to the priority queue
     for (edge, priority) in zip(edges, priorities)
-        if edge != k
+        if edge != rpi
             enqueue!(d.pq, edge, priority)
         end
     end
 
-    zerodiag!(d, k)
-    return d.rowperminv[k]
+    setinactive!(d, rpi)
+    zerodiag!(d, rpi)
+    return d.rowperminv[rpi]
 end
 
 doc"Select the row with smallest active degree."
 function select_row(d::Decoder) :: Int
-    k = 0 # coded symbol index
+    rpi = 0 # coded symbol index
     v = 0 # coded symbol priority
     while length(d.pq) > 0 && v < 1
         _, v = peek(d.pq)
-        k = dequeue!(d.pq)
+        rpi = dequeue!(d.pq)
     end
-    if k == 0
+    if rpi == 0
         push!(d.metrics, "status", -3)
         error("no coded symbols of non-zero weight")
     end
-    zerodiag!(d, k)
-    return d.rowperminv[k]
+    setinactive!(d, rpi)
+    zerodiag!(d, rpi)
+    return d.rowperminv[rpi]
 end
 
 doc"subtract coef*rows[rpi] from rows[rpj]."
@@ -413,7 +427,29 @@ function update_metrics!(d::Decoder, row::Row, coef)
     end
 end
 
-doc"Inactivate a column of the constraint matrix."
+"""
+    setinactive!(d, rpi::Int)
+
+Set the dense elements of row rpi based on which columns have been inactivated.
+
+"""
+function setinactive!(d::Decoder, rpi::Int)
+    row = d.rows[rpi]
+    for (cpi, coef) in zip(neighbours(row), coefficients(row))
+        ci = d.colperminv[cpi]
+        if ci > d.p.L - d.num_inactivated
+            setdense!(d, rpi, cpi, coef)
+        end
+    end
+end
+
+"""
+    inactivate!(d::Decoder, cpi::Int)
+
+Inactivate the column with permuted index cpi and update the priority of all
+adjacent rows.
+
+"""
 function inactivate!(d::Decoder, cpi::Int)
     rightmost_active_col = length(d.columns) - d.num_inactivated
     ci = d.colperminv[cpi]
@@ -425,12 +461,6 @@ function inactivate!(d::Decoder, cpi::Int)
     d.num_inactivated += 1
     push!(d.metrics, "inactivations", 1)
     swap_cols!(d, ci, rightmost_active_col)
-    for rpi in d.columns[cpi]
-        if d.rowperminv[rpi] > d.num_decoded
-            coef = coefficient(d.rows[rpi], cpi)
-            setdense!(d, rpi, cpi, coef)
-        end
-    end
     setpriority!(d, cpi)
     return
 end
@@ -481,11 +511,14 @@ function diagonalize!(d::Decoder)
         setpriority!(d, cpi)
 
         # inactivate the remaining neighbouring symbols
+        rpi = d.rowperm[d.num_decoded+1]
+        coefs = coefficients(d.rows[rpi])
         for j in i+1:length(active)
             cpi = active[j]
             ci = d.colperminv[cpi]
             if (d.num_decoded+1 < ci <= d.p.L-d.num_inactivated)
                 inactivate!(d, cpi)
+                setdense!(d, rpi, cpi, coefs[j])
             end
         end
         d.num_decoded += 1
@@ -518,6 +551,7 @@ function solve_dense!{RT<:QRow{Float64},VT}(d::Decoder{RT,VT})
     )
     for ri in firstrow:lastrow
         rpi = d.rowperm[ri]
+        setinactive!(d, rpi)
         zerodiag!(d, rpi)
         for ci in firstcol:lastcol
             cpi = d.colperm[ci]
