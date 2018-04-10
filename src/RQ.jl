@@ -107,7 +107,7 @@ function RQ_tuple(X::Int, c::RQ)
     B = 10267*(c.J+1)
     y = (B + X*A) % 2^32
     v = RQ_rand(y, 0, 2^20)
-    d = RQ_deg(v)
+    d = min(RQ_deg(v), c.W-2)
     a = 1 + RQ_rand(y, 1, c.W-1)
     b = RQ_rand(y, 2, c.W)
     if (d < 4) d1 = 2 + RQ_rand(X, 3, 2)
@@ -140,8 +140,8 @@ function ltgenerate(C::Vector, X::Int, c::RQ)
     for j in 1:d1-1
         b1 = (b1 + a1) % c.P1
         while (b1 >= c.P) b1 = (b1+a1) % c.P1 end
-        value += C[c.W+b1]
-        indices[d+j+1] = c.W+b1
+        value += C[c.W+b1+1]
+        indices[d+j+1] = c.W+b1+1
     end
     sort!(indices)
     return BSymbol(X, value, indices)
@@ -153,21 +153,39 @@ end
 RaptorQ precode. C is assumed to be a vector of length L, where the elements at
 index 1, ..., K are the source symbols. After calling this method elements K+1,
 ..., K+S will be the LDPC symbols, and elements K+S+1, ..., K+S+H will be the
-HDPC symbols..
+HDPC symbols.
+
+# TODO: separate relations and value generation for LT symbols since we often
+need only the indices and not the value.
 
 """
 function precode!(C::Vector, c::RQ)
-    error("not implemented")
+    d = Decoder(c)
+    if length(C) != c.L
+        error("C must have length L")
+    end
+    for i in c.K+1:c.Kp
+        C[i] = zero(C[1])
+    end
+    for X in 1:c.Kp
+        s = ltgenerate(C, X, c)
+        s = BSymbol(X, C[X], s.neighbours)
+        add!(d, s)
+    end
+    decode!(d)
+    get_source!(C, d)
+    return C
 end
 
 """
     precode_relations(C::Vector, c::RQ, N)
 
 Return a Vector of tuples [(indices, coefficients), ...], describing the
-intermediate symbol constraints.
+intermediate symbol constraints. The first S entries correspond to LDPC
+relations and the remaining H entries correspond to HDPC relations.
 
 """
-function RQ_precode_relations(c::RQ)
+function precode_relations(c::RQ)
     N = Vector{Tuple{Vector{Int},Vector{GF256}}}(c.L)
     N = RQ_ldpc_constraints!(N, c)
     N = RQ_hdpc_constraints!(N, c)
@@ -237,6 +255,7 @@ function RQ_hdpc_constraints!(N::Vector, c::RQ)
         for j in 1:c.Kp+c.S
             N[i0+i-1][2][j] = A[i,j]
         end
+        N[i0+i-1][1][end] = c.S+c.H+i
         N[i0+i-1][2][end] = one(GF256)
     end
 
