@@ -138,7 +138,7 @@ end
     return r.values
 end
 
-@inline function coefficient(r::QRow, cpi::Int)
+@inline function coefficient{CT}(r::QRow{CT}, cpi::Int) :: CT
     range = searchsorted(r.indices, cpi)
     @assert length(range) == 1 "tried to find-non-existing or duplicate index $cpi in row $r"
     i = range[1]
