@@ -51,8 +51,7 @@ end
 "make sure the encoder runs at all"
 function test_precode_relations()
     c = RQ(10)
-    println(c)
-    N = RaptorCodes.RQ_precode_relations(c)
+    N = RaptorCodes.precode_relations(c)
 
     # test LDPC constraints
     ri = 1
@@ -74,8 +73,6 @@ function test_precode_relations()
     ri = 8
     correct = append!(collect(1:17), 18)
     indices = N[ri][1]
-    p = sortperm(indices)
-    indices = indices[p]
     if indices != correct
         error("RQ HDPC constraint error. row $ri indices are\n$indices,\nbut should be\n$correct")
     end
@@ -84,11 +81,24 @@ function test_precode_relations()
         0x90, 0x48, 0x24, 0x12, 0x09, 0x04, 0x02, 0x01, 0x01,
     ]
     coefs = N[ri][2]
-    coefs = coefs[p]
     if coefs != correct
         error("RQ HDPC constraint error. row $ri coefficients are\n$coefs,\n but should be\n$correct")
     end
 
+    ri = 17
+    correct = append!(collect(1:17), 27)
+    indices = N[ri][1]
+    if indices != correct
+        error("RQ HDPC constraint error. row $ri indices are\n$indices,\nbut should be\n$correct")
+    end
+    correct = [
+        0xeb, 0x75, 0x3a, 0x1d, 0x80, 0x40, 0x20, 0x10, 0x08,
+        0x04, 0x02, 0x01, 0x8e, 0xc9, 0xea, 0x75, 0x3a ,0x01,
+    ]
+    coefs = N[ri][2]
+    if coefs != correct
+        error("RQ HDPC constraint error. row $ri coefficients are\n$coefs,\n but should be\n$correct")
+    end
     return true
 end
 @test test_precode_relations()
@@ -96,8 +106,34 @@ end
 function test_ltgenerate()
     c = RQ(10)
     C = zeros(GF256, c.L)
-    s = ltgenerate(C, 1, c)
-    println(s)
+    for X in 1:100
+        s = ltgenerate(C, X, c)
+        for i in 2:length(s.neighbours)
+            if s.neighbours[i] <= s.neighbours[i-1]
+                error("indices for symbol $s are not strictly increasing")
+            end
+        end
+        if s.neighbours[1] < 1 || s.neighbours[end] > c.L
+            error("indices for symbol $s are not between 1 and L")
+        end
+    end
     return true
 end
 @test test_ltgenerate()
+
+function test_precode()
+    c = RQ(10)
+    C = [Vector{GF256}([i]) for i in 1:c.L]
+    println("C=$C")
+    precode!(C, c)
+    println("C=$C")
+    for X in 1:c.K
+        s = ltgenerate(C, X, c)
+        correct = Vector{GF256}([X])
+        if s.value != correct
+            error("$X-th LT symbol value should be $correct but is $(s.value)")
+        end
+    end
+    return true
+end
+@test test_precode()
