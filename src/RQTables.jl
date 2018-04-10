@@ -112,7 +112,7 @@ const V3 = [
     3432275192
 ]
 
-doc"table of RaptorQ parameters. table 5.6 of rfc6330."
+"table 5.6 of rfc6330. columns labels are [Kp, J(Kp), S(Kp), H(Kp), W(Kp)]."
 const RQ_parameter_table = [
     10 254 7 10 17
     12 630 7 10 19
