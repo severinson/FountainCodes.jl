@@ -4,8 +4,8 @@
 using DataStructures
 
 doc"R10-compliant decoder."
-mutable struct Decoder{RT<:Row,VT}
-    p::Code # type of code
+mutable struct Decoder{RT<:Row,VT,CODE<:Code}
+    p::CODE # type of code
     values::Vector{VT} # source values may be of any type, including arrays
     columns::Vector{Vector{Int}}
     rows::Vector{RT} # binary and q-ary codes use different row types
@@ -15,12 +15,12 @@ mutable struct Decoder{RT<:Row,VT}
     rowperminv::Vector{Int} # maps row object indices to their row indices
     uperm::Vector{Int} # maps ui to upi
     uperminv::Vector{Int} # maps upi to ui
-    pq::PriorityQueue{Int,Float64} # used to select rows
+    pq::PriorityQueue{Int,Float64,Base.Order.ForwardOrdering} # used to select rows
     num_decoded::Int # denoted by i in the R10 spec.
     num_inactivated::Int # denoted by u in the R10 spec.
     metrics::DataStructures.Accumulator{String,Int}
     status::String # indicates success or stores the reason for decoding failure.
-    function Decoder{RT,VT}(p::Code) where RT<:Row where VT
+    function Decoder{RT,VT,CODE}(p::CODE) where {RT<:Row,VT,CODE<:Code}
         d = new(
             p,
             Vector{Vector{VT}}(0),
@@ -51,7 +51,7 @@ end
 
 doc"R10 decoder constructor. Automatically adds constraint symbols."
 function Decoder(p::R10)
-    d = Decoder{BRow,Vector{GF256}}(p)
+    d = Decoder{BRow,Vector{GF256},R10}(p)
     C = [Vector{GF256}() for _ in 1:p.L]
     N = [Dict{Int,Bool}() for _ in 1:p.L]
     precode!(C, p, N)
@@ -68,7 +68,7 @@ end
 
 doc"R10_256 decoder constructor. Automatically adds constraint symbols."
 function Decoder(c::R10_256)
-    d = Decoder{Union{BRow,QRow{GF256}},Vector{GF256}}(c)
+    d = Decoder{Union{BRow,QRow{GF256}},Vector{GF256},R10_256}(c)
     C = [Vector{GF256}() for _ in 1:c.L]
     N = [Dict{Int,GF256}() for _ in 1:c.L]
     precode!(C, c, N)
@@ -107,7 +107,7 @@ Create a RaptorQ decoder and add the relevant constraint symbols.
 
 """
 function Decoder(c::RQ)
-    d = Decoder{Union{BRow,QRow{GF256}},Vector{GF256}}(c)
+    d = Decoder{Union{BRow,QRow{GF256}},Vector{GF256},RQ}(c)
     C = zeros(GF256, c.L)
     N = precode_relations(c)
 
@@ -132,12 +132,12 @@ end
 
 doc"Default LT decoder constructor."
 function Decoder(p::LT)
-    return Decoder{BRow,Vector{GF256}}(p)
+    return Decoder{BRow,Vector{GF256},LT}(p)
 end
 
 doc"Default non-binary LT decoder constructor."
 function Decoder{CT,DT}(p::LTQ{CT,DT})
-    return Decoder{QRow{CT},Vector{CT}}(p)
+    return Decoder{QRow{CT},Vector{CT},LTQ}(p)
 end
 
 doc"add a row to the decoder."
@@ -481,6 +481,12 @@ function setpriority!(d::Decoder, cpi::Int)
     return
 end
 
+"""
+    vdegree(d::Decoder, row::Row)
+
+Return the number of non-zero entries this row has in V.
+
+"""
 function vdegree(d::Decoder, row::Row)
     deg = 0
     i::Int = d.num_decoded
@@ -493,6 +499,12 @@ function vdegree(d::Decoder, row::Row)
     return deg
 end
 
+"""
+    quickselect(d::Decoder)
+
+Select the highest priority row by scanning down.
+
+"""
 function quickselect(d::Decoder)
     r = 1
     dmin::Int = d.p.L
