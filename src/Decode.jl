@@ -158,8 +158,8 @@ function add!{RT,VT}(d::Decoder{RT,VT}, s::RT, v::VT)
     # priority equal to its number of non-zero entries in V plus deg/L. adding
     # deg/L causes rows with lower original degree to be selected first, leading
     # to lower complexity.
-    deg = degree(s)
-    enqueue!(d.pq, i, deg + deg/d.p.L)
+    # deg = degree(s)
+    # enqueue!(d.pq, i, deg + deg/d.p.L)
     return d
 end
 
@@ -481,6 +481,60 @@ function setpriority!(d::Decoder, cpi::Int)
     return
 end
 
+function vdegree(d::Decoder, row::Row)
+    deg = 0
+    i::Int = d.num_decoded
+    u::Int = d.num_inactivated
+    L::Int = d.p.L
+    for cpi in neighbours(row)
+        ci = d.colperminv[cpi]
+        deg += Int(i < ci <= L-u)
+    end
+    return deg
+end
+
+function quickselect(d::Decoder)
+    r = 1
+    dmin::Int = d.p.L
+    rj = 0
+    for ri in d.num_decoded+1:length(d.rows)
+        rpi = d.rowperm[ri]
+        row = d.rows[rpi]
+        deg = vdegree(d, row)
+        if deg == r
+            return ri
+        elseif deg < dmin
+            dmin = deg
+            rj = ri
+        end
+    end
+    if iszero(rj)
+        error("no rows with non-zero elements in V")
+    end
+    return rj
+end
+
+"""
+    sortrows!(d::Decoder)
+
+Sort the rows of the matrix according to their original degree and add all rows
+to the priority queue.
+
+"""
+function sortrows!(d::Decoder)
+    p = sortperm(d.rows, by=degree)
+    d.rows = d.rows[p]
+    d.values = d.values[p]
+    for i in 1:length(d.rows)
+        row = d.rows[i]
+        deg = degree(row)
+        enqueue!(d.pq, i, deg + deg/d.p.L)
+        for j in neighbours(row)
+            push!(d.columns[j], i)
+        end
+    end
+end
+
 """
     diagonalize!(d::Decoder)
 
@@ -498,6 +552,8 @@ function diagonalize!(d::Decoder)
         if ri == 0
             ri = select_row(d)
         end
+        # ri = select_row(d)
+        # foo = quickselect(d)
         swap_rows!(d, ri, d.num_decoded+1)
 
         # swap any non-zero entry in V into the first column of V
@@ -727,6 +783,7 @@ end
 doc"carry out the decoding and return the source symbols."
 function decode!{RT,VT}(d::Decoder{RT,VT}, raise_on_error=true)
     try
+        sortrows!(d)
         check_cover(d)
         diagonalize!(d)
         solve_dense!(d)
