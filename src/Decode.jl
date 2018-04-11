@@ -150,9 +150,9 @@ function add!{RT,VT}(d::Decoder{RT,VT}, s::RT, v::VT)
     i = length(d.rowperm) + 1
     push!(d.rowperm, i)
     push!(d.rowperminv, i)
-    for j in neighbours(s)
-        push!(d.columns[j], i)
-    end
+    # for j in neighbours(s)
+    #     push!(d.columns[j], i)
+    # end
 
     # a priority queue is used to select rows during decoding. rows have
     # priority equal to its number of non-zero entries in V plus deg/L. adding
@@ -248,6 +248,7 @@ doc"Swap rows ri and rj of the constraint matrix."
     d.rowperminv[d.rowperm[rj]] = rj
 end
 
+# TODO: remove
 doc"zero out any elements of rows[rpi] below the diagonal"
 function zerodiag_old!(d::Decoder, rpi::Int) :: Int
     row = d.rows[rpi]
@@ -464,7 +465,12 @@ function inactivate!(d::Decoder, cpi::Int)
     return
 end
 
-doc"Decrement the priority of all rows neighbouring column i."
+"""
+    setpriority!(d::Decoder, cpi::Int)
+
+Increase (lower by 1) the priority of all rows adjacent to permuted column cpi.
+
+"""
 function setpriority!(d::Decoder, cpi::Int)
     k = keys(d.pq)
     for rpi in d.columns[cpi]
@@ -475,8 +481,13 @@ function setpriority!(d::Decoder, cpi::Int)
     return
 end
 
-doc"Perform row/column operations such that there are non-zero entries only
-    along the diagonal and in the rightmost d.num_inactivated columns."
+"""
+    diagonalize!(d::Decoder)
+
+Perform row and column operations to put the submatrix consisting of the first
+L-u columns into diagonal form. Referred to as the first phase in rfc6330.
+
+"""
 function diagonalize!(d::Decoder)
     while d.num_decoded + d.num_inactivated < d.p.L
 
