@@ -2,13 +2,13 @@ export R10, R10_256, precode!, ltgenerate
 
 doc"R10 parameters container."
 struct R10 <: BinaryCode
-    K::Integer # number of source symbols
-    S::Integer # number of LDPC symbols
-    H::Integer # number of HDPC symbols
-    Hp:: Integer # hamming weight of HDPC symbols
-    L::Integer # =K+S+H
-    Lp::Integer # used by r10_trip
-    function R10(K::Integer)
+    K::Int # number of source symbols
+    S::Int # number of LDPC symbols
+    H::Int # number of HDPC symbols
+    Hp:: Int # hamming weight of HDPC symbols
+    L::Int # =K+S+H
+    Lp::Int # used by r10_trip
+    function R10(K::Int)
         if !(4 <= K <= 8192)
             error("R10 codes support 4 <= K <= 8192 source symbols.")
         end
@@ -17,11 +17,11 @@ struct R10 <: BinaryCode
         X = ceil(1/2 + sqrt(1/4+2K))
 
         # S is the smallest prime integer such that S >= ceil(0.01K) + X
-        S = Primes.nextprime(Int64(ceil(0.01K)+X))
+        S = Primes.nextprime(Int(ceil(0.01K)+X))
 
         # H is the smallest integer such that choose(H,ceil(H/2)) >= K + S
         H = 0
-        while binomial(H,Int64(ceil(H/2))) < K + S
+        while binomial(H,Int(ceil(H/2))) < K + S
             H += 1
         end
         Hp = ceil(H/2)
@@ -34,13 +34,13 @@ Base.repr(p::R10) = "R10($(p.K))"
 
 "R10 code, where the HDPC row coefficients are drawn from GF256."
 struct R10_256 <: NonBinaryCode
-    K::Integer # number of source symbols
-    S::Integer # number of LDPC symbols
-    H::Integer # number of HDPC symbols
-    Hp:: Integer # hamming weight of HDPC symbols
-    L::Integer # =K+S+H
-    Lp::Integer # used by r10_trip
-    function R10_256(K::Integer)
+    K::Int # number of source symbols
+    S::Int # number of LDPC symbols
+    H::Int # number of HDPC symbols
+    Hp:: Int # hamming weight of HDPC symbols
+    L::Int # =K+S+H
+    Lp::Int # used by r10_trip
+    function R10_256(K::Int)
         if !(4 <= K <= 8192)
             error("R10 codes support 4 <= K <= 8192 source symbols.")
         end
@@ -49,11 +49,11 @@ struct R10_256 <: NonBinaryCode
         X = ceil(1/2 + sqrt(1/4+2K))
 
         # S is the smallest prime integer such that S >= ceil(0.01K) + X
-        S = Primes.nextprime(Int64(ceil(0.01K)+X))
+        S = Primes.nextprime(Int(ceil(0.01K)+X))
 
         # H is the smallest integer such that choose(H,ceil(H/2)) >= K + S
         H = 0
-        while binomial(H,Int64(ceil(H/2))) < K + S
+        while binomial(H,Int(ceil(H/2))) < K + S
             H += 1
         end
         Hp = ceil(H/2)

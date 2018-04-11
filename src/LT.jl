@@ -2,33 +2,33 @@ export LT, LTQ
 
 doc"LT code parameters."
 struct LT{T <: Sampleable{Univariate, Discrete}} <: BinaryCode
-    K::Integer # number of source symbols
-    L::Integer # number of intermediate symbols
-    Lp::Integer
+    K::Int # number of source symbols
+    L::Int # number of intermediate symbols
+    Lp::Int
     dd::T # degree distribution
-    function LT{T}(K::Integer, dd::T) where T
+    function LT{T}(K::Int, dd::T) where T
         Lp = Primes.nextprime(K)
         new(K, K, Lp, dd)
     end
 end
-LT(K::Integer, dd::T) where {T <: Sampleable{Univariate, Discrete}} = LT{T}(K, dd)
+LT(K::Int, dd::T) where {T <: Sampleable{Univariate, Discrete}} = LT{T}(K, dd)
 Base.repr(p::LT) = "LT($(p.K), $(repr(p.dd)))"
 
 doc"q-ary LT code parameters."
 struct LTQ{CT,DT <: Sampleable{Univariate, Discrete}} <: NonBinaryCode
-    K::Integer # number of source symbols
-    L::Integer # number of intermediate symbols
-    Lp::Integer
+    K::Int # number of source symbols
+    L::Int # number of intermediate symbols
+    Lp::Int
     dd::DT # degree distribution
-    function LTQ{CT,DT}(K::Integer, dd::DT) where {CT,DT}
+    function LTQ{CT,DT}(K::Int, dd::DT) where {CT,DT}
         Lp = Primes.nextprime(K)
         new(K, K, Lp, dd)
     end
 end
-function LTQ(K::Integer, dd::DT) where DT <: Sampleable{Univariate, Discrete}
+function LTQ(K::Int, dd::DT) where DT <: Sampleable{Univariate, Discrete}
     LTQ{GF256,DT}(K, dd)
 end
-function LTQ{CT}(K::Integer, dd::DT) where {CT,DT <: Sampleable{Univariate, Discrete}}
+function LTQ{CT}(K::Int, dd::DT) where {CT,DT <: Sampleable{Univariate, Discrete}}
     LTQ{CT,DT}(K, dd)
 end
 Base.repr{CT,DT}(p::LTQ{CT,DT}) = "LTQ{$CT,DT}($(p.K), $(repr(p.dd)))"

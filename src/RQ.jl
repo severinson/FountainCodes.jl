@@ -8,7 +8,7 @@ struct RQ <: NonBinaryCode
     S::Int # number of LDPC symbols
     H::Int # number of HDPC symbols
     W::Int # number of LT symbols
-    L::Integer # =Kp+S+H
+    L::Int # =Kp+S+H
     P::Int # number of PI symbols
     P1::Int # smallest prime >= P
     U::Int # number of PI symbols that are not HDPC symbols
