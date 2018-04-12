@@ -50,7 +50,7 @@ function test_select_row_1()
     RaptorCodes.add!(d, BSymbol(2, Vector{GF256}([1]), [1, 2]))
     RaptorCodes.add!(d, BSymbol(3, Vector{GF256}([1]), [1, 2, 3, 4]))
     RaptorCodes.sortrows!(d)
-    ri = RaptorCodes.select_row(d)
+    ri = RaptorCodes.quickselect(d)
     rpi = d.rowperm[ri]
     row = d.rows[rpi]
     deg = RaptorCodes.degree(row)
@@ -69,7 +69,7 @@ function test_select_row_2()
     RaptorCodes.sortrows!(d)
     RaptorCodes.subtract!(d, p.S+p.H+3, p.S+p.H+1, true)
     RaptorCodes.setpriority!(d, 1)
-    i = RaptorCodes.select_row(d)
+    i = RaptorCodes.quickselect(d)
     correct = p.S + p.H + 2
     if i != correct
         error("selected row $i. should have selected row $correct.")
@@ -85,14 +85,16 @@ function test_select_row_3()
     RaptorCodes.add!(d, BSymbol(0, Vector{GF256}([1]), [2, 3]))
     RaptorCodes.add!(d, BSymbol(0, Vector{GF256}([1]), [5, 6]))
     RaptorCodes.sortrows!(d)
-    i = RaptorCodes.select_row_2(d)
-    correct = [2, 3] + (p.S + p.H)
-    if !(i in correct)
-        error("selected row $i. should have selected one of $correct.")
+    ri = RaptorCodes.quickselect(d)
+    rpi = d.rowperm[ri]
+    row = d.rows[rpi]
+    deg = RaptorCodes.degree(row)
+    if deg != 2
+        error("selected row $i has degree $deg but should have degree 2")
     end
     return true
 end
-# @test test_select_row_3()
+@test test_select_row_3()
 
 function test_diagonalize_1()
     p, d, C = init()
