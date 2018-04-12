@@ -15,7 +15,6 @@ mutable struct Decoder{RT<:Row,VT,CODE<:Code}
     rowperminv::Vector{Int} # maps row object indices to their row indices
     uperm::Vector{Int} # maps ui to upi
     uperminv::Vector{Int} # maps upi to ui
-    pq::PriorityQueue{Int,Float64,Base.Order.ForwardOrdering} # used to select rows
     rset::OrderedSet{Int} # set of remaining useful rows
     num_decoded::Int # denoted by i in the R10 spec.
     num_inactivated::Int # denoted by u in the R10 spec.
@@ -33,7 +32,6 @@ mutable struct Decoder{RT<:Row,VT,CODE<:Code}
             Vector{Int}(),
             Vector{Int}(),
             Vector{Int}(),
-            PriorityQueue{Int,Float64}(),
             OrderedSet{Int}(),
             0,
             0,
@@ -210,17 +208,17 @@ function getdense(d::Decoder, rpi::Int, cpi::Int)
     return getdense(row, upi)
 end
 
-doc"Number of remaining source symbols to process in stage 1."
+"""return the number of remaining source symbols to process in stage 1."""
 function num_remaining(d::Decoder)
     return d.p.L - p.num_decoded - p.num_inactivated
 end
 
-doc"Check if an intermediate symbol is covered."
+"""check if an intermediate symbol is covered."""
 @inline function iscovered(d::Decoder, i::Int) :: Bool
     return length(d.columns[i]) > 0
 end
 
-doc"Check if all intermediate symbols are covered."
+"""check if all intermediate symbols are covered."""
 function check_cover(d::Decoder)
     for i in 1:d.p.L
         if !iscovered(d, i)
@@ -230,43 +228,28 @@ function check_cover(d::Decoder)
     end
 end
 
-doc"Swap cols ci and cj of the constraint matrix."
+"""swap cols ci and cj of the constraint matrix."""
 @inline function swap_cols!(d::Decoder, ci::Int, cj::Int)
     d.colperm[ci], d.colperm[cj] = d.colperm[cj], d.colperm[ci]
     d.colperminv[d.colperm[ci]] = ci
     d.colperminv[d.colperm[cj]] = cj
 end
 
-doc"Swap cols ui and uj of the dense submatrix u."
+"""swap cols ui and uj of the dense submatrix u."""
 @inline function swap_dense_cols!(d::Decoder, ui::Int, uj::Int)
     d.uperm[ui], d.uperm[uj] = d.uperm[uj], d.uperm[ui]
     d.uperminv[d.uperm[ui]] = ui
     d.uperminv[d.uperm[uj]] = uj
 end
 
-doc"Swap rows ri and rj of the constraint matrix."
+"""swap rows ri and rj of the constraint matrix."""
 @inline function swap_rows!(d::Decoder, ri::Int, rj::Int)
     d.rowperm[ri], d.rowperm[rj] = d.rowperm[rj], d.rowperm[ri]
     d.rowperminv[d.rowperm[ri]] = ri
     d.rowperminv[d.rowperm[rj]] = rj
 end
 
-# TODO: remove
-doc"zero out any elements of rows[rpi] below the diagonal"
-function zerodiag_old!(d::Decoder, rpi::Int) :: Int
-    row = d.rows[rpi]
-    for (cpi, coef) in zip(neighbours(row), coefficients(row))
-        ci = d.colperminv[cpi]
-        if ci < d.num_decoded+1 && ci <= d.p.L-d.num_inactivated
-            rpj = d.rowperm[ci]
-            row = d.rows[rpj]
-            subtract!(d, rpj, rpi, coef, coefficient(row, cpi))
-        end
-    end
-    return rpi
-end
-
-doc"zero out any elements of rows[rpi] below the diagonal"
+"""zero out any elements of rows[rpi] below the diagonal"""
 function zerodiag!(d::Decoder, rpi::Int) :: Int
     row = d.rows[rpi]
     zerodiag!(d, row, rpi)
@@ -291,109 +274,13 @@ function zerodiag!(d::Decoder, rowi::Row, rpi::Int, cpi::Int, coef)
     end
 end
 
-doc"The R10 spec. gives a recommendation for which row to select in the case
-    where the row with smallest active degree is 2."
-function select_row_2(d::Decoder) :: Int
-    _, v = peek(d.pq)
-    if !(2 <= v < 3)
-        return 0
-    end
+"""
+    subtract!(d::Decoder, rpi::Int, rpj::Int, coef)
 
-    # a column is selected based on a graph where the rows of active degree 2
-    # are the edges and the columns with non-zero entries are the edges. we want
-    # to find any edge part of the largest connected component of this graph.
-    edges = Vector{Int}()
-    priorities = Vector{Float64}()
+Subtract coef*rows[rpi] from rows[rpj] and assign the result to rows[rpj]. New
+row objects are only allocated when needed.
 
-    # get the edges from the priority queue
-    while length(d.pq) > 0
-        _, v = peek(d.pq)
-        if !(2 <= v < 3)
-            break
-        end
-        push!(edges, dequeue!(d.pq))
-        push!(priorities, v)
-    end
-
-    # get the nodes from the edges. use a union-find data structure to keep
-    # track of the graph components.
-    nodes = Set{Int}()
-    a = IntDisjointSets(d.p.L)
-    n = Vector{Int}(2)
-    for (edge, prio) in zip(edges, priorities)
-        row = d.rows[edge]
-        i = 1
-        for cpi in neighbours(row)
-            ci = d.colperminv[cpi]
-            if (d.num_decoded < ci <= d.p.L-d.num_inactivated)
-                n[i] = cpi
-                i += 1
-            end
-        end
-        if i != 3
-            push!(d.metrics, "status", -2)
-            error("selected row did not have exactly 2 non-zero entries in V")
-        end
-        union!(a, n[1], n[2])
-        push!(nodes, n[1])
-        push!(nodes, n[2])
-    end
-
-    # compute the size of each component. remember the largest one.
-    size = zeros(Int, d.p.L)
-    max_root = 0
-    max_root_size = 0
-    for node in nodes
-        root = find_root(a, node)
-        size[root] += 1
-        if size[root] > max_root_size
-            max_root = root
-            max_root_size = size[root]
-        end
-    end
-
-    # find any edge that connects to the root node of the largest component.
-    rpi = 0
-    for edge in edges
-        if edge in d.columns[max_root]
-            rpi = edge
-        end
-    end
-    if rpi == 0
-        push!(d.metrics, "status", -2)
-        error("could not find neighbouring row")
-    end
-
-    # add all other edges back to the priority queue
-    for (edge, priority) in zip(edges, priorities)
-        if edge != rpi
-            enqueue!(d.pq, edge, priority)
-        end
-    end
-
-    # setinactive!(d, rpi)
-    # zerodiag!(d, rpi)
-    return d.rowperminv[rpi]
-end
-
-doc"Select the row with smallest active degree."
-function select_row(d::Decoder) :: Int
-    rpi = 0 # coded symbol index
-    v = 0 # coded symbol priority
-    while length(d.pq) > 0 && v < 1
-        _, v = peek(d.pq)
-        rpi = dequeue!(d.pq)
-    end
-    if rpi == 0
-        push!(d.metrics, "status", -3)
-        error("no coded symbols of non-zero weight")
-    end
-    # setinactive!(d, rpi)
-    # zerodiag!(d, rpi)
-    return d.rowperminv[rpi]
-end
-
-doc"subtract coef*rows[rpi] from rows[rpj]."
+"""
 function subtract!(d::Decoder, rpi::Int, rpj::Int, coef1)
     return subtract!(d, rpi, rpj, coef1, one(coef1))
 end
@@ -401,8 +288,8 @@ end
 """
     subtract!(d::Decoder, rpi::Int, rpj::Int, coefi, coefj)
 
-Subtract coef*rows[rpi] from rows[rpj] and assign the result to rows[rpj]. New
-row objects are only allocated when needed.
+Subtract coefi/coefj*rows[rpi] from rows[rpj] and assign the result to
+rows[rpj]. New row objects are only allocated when needed.
 
 """
 function subtract!(d::Decoder, rpi::Int, rpj::Int, coefi, coefj)
@@ -464,22 +351,6 @@ function inactivate!(d::Decoder, cpi::Int)
     d.num_inactivated += 1
     push!(d.metrics, "inactivations", 1)
     swap_cols!(d, ci, rightmost_active_col)
-    return
-end
-
-"""
-    setpriority!(d::Decoder, cpi::Int)
-
-Increase (lower by 1) the priority of all rows adjacent to permuted column cpi.
-
-"""
-function setpriority!(d::Decoder, cpi::Int)
-    k = keys(d.pq)
-    for rpi in d.columns[cpi]
-        if rpi in k
-            d.pq[rpi] -= 1.0
-        end
-    end
     return
 end
 
@@ -564,7 +435,7 @@ function vdegree(d::Decoder, row::Row)
 end
 
 """
-    quickselect(d::Decoder)
+    select_row(d::Decoder)
 
 Select the highest priority row by scanning down.
 
@@ -573,7 +444,7 @@ TODO: may select non-binary rows before depleting the binary rows.
 TODO: consider ways to reduce the number of average lookups.
 
 """
-function quickselect(d::Decoder)
+function select_row(d::Decoder)
     edges = Vector{Int}()
     dmin::Int = d.p.L + 1
     rj = 0
@@ -648,7 +519,7 @@ L-u columns into diagonal form. Referred to as the first phase in rfc6330.
 function diagonalize!(d::Decoder)
     while d.num_decoded + d.num_inactivated < d.p.L
 
-        ri = quickselect(d)
+        ri = select_row(d)
         peel_row!(d, d.rowperm[ri])
         swap_rows!(d, ri, d.num_decoded+1)
 
