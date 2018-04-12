@@ -86,6 +86,14 @@ function subeq!(a::AbstractArray{GF256}, b::AbstractArray{GF256}, c::GF256)
     return a
 end
 
+function subeq!(a::AbstractArray{GF256}, b::AbstractArray{GF256}, c::Bool)
+    if iszero(c) || iszero(b)
+        return a
+    end
+    a -= b
+    return a
+end
+
 ## fallback in-place arithmetic functions ##
 function subeq!(a, b)
     a -= b
