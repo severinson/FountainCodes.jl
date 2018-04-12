@@ -189,6 +189,14 @@ end
     return b
 end
 
+@inline function subtract!{CT}(b::QRow{CT}, a::QRow{CT}, coef::Bool) ::QRow{CT}
+    if iszero(coef) || length(a.dense) == 0
+        return b
+    end
+    xor!(b.dense, a.dense)
+    return b
+end
+
 @inline function subtract!{CT<:Float64}(b::QRow{CT}, a::QRow{CT}, coef::CT) ::QRow{CT}
     lb, la = length(b.dense), length(a.dense)
     if iszero(a.dense) || iszero(coef)
