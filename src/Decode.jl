@@ -16,6 +16,7 @@ mutable struct Decoder{RT<:Row,VT,CODE<:Code}
     uperm::Vector{Int} # maps ui to upi
     uperminv::Vector{Int} # maps upi to ui
     pq::PriorityQueue{Int,Float64,Base.Order.ForwardOrdering} # used to select rows
+    rset::OrderedSet{Int} # set of remaining useful rows
     num_decoded::Int # denoted by i in the R10 spec.
     num_inactivated::Int # denoted by u in the R10 spec.
     metrics::DataStructures.Accumulator{String,Int}
@@ -33,6 +34,7 @@ mutable struct Decoder{RT<:Row,VT,CODE<:Code}
             Vector{Int}(),
             Vector{Int}(),
             PriorityQueue{Int,Float64}(),
+            OrderedSet{Int}(),
             0,
             0,
             DataStructures.counter(String),
@@ -150,6 +152,7 @@ function add!{RT,VT}(d::Decoder{RT,VT}, s::RT, v::VT)
     i = length(d.rowperm) + 1
     push!(d.rowperm, i)
     push!(d.rowperminv, i)
+    push!(d.rset, i)
     # for j in neighbours(s)
     #     push!(d.columns[j], i)
     # end
@@ -368,8 +371,8 @@ function select_row_2(d::Decoder) :: Int
         end
     end
 
-    setinactive!(d, rpi)
-    zerodiag!(d, rpi)
+    # setinactive!(d, rpi)
+    # zerodiag!(d, rpi)
     return d.rowperminv[rpi]
 end
 
@@ -385,8 +388,8 @@ function select_row(d::Decoder) :: Int
         push!(d.metrics, "status", -3)
         error("no coded symbols of non-zero weight")
     end
-    setinactive!(d, rpi)
-    zerodiag!(d, rpi)
+    # setinactive!(d, rpi)
+    # zerodiag!(d, rpi)
     return d.rowperminv[rpi]
 end
 
@@ -461,7 +464,6 @@ function inactivate!(d::Decoder, cpi::Int)
     d.num_inactivated += 1
     push!(d.metrics, "inactivations", 1)
     swap_cols!(d, ci, rightmost_active_col)
-    setpriority!(d, cpi)
     return
 end
 
@@ -479,6 +481,68 @@ function setpriority!(d::Decoder, cpi::Int)
         end
     end
     return
+end
+
+"""
+    component_select(d::Decoder, edges::Vector{Int})
+
+Return an edge part of the maximum size component from the graph where the
+vertices are the columns and the rows with non-zero entries in V are the edges.
+Specifically, edges is a vector of permuted row indices.
+
+TODO: Don't need to include decoded/inactivated symbols for IntDisjointSets.
+
+"""
+function component_select(d::Decoder, edges::Vector{Int})
+
+    # setup union-find to quickly find the largest component
+    vertices = Set{Int}()
+    a = IntDisjointSets(d.p.L)
+    n = Vector{Int}(2)
+    for rpi in edges
+        row = d.rows[rpi]
+        i = 1
+        for cpi in neighbours(row)
+            ci = d.colperminv[cpi]
+            if (d.num_decoded < ci <= d.p.L-d.num_inactivated)
+                n[i] = cpi
+                i += 1
+            end
+        end
+        union!(a, n[1], n[2])
+        push!(vertices, n[1])
+        push!(vertices, n[2])
+    end
+
+    # find the largest component
+    components = DefaultDict{Int,Int}(1)
+    largest_component_root = 0
+    largest_component_size = 0
+    for vertex in vertices
+        root = find_root(a, vertex)
+        components[root] += 1
+        size = components[root]
+        if size > largest_component_size
+            largest_component_root = root
+            largest_component_size = size
+        end
+    end
+
+    # return an edge part of the largest component. returning the edge with
+    # smallest index makes it easier to keep the row list sorted.
+    for rpi in edges
+        row = d.rows[rpi]
+        for cpi in neighbours(row)
+            ci = d.colperminv[cpi]
+            if (d.num_decoded < ci <= d.p.L-d.num_inactivated)
+                if find_root(a, cpi) == largest_component_root
+                    return d.rowperminv[rpi]
+                end
+            end
+        end
+    end
+    push!(d.metrics, "status", -2)
+    error("could not find neighbouring row")
 end
 
 """
@@ -504,26 +568,55 @@ end
 
 Select the highest priority row by scanning down.
 
+TODO: may select non-binary rows before depleting the binary rows.
+
+TODO: consider ways to reduce the number of average lookups.
+
 """
 function quickselect(d::Decoder)
-    r = 1
-    dmin::Int = d.p.L
+    edges = Vector{Int}()
+    dmin::Int = d.p.L + 1
     rj = 0
-    for ri in d.num_decoded+1:length(d.rows)
+    # push!(d.metrics, "rowselects", 1)
+    for ri in d.rset
         rpi = d.rowperm[ri]
         row = d.rows[rpi]
         deg = vdegree(d, row)
-        if deg == r
-            return ri
-        elseif deg < dmin
+        if deg == 0
+            delete!(d.rset, ri)
+        elseif deg == 1
+            dmin = 1
+            rj = ri
+            break
+        elseif deg == 2
+            dmin = 2
+            push!(edges, rpi)
+        elseif 1 < deg < dmin
             dmin = deg
             rj = ri
         end
+        # push!(d.metrics, "rowlookups", 1)
+    end
+    if dmin == 2
+        rj = component_select(d, edges)
     end
     if iszero(rj)
         error("no rows with non-zero elements in V")
     end
+    delete!(d.rset, rj)
     return rj
+end
+
+"""
+    process_row(d::Decoder, rpi::Int)
+
+Peel away previously decoded symbols from a row. Has to be carried out each time
+a row is selected.
+
+"""
+function peel_row!(d::Decoder, rpi::Int)
+    setinactive!(d, rpi)
+    zerodiag!(d, rpi)
 end
 
 """
@@ -539,8 +632,6 @@ function sortrows!(d::Decoder)
     d.values = d.values[p]
     for i in 1:length(d.rows)
         row = d.rows[i]
-        deg = degree(row)
-        enqueue!(d.pq, i, deg + deg/d.p.L)
         for j in neighbours(row)
             push!(d.columns[j], i)
         end
@@ -557,15 +648,8 @@ L-u columns into diagonal form. Referred to as the first phase in rfc6330.
 function diagonalize!(d::Decoder)
     while d.num_decoded + d.num_inactivated < d.p.L
 
-        # select a row and swap it with the topmost row of V. the R10 spec.
-        # gives a special selection strategy for when 2 is the smallest active
-        # degree. fall back to the regular strategy when this is not the case.
-        ri = select_row_2(d)
-        if ri == 0
-            ri = select_row(d)
-        end
-        # ri = select_row(d)
-        # foo = quickselect(d)
+        ri = quickselect(d)
+        peel_row!(d, d.rowperm[ri])
         swap_rows!(d, ri, d.num_decoded+1)
 
         # swap any non-zero entry in V into the first column of V
@@ -585,9 +669,6 @@ function diagonalize!(d::Decoder)
         end
         swap_cols!(d, ci, d.num_decoded+1)
 
-        # decrement the priority of all rows neighbouring this column by 1
-        setpriority!(d, cpi)
-
         # inactivate the remaining neighbouring symbols
         rpi = d.rowperm[d.num_decoded+1]
         coefs = coefficients(d.rows[rpi])
@@ -601,6 +682,10 @@ function diagonalize!(d::Decoder)
         end
         d.num_decoded += 1
     end
+    # TODO: remove
+    # a = d.metrics["rowselects"]
+    # b = d.metrics["rowlookups"]
+    # println("$b lookups over $a selects. avg lookups is $(b/a)")
     return d
 end
 
@@ -629,8 +714,7 @@ function solve_dense!{RT<:QRow{Float64},VT}(d::Decoder{RT,VT})
     )
     for ri in firstrow:lastrow
         rpi = d.rowperm[ri]
-        setinactive!(d, rpi)
-        zerodiag!(d, rpi)
+        peel_row!(d, rpi)
         for ci in firstcol:lastcol
             cpi = d.colperm[ci]
             A[ri-firstrow+1, ci-firstcol+1] = getdense(d, rpi, cpi)
@@ -654,25 +738,25 @@ function solve_dense!{RT<:QRow{Float64},VT}(d::Decoder{RT,VT})
     return d
 end
 
-doc"solve for the inactivated intermediate symbols using Gaussian elimination."
-function solve_dense!{RT,VT}(d::Decoder{RT,VT})
+"""
+    solve_dense!(d::Decoder)
 
-    # add all remaining rows to the priority queue
-    for ri in d.num_decoded+1:length(d.rows)
-        rpi = d.rowperm[ri]
-        d.pq[rpi] = degree(d.rows[rpi])
-    end
+Solve for the inactivated symbols from the system of equations consisting of the
+inactivated columns using Gaussian Elimination.
+
+"""
+function solve_dense!{RT,VT}(d::Decoder{RT,VT})
 
     for i in 1:d.num_inactivated
 
-        # select a row with non-zero inactive degree to swap with the current row
+        # select the first row with non-zero inactive degree
         ci = d.num_decoded+1
         cpi = d.colperm[ci]
         ri = 0
         rpi = 0
-        while length(d.pq) > 0
-            rj = select_row(d)
+        for rj in d.num_decoded+1:length(d.rows)
             rpj = d.rowperm[rj]
+            peel_row!(d, rpj)
             row = d.rows[rpj]
 
             # zero out the elements below the diagonal
@@ -686,7 +770,6 @@ function solve_dense!{RT,VT}(d::Decoder{RT,VT})
                     subtract!(d, rpk, rpj, coef, coef2)
                 end
             end
-
             if inactive_degree(row) > 0
                 ri = rj
                 rpi = rpj
