@@ -151,16 +151,6 @@ function add!{RT,VT}(d::Decoder{RT,VT}, s::RT, v::VT)
     push!(d.rowperm, i)
     push!(d.rowperminv, i)
     push!(d.rset, i)
-    # for j in neighbours(s)
-    #     push!(d.columns[j], i)
-    # end
-
-    # a priority queue is used to select rows during decoding. rows have
-    # priority equal to its number of non-zero entries in V plus deg/L. adding
-    # deg/L causes rows with lower original degree to be selected first, leading
-    # to lower complexity.
-    # deg = degree(s)
-    # enqueue!(d.pq, i, deg + deg/d.p.L)
     return d
 end
 
