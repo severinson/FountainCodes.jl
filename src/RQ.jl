@@ -1,6 +1,11 @@
 export RQ, precode!, ltgenerate
 
-doc"R10 parameters container."
+"""
+    RQ
+
+RaptorQ code.
+
+"""
 struct RQ <: NonBinaryCode
     K::Int # number of source symbols
     Kp::Int # number of source symbols including padding
