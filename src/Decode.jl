@@ -1,9 +1,14 @@
-# Inactivation decoder based on the IETF standards proposals RFC5053 and
-# RFC6330. Currently supports binary and q-ary codes.
-
 using DataStructures
 
-doc"R10-compliant decoder."
+export Decoder, add!, decode!, get_source
+
+"""
+    Decoder{RT<:Row,VT,CODE<:Code}
+
+Inactivation decoder. Compatible with Raptor10 (rfc5053) and RaptorQ (rfc6330)
+codes.
+
+"""
 mutable struct Decoder{RT<:Row,VT,CODE<:Code}
     p::CODE # type of code
     values::Vector{VT} # source values may be of any type, including arrays
@@ -15,12 +20,14 @@ mutable struct Decoder{RT<:Row,VT,CODE<:Code}
     rowperminv::Vector{Int} # maps row object indices to their row indices
     uperm::Vector{Int} # maps ui to upi
     uperminv::Vector{Int} # maps upi to ui
-    rset::OrderedSet{Int} # set of remaining useful rows
+    rbuckets::Vector{Vector{Tuple{Int,Int}}} # used to select which row to process next
+    lastsorted::Vector{Int} # number of decoded/inactivated symbols when a bucket was last sorted
     num_decoded::Int # denoted by i in the R10 spec.
     num_inactivated::Int # denoted by u in the R10 spec.
     metrics::DataStructures.Accumulator{String,Int}
     status::String # indicates success or stores the reason for decoding failure.
-    function Decoder{RT,VT,CODE}(p::CODE) where {RT<:Row,VT,CODE<:Code}
+    function Decoder{RT,VT,CODE}(p::CODE, num_buckets::Int) where {RT<:Row,VT,CODE<:Code}
+        @assert num_buckets > 2 "num_buckets must be > 2"
         d = new(
             p,
             Vector{Vector{VT}}(0),
@@ -32,7 +39,8 @@ mutable struct Decoder{RT<:Row,VT,CODE<:Code}
             Vector{Int}(),
             Vector{Int}(),
             Vector{Int}(),
-            OrderedSet{Int}(),
+            [Vector{Tuple{Int,Int}}() for _ in 1:num_buckets],
+            zeros(Int, num_buckets),
             0,
             0,
             DataStructures.counter(String),
@@ -51,7 +59,7 @@ end
 
 doc"R10 decoder constructor. Automatically adds constraint symbols."
 function Decoder(p::R10)
-    d = Decoder{BRow,Vector{GF256},R10}(p)
+    d = Decoder{BRow,Vector{GF256},R10}(p, 40) # maybe use 11?
     C = [Vector{GF256}() for _ in 1:p.L]
     N = [Dict{Int,Bool}() for _ in 1:p.L]
     precode!(C, p, N)
@@ -68,7 +76,7 @@ end
 
 doc"R10_256 decoder constructor. Automatically adds constraint symbols."
 function Decoder(c::R10_256)
-    d = Decoder{Union{BRow,QRow{GF256}},Vector{GF256},R10_256}(c)
+    d = Decoder{Union{BRow,QRow{GF256}},Vector{GF256},R10_256}(c, 41)
     C = [Vector{GF256}() for _ in 1:c.L]
     N = [Dict{Int,GF256}() for _ in 1:c.L]
     precode!(C, c, N)
@@ -107,7 +115,7 @@ Create a RaptorQ decoder and add the relevant constraint symbols.
 
 """
 function Decoder(c::RQ)
-    d = Decoder{Union{BRow,QRow{GF256}},Vector{GF256},RQ}(c)
+    d = Decoder{Union{BRow,QRow{GF256}},Vector{GF256},RQ}(c, 31)
     C = zeros(GF256, c.L)
     N = precode_relations(c)
 
@@ -132,12 +140,14 @@ end
 
 doc"Default LT decoder constructor."
 function Decoder(p::LT)
-    return Decoder{BRow,Vector{GF256},LT}(p)
+    buckets = max(3, Int(round(log(p.K))))
+    return Decoder{BRow,Vector{GF256},LT}(p, buckets)
 end
 
 doc"Default non-binary LT decoder constructor."
 function Decoder{CT,DT}(p::LTQ{CT,DT})
-    return Decoder{QRow{CT},Vector{CT},LTQ}(p)
+    buckets = max(3, Int(round(log(p.K))))
+    return Decoder{QRow{CT},Vector{CT},LTQ}(p, buckets)
 end
 
 doc"add a row to the decoder."
@@ -150,11 +160,15 @@ function add!{RT,VT}(d::Decoder{RT,VT}, s::RT, v::VT)
     i = length(d.rowperm) + 1
     push!(d.rowperm, i)
     push!(d.rowperminv, i)
-    push!(d.rset, i)
     return d
 end
 
-doc"add a coded symbol to the decoder."
+"""
+    add!{RT}(d::Decoder{RT}, s::CodeSymbol)
+
+Add a code symbol to the decoder.
+
+"""
 function add!{RT}(d::Decoder{RT}, s::CodeSymbol)
     add!(d, row(RT, s), s.value)
 end
@@ -259,8 +273,6 @@ function zerodiag!(d::Decoder, rowi::Row, rpi::Int, cpi::Int, coef)
         rpj = d.rowperm[ci]
         rowj = d.rows[rpj]
         subtract!(d, rpj, rpi, coef, coefficient(rowj, cpi))
-        # subtract!(d, rowi, d.rows[rpj], rpj, coef)
-        # function subtract!(d::Decoder, rowi::Row, rowj::Row, rpj::Int, coef)
     end
 end
 
@@ -349,18 +361,20 @@ end
 
 Return an edge part of the maximum size component from the graph where the
 vertices are the columns and the rows with non-zero entries in V are the edges.
-Specifically, edges is a vector of permuted row indices.
 
 TODO: Don't need to include decoded/inactivated symbols for IntDisjointSets.
 
 """
-function component_select(d::Decoder, edges::Vector{Int})
+function component_select(d::Decoder)
+    bucket = d.rbuckets[2]
 
     # setup union-find to quickly find the largest component
     vertices = Set{Int}()
     a = IntDisjointSets(d.p.L)
     n = Vector{Int}(2)
-    for rpi in edges
+    for (ri, deg) in bucket
+        @assert deg == 2
+        rpi = d.rowperm[ri]
         row = d.rows[rpi]
         i = 1
         for cpi in neighbours(row)
@@ -389,21 +403,25 @@ function component_select(d::Decoder, edges::Vector{Int})
         end
     end
 
-    # return an edge part of the largest component. returning the edge with
-    # smallest index makes it easier to keep the row list sorted.
-    for rpi in edges
+    # return any edge part of the largest component.
+    for i in length(bucket):-1:1
+        ri, _ = bucket[i]
+        rpi = d.rowperm[ri]
         row = d.rows[rpi]
         for cpi in neighbours(row)
             ci = d.colperminv[cpi]
             if (d.num_decoded < ci <= d.p.L-d.num_inactivated)
                 if find_root(a, cpi) == largest_component_root
-                    return d.rowperminv[rpi]
+                    bucket[end], bucket[i] = bucket[i], bucket[end]
+                    rj, _ = pop!(bucket)
+                    @assert ri == ri
+                    return rj
                 end
             end
         end
     end
     push!(d.metrics, "status", -2)
-    error("could not find neighbouring row")
+    error("could not find a neighbouring row")
 end
 
 """
@@ -412,7 +430,7 @@ end
 Return the number of non-zero entries this row has in V.
 
 """
-function vdegree(d::Decoder, row::Row)
+function vdegree(d::Decoder{RT}, row::RT) where RT
     deg = 0
     i::Int = d.num_decoded
     u::Int = d.num_inactivated
@@ -425,47 +443,97 @@ function vdegree(d::Decoder, row::Row)
 end
 
 """
+    sort_bucket!(d::Decoder, i::Int)
+
+Sort the i-th row bucket and move any rows whose vdegree has changed into the
+correct bucket. Return the smallest vdegree seen.
+
+"""
+function sort_bucket!(d::Decoder, i::Int)
+    min_bucket = length(d.rbuckets) + 1
+    bucket = d.rbuckets[i]
+    for j in 1:length(bucket)
+        ri, _ = bucket[j]
+        rpi = d.rowperm[ri]
+        row = d.rows[rpi]
+        deg = vdegree(d, row)
+        bucket[j] = (ri, deg)
+    end
+    sort!(bucket, alg=QuickSort, by=x->x[2], rev=true)
+
+    # move rows into their correct buckets. remember the smallest bucket.
+    while length(bucket) > 0 && bucket[end][2] < i
+        ri, deg = pop!(bucket)
+        j = min(deg, length(d.rbuckets))
+        if j > 0
+            push!(d.rbuckets[j], (ri, deg))
+            min_bucket = min(j, min_bucket)
+        end
+    end
+    if length(bucket) > 0
+        min_bucket = min(i, min_bucket)
+    end
+
+    # store the number of known symbols when this bucket was sorted
+    d.lastsorted[i] = d.num_decoded + d.num_inactivated
+
+    return min_bucket
+end
+
+"""
     select_row(d::Decoder)
 
 Select the highest priority row by scanning down.
 
-TODO: may select non-binary rows before depleting the binary rows.
-
-TODO: consider ways to reduce the number of average lookups.
+TODO: may return a row of degree 1 not of lowest original degree. consider using
+a deque.
 
 """
 function select_row(d::Decoder)
-    edges = Vector{Int}()
-    dmin::Int = d.p.L + 1
-    rj = 0
     # push!(d.metrics, "rowselects", 1)
-    for ri in d.rset
+
+    # no need to consider other buckets if we find a row of vdegree 1
+    bucket = d.rbuckets[1]
+    while length(bucket) > 0
+        ri, _ = pop!(bucket)
         rpi = d.rowperm[ri]
         row = d.rows[rpi]
         deg = vdegree(d, row)
-        if deg == 0
-            delete!(d.rset, ri)
-        elseif deg == 1
-            dmin = 1
-            rj = ri
-            break
-        elseif deg == 2
-            dmin = 2
-            push!(edges, rpi)
-        elseif 1 < deg < dmin
-            dmin = deg
-            rj = ri
+        @assert deg in [0, 1] "deg=$deg must be in [0, 1]"
+        if deg == 1
+            return ri
         end
-        # push!(d.metrics, "rowlookups", 1)
     end
-    if dmin == 2
-        rj = component_select(d, edges)
+
+    # consider all buckets except the last one as it may hold high-degree rows
+    min_bucket = length(d.rbuckets)+1 # smallest non-empty bucket
+    for i in 2:length(d.rbuckets)-1
+        bucket = d.rbuckets[i]
+
+        # stop after finding any row of vdegree 1
+        if min_bucket == 1
+            break
+        end
+
+        # skip if there are no potentially better rows
+        if i - (d.num_decoded + d.num_inactivated - d.lastsorted[i]) > min_bucket
+            continue
+        end
+
+        min_bucket = min(sort_bucket!(d, i), min_bucket)
     end
-    if iszero(rj)
-        error("no rows with non-zero elements in V")
+
+    # only consider the last bucket when required
+    if min_bucket > length(d.rbuckets)
+        min_bucket = min(sort_bucket!(d, length(d.rbuckets)), min_bucket)
     end
-    delete!(d.rset, rj)
-    return rj
+
+    @assert min_bucket <= length(d.rbuckets) "no rows with non-zero vdegree"
+    if min_bucket == 2
+        return component_select(d)
+    end
+    ri, _ = pop!(d.rbuckets[min_bucket])
+    return ri
 end
 
 """
@@ -491,11 +559,14 @@ function sortrows!(d::Decoder)
     p = sortperm(d.rows, by=degree)
     d.rows = d.rows[p]
     d.values = d.values[p]
-    for i in 1:length(d.rows)
-        row = d.rows[i]
-        for j in neighbours(row)
-            push!(d.columns[j], i)
+    for ri in length(d.rows):-1:1
+        row = d.rows[ri]
+        for ci in neighbours(row)
+            push!(d.columns[ci], ri)
         end
+        deg = degree(row)
+        i = min(deg, length(d.rbuckets))
+        push!(d.rbuckets[i], (ri, deg))
     end
 end
 
@@ -618,7 +689,6 @@ function solve_dense!{RT,VT}(d::Decoder{RT,VT})
         for rj in d.num_decoded+1:length(d.rows)
             rpj = d.rowperm[rj]
             peel_row!(d, rpj)
-            row = d.rows[rpj]
 
             # zero out the elements below the diagonal
             for cj in d.p.L-d.num_inactivated+1:d.num_decoded
@@ -627,11 +697,11 @@ function solve_dense!{RT,VT}(d::Decoder{RT,VT})
                 if !iszero(coef)
                     rpk = d.rowperm[cj]
                     coef2 = getdense(d, rpk, cpj)
-                    @assert !iszero(coef2) "coef=$coef, coef2=$coef2, but coef2 must be non-zero. cj=$cj, cpj=$cpj, row=$row, row2=$(d.rows[rpk])"
+                    @assert !iszero(coef2) "coef2 must be non-zero. coef=$coef, coef2=$coef2, cj=$cj, cpj=$cpj"
                     subtract!(d, rpk, rpj, coef, coef2)
                 end
             end
-            if inactive_degree(row) > 0
+            if inactive_degree(d.rows[rpj]) > 0
                 ri = rj
                 rpi = rpj
                 break
