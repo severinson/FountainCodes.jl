@@ -295,17 +295,27 @@ rows[rpj]. New row objects are only allocated when needed.
 
 """
 function subtract!(d::Decoder, rpi::Int, rpj::Int, coefi, coefj)
-    coef = coefi
+    # coef = promote_rule(typeof(coefi), typeof(coefj))(coefi)
     @assert !iszero(coefj) "coefj must be non-zero, but is $coefj and type $(typeof(coefj))"
-    if coefj != one(coefj)
-        coef /= coefj
-    end
+    coef = coefi / coefj
     d.rows[rpj] = subtract!(d.rows[rpj], d.rows[rpi], coef)
     if iszero(d.values[rpj])
         d.values[rpj] = zeros(d.values[rpi])
     end
     d.values[rpj] = subeq!(d.values[rpj], d.values[rpi], coef)
     update_metrics!(d, d.rows[rpi], coef)
+    return
+end
+
+function subtract!(d::Decoder, rpi::Int, rpj::Int, coefi::Bool, coefj::Bool)
+    @assert !iszero(coefj) "coefj must be non-zero, but is $coefj and type $(typeof(coefj))"
+    d.rows[rpj] = subtract!(d.rows[rpj], d.rows[rpi], coefi)
+    if iszero(d.values[rpj])
+        d.values[rpj] = zeros(d.values[rpi])
+    end
+    d.values[rpj] = subeq!(d.values[rpj], d.values[rpi], coefi)
+    update_metrics!(d, d.rows[rpi], coefi)
+    return
 end
 
 """track performance metrics"""
@@ -317,6 +327,7 @@ function update_metrics!(d::Decoder, row::Row, coef)
         push!(d.metrics, "decoding_multiplications", weight)
         push!(d.metrics, "rowmuls", 1)
     end
+    return
 end
 
 """
