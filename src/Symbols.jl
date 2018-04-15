@@ -69,7 +69,7 @@ end
 Subtract c*b from a.
 
 """
-function subeq!(a::AbstractArray{GF256}, b::AbstractArray{GF256}, c::GF256)
+function subeq!(a::Vector{GF256}, b::Vector{GF256}, c::GF256) :: Vector{GF256}
     if iszero(c) || iszero(b)
         return a
     end
@@ -86,7 +86,7 @@ function subeq!(a::AbstractArray{GF256}, b::AbstractArray{GF256}, c::GF256)
     return a
 end
 
-function subeq!(a::AbstractArray{GF256}, b::AbstractArray{GF256}, c::Bool)
+function subeq!(a::Vector{GF256}, b::Vector{GF256}, c::Bool) :: Vector{GF256}
     if iszero(c) || iszero(b)
         return a
     end
