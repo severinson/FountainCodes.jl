@@ -134,8 +134,19 @@ function coefficient(X::Int, p::R10)
     return true
 end
 
+"""
+    coefficient(X::Int, p::R10_256)
+
+Return a psuedo-random non-zero coefficient.
+
+"""
 function coefficient(X::Int, p::R10_256)
-    return GF256(r10_rand(X, 1, 256))
+    i, coef = 0, zero(GF256)
+    while iszero(coef)
+        coef = GF256(r10_rand(X, i, 256))
+        i += 1
+    end
+    return coef
 end
 
 doc"Generate R10 precode HDPC symbols in-place at N (K+S+1) to (K+S+H)."
