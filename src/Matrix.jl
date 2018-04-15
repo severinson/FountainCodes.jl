@@ -230,19 +230,19 @@ end
     if iszero(coef)
         return a
     end
+    la, lb = length(a.inactive), length(b.dense)
+    dense = zeros(CT, max(la, lb))
+    xor!(dense, a.inactive)
     if coef == one(coef)
-        return QRow(
-            a.indices,
-            ones(CT, length(a.indices)),
-            xor.(a.inactive, b.dense),
-        )
+        xor!(dense, b.dense)
     else
-        return QRow(
-            a.indices,
-            ones(CT, length(a.indices)),
-            xor.(a.inactive, coef.*b.dense),
-        )
+        xor!(dense, coef*b.dense)
     end
+    return QRow(
+        a.indices,
+        ones(CT, length(a.indices)),
+        dense,
+    )
 end
 
 doc"get the index of any non-zero inactive element"
@@ -250,9 +250,15 @@ doc"get the index of any non-zero inactive element"
     return findfirst(r.dense)
 end
 
-doc"set an element of the dense part of the matrix."
+
+
+"""
+    setdense!{CT}(row::QRow{CT}, upi::Int, v::CT)
+
+set an element of the dense part of the matrix.
+
+"""
 @inline function setdense!{CT}(row::QRow{CT}, upi::Int, v::CT)
-    @assert !iszero(v) "v must be non-zero"
     while upi > length(row.dense)
         append!(row.dense, zeros(CT, max(1, length(row.dense))))
     end
@@ -260,7 +266,12 @@ doc"set an element of the dense part of the matrix."
     return row
 end
 
-doc"get an element from the dense part of the matrix."
+"""
+    getdense{CT}(row::QRow{CT}, upi::Int)
+
+get an element from the dense part of the matrix.
+
+"""
 @inline function getdense{CT}(row::QRow{CT}, upi::Int)
     if upi <= length(row.dense)
         return row.dense[upi]
