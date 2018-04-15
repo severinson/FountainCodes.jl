@@ -121,12 +121,10 @@ function test_ltgenerate()
 end
 @test test_ltgenerate()
 
-function test_precode()
+function test_precode_1()
     c = RQ(10)
     C = [Vector{GF256}([i]) for i in 1:c.L]
-    println("C=$C")
     precode!(C, c)
-    println("C=$C")
     for X in 1:c.K
         s = ltgenerate(C, X, c)
         correct = Vector{GF256}([X])
@@ -136,4 +134,19 @@ function test_precode()
     end
     return true
 end
-@test test_precode()
+@test test_precode_1()
+
+function test_precode_2()
+    c = RQ(1000)
+    C = [Vector{GF256}([i % 256]) for i in 1:c.L]
+    precode!(C, c)
+    for X in 1:c.K
+        s = ltgenerate(C, X, c)
+        correct = Vector{GF256}([X % 256])
+        if s.value != correct
+            error("$X-th LT symbol value should be $correct but is $(s.value)")
+        end
+    end
+    return true
+end
+@test test_precode_2()
