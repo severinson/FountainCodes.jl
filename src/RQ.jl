@@ -169,7 +169,7 @@ function precode!(C::Vector, c::RQ)
     if length(C) != c.L
         error("C must have length L")
     end
-    for i in c.K+1:c.Kp
+    for i in c.K+1:c.L
         C[i] = zero(C[1])
     end
     for X in 1:c.Kp
@@ -255,7 +255,7 @@ function RQ_hdpc_constraints!(N::Vector, c::RQ)
             GAMMA[i+1,j+1] = alpha^(i-j)
         end
     end
-    A = MT*GAMMA
+    A::Matrix{GF256} = MT*GAMMA
     for i in 1:c.H
         for j in 1:c.Kp+c.S
             N[i0+i-1][2][j] = A[i,j]
