@@ -726,3 +726,20 @@ function test_decoder_R10_256_2()
     return true
 end
 @test test_decoder_R10_256_2()
+
+function test_decoder_R10_256_3()
+    K = 1000
+    p, d, C = init_R10_256(K)
+    for i in 1:1500
+        s = RaptorCodes.ltgenerate(C, 19K+i, p)
+        RaptorCodes.add!(d, s)
+    end
+    output = RaptorCodes.decode!(d)
+    for i in 1:p.K
+        if output[i] != C[i]
+            error("decoding failure. source[$i] is $(output[i]). should be $(C[i]).")
+        end
+    end
+    return true
+end
+@test test_decoder_R10_256_3()
