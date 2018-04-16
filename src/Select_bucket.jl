@@ -26,8 +26,10 @@ Add row r with index ri to the selector.
 """
 function Base.push!(sel::SelectBucket, d::Decoder, ri::Int, row::Row)
     deg::Int = vdegree(d, row)
-    i::Int = min(deg, length(sel.buckets))
-    push!(sel.buckets[i], (ri, deg))
+    if !iszero(deg)
+        i::Int = min(deg, length(sel.buckets))
+        push!(sel.buckets[i], (ri, deg))
+    end
     return
 end
 
