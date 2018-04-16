@@ -1,5 +1,5 @@
 module RaptorCodes
-using Distributions, Missings, Primes
+using Distributions, Missings, Primes, DataStructures
 export CoefficientType, Binary, NonBinary, Code
 
 # type system
@@ -36,6 +36,7 @@ include("R10.jl")
 include("LT.jl")
 include("RQTables.jl")
 include("RQ.jl")
+include("LDPC.jl")
 include("Simulate.jl")
 
 end # module

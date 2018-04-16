@@ -1,6 +1,4 @@
-using DataStructures
-
-export Decoder, add!, decode!, get_source
+export Decoder, add!, decode!, get_source, get_source!
 
 """
     Decoder{RT<:Row,VT,CODE<:Code}
@@ -547,9 +545,9 @@ end
 In-place version of get_source()
 
 """
-function get_source!{RT,VT}(C::Vector, d::Decoder{RT,VT})
+function get_source!{RT,VT}(C::AbstractArray{VT}, d::Decoder{RT,VT})
     if length(C) != d.num_symbols
-        error("C must have length L")
+        error("C must have length num_symbols")
     end
     for i in 1:d.num_symbols-d.num_inactivated
         rpi = d.rowperm[i]
