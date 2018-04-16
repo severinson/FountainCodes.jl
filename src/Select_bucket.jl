@@ -103,7 +103,7 @@ function component_select(sel::SelectBucket, d::Decoder)
 
     # setup union-find to quickly find the largest component
     vertices = Set{Int}()
-    a = IntDisjointSets(d.p.L)
+    a = IntDisjointSets(d.num_symbols)
     n = Vector{Int}(2)
     for (ri, deg) in bucket
         @assert deg == 2
@@ -112,7 +112,7 @@ function component_select(sel::SelectBucket, d::Decoder)
         i = 1
         for cpi in neighbours(row)
             ci = d.colperminv[cpi]
-            if (d.num_decoded < ci <= d.p.L-d.num_inactivated)
+            if (d.num_decoded < ci <= d.num_symbols-d.num_inactivated)
                 n[i] = cpi
                 i += 1
             end
@@ -143,7 +143,7 @@ function component_select(sel::SelectBucket, d::Decoder)
         row = d.rows[rpi]
         for cpi in neighbours(row)
             ci = d.colperminv[cpi]
-            if (d.num_decoded < ci <= d.p.L-d.num_inactivated)
+            if (d.num_decoded < ci <= d.num_symbols-d.num_inactivated)
                 if find_root(a, cpi) == largest_component_root
                     bucket[end], bucket[i] = bucket[i], bucket[end]
                     rj, _ = pop!(bucket)
