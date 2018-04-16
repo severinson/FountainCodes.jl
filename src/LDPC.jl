@@ -21,6 +21,7 @@ mutable struct LDPC10{VT} <: BinaryCode
         new(K, n, H, zeros(VT, n), falses(n))
     end
 end
+Base.repr(c::LDPC10) = "LDPC10($(c.K), $(c.n), $(hash(c.H)))"
 
 """create a binary LDPC code from a dense Parity check matrix."""
 function LDPC10{VT}(H::Matrix{Bool}) where VT
