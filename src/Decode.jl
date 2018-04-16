@@ -218,7 +218,7 @@ function subtract!(d::Decoder, rpi::Int, rpj::Int, coefi::Bool, coefj::Bool)
     @assert !iszero(coefj) "coefj must be non-zero, but is $coefj and type $(typeof(coefj))"
     d.rows[rpj] = subtract!(d.rows[rpj], d.rows[rpi], coefi)
     if iszero(d.values[rpj])
-        d.values[rpj] = zeros(d.values[rpi])
+        d.values[rpj] = zero(d.values[rpi])
     end
     d.values[rpj] = subeq!(d.values[rpj], d.values[rpi], coefi)
     update_metrics!(d, d.rows[rpi], coefi)
