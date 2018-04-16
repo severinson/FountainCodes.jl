@@ -30,9 +30,9 @@ mutable struct Decoder{RT<:Row,VT,CODE<:Code,SELECTOR<:Selector}
         num_symbols::Int) where {RT<:Row,VT,CODE<:Code,SELECTOR<:Selector}
         d = new(
             p,
-            Vector{Vector{VT}}(0),
+            Vector{VT}(),
             [Vector{Int}() for _ in 1:num_symbols],
-            Vector{RT}(0),
+            Vector{RT}(),
             Vector(1:num_symbols),
             Vector(1:num_symbols),
             Vector{Int}(),
