@@ -80,7 +80,10 @@ function Base.pop!(sel::SelectBucket, d::Decoder) :: Int
         min_bucket = min(sort_bucket!(sel, d, length(sel.buckets)), min_bucket)
     end
 
-    @assert min_bucket <= length(sel.buckets) "no rows with non-zero vdegree"
+    if length(sel.buckets) < min_bucket
+        push!(d.metrics, "status", -2)
+        error("no rows with non-zero vdegree")
+    end
     if min_bucket == 2
         return component_select(sel, d)
     end
