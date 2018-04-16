@@ -17,9 +17,22 @@ function sample(S::AbstractArray, c::Code)
     return d.metrics
 end
 
+function sample(c::LDPC10)
+    d = Decoder(c)
+    decode!(d, false)
+    return d.metrics
+end
+
 function parameterdct(c::R10)
     dct = Dict{String,Int}()
     dct["num_inputs"] = c.K
+    return dct
+end
+
+function parameterdct(c::LDPC10)
+    dct = Dict{String,Int}()
+    dct["num_inputs"] = c.K
+    dct["length"] = c.n
     return dct
 end
 
@@ -41,6 +54,23 @@ function linearsim!(samples::DefaultDict{String, Vector{Any}}, overheads::Vector
             push!(samples[v[1]], v[2])
         end
         for v in sample(view(S, 1:(c.K+overhead)), c)
+            push!(samples[v[1]], v[2])
+        end
+    end
+    return samples
+end
+
+function linearsim!(samples::DefaultDict{String, Vector{Any}}, num_erasures::Vector{Int}, c::LDPC10)
+    dct = parameterdct(c)::Dict
+    for erasures in num_erasures
+        c.erased[1:erasures] = true
+        c.erased[erasures+1:end] = false
+        shuffle!(c.erased)
+        dct["erasures"] = erasures
+        for v in dct
+            push!(samples[v[1]], v[2])
+        end
+        for v in sample(c)
             push!(samples[v[1]], v[2])
         end
     end
