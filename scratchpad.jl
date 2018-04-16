@@ -102,10 +102,25 @@ function r10sim(K::Int, overheads::Vector{Int})
     end
 end
 
-K = 8000
-reloverheads = linspace(0.25, 0.4, 10)
-overheads = Vector{Int}(round.(K*reloverheads))
-ltqrsim(K, overheads)
+function ldpc10sim(erasures::Vector{Int})
+    H = Matrix{Bool}(readdlm("./test/H_612_1224.txt"))
+    c = LDPC10{GF256}(H)
+    for _ in 1:100
+        df = RaptorCodes.linearsims(erasures, c, 1)
+        println(df)
+    end
+end
+
+K = 1224
+# reloverheads = linspace(0.3, 0.5, 10)
+reloverheads = linspace(0, 0.5, 10)
+num_erasures = Vector{Int}(round.(K*reloverheads))
+ldpc10sim(num_erasures)
+
+# K = 8000
+# reloverheads = linspace(0.25, 0.4, 10)
+# overheads = Vector{Int}(round.(K*reloverheads))
+# ltqrsim(K, overheads)
 
 # ltsim(K, overheads)
 # reloverheads = linspace(0.05, 0.5, 100)
