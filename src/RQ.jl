@@ -299,7 +299,11 @@ Create a RaptorQ decoder and add the relevant constraint symbols.
 """
 function Decoder(c::RQ)
     selector = SelectBucket(31)
-    d = Decoder{Union{BRow,QRow{GF256}},Vector{GF256},RQ,SelectBucket}(c, selector)
+    d = Decoder{Union{BRow,QRow{GF256}},Vector{GF256},RQ,SelectBucket}(
+        c,
+        selector,
+        c.L,
+    )
     C = zeros(GF256, c.L)
     N = precode_relations(c)
 

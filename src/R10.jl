@@ -237,13 +237,17 @@ end
 Return a decoder for Raptor10 codes.
 
 """
-function Decoder(p::R10)
+function Decoder(c::R10)
     selector = SelectBucket(41)
-    d = Decoder{BRow,Vector{GF256},R10,SelectBucket}(p, selector)
-    C = [Vector{GF256}() for _ in 1:p.L]
-    N = [Dict{Int,Bool}() for _ in 1:p.L]
-    precode!(C, p, N)
-    for i in (p.K+1):(p.K+p.S+p.H)
+    d = Decoder{BRow,Vector{GF256},R10,SelectBucket}(
+        c,
+        selector,
+        c.L,
+    )
+    C = [Vector{GF256}() for _ in 1:c.L]
+    N = [Dict{Int,Bool}() for _ in 1:c.L]
+    precode!(C, c, N)
+    for i in (c.K+1):(c.K+c.S+c.H)
         cs = BSymbol(
             -1,
             Vector{GF256}(),
@@ -262,7 +266,11 @@ Return a decoder for Raptor10-256 codes.
 """
 function Decoder(c::R10_256)
     selector = SelectBucket(41)
-    d = Decoder{Union{BRow,QRow{GF256}},Vector{GF256},R10_256,SelectBucket}(c, selector)
+    d = Decoder{Union{BRow,QRow{GF256}},Vector{GF256},R10_256,SelectBucket}(
+        c,
+        selector,
+        c.L,
+    )
     C = [Vector{GF256}() for _ in 1:c.L]
     N = [Dict{Int,GF256}() for _ in 1:c.L]
     precode!(C, c, N)

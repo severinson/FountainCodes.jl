@@ -20,24 +20,29 @@ mutable struct Decoder{RT<:Row,VT,CODE<:Code,SELECTOR<:Selector}
     rowperminv::Vector{Int} # maps row object indices to their row indices
     uperm::Vector{Int} # maps ui to upi
     uperminv::Vector{Int} # maps upi to ui
-    selector::SELECTOR
+    selector::SELECTOR # used to select which row to process next
+    num_symbols::Int # code length
     num_decoded::Int # denoted by i in the R10 spec.
     num_inactivated::Int # denoted by u in the R10 spec.
     metrics::DataStructures.Accumulator{String,Int}
     status::String # indicates success or stores the reason for decoding failure.
-    function Decoder{RT,VT,CODE,SELECTOR}(p::CODE, selector::Selector) where {RT<:Row,VT,CODE<:Code,SELECTOR<:Selector}
+    function Decoder{RT,VT,CODE,SELECTOR}(
+        p::CODE,
+        selector::Selector,
+        num_symbols::Int) where {RT<:Row,VT,CODE<:Code,SELECTOR<:Selector}
         d = new(
             p,
             Vector{Vector{VT}}(0),
-            [Vector{Int}() for _ in 1:p.L],
+            [Vector{Int}() for _ in 1:num_symbols],
             Vector{RT}(0),
-            Vector(1:p.L),
-            Vector(1:p.L),
+            Vector(1:num_symbols),
+            Vector(1:num_symbols),
             Vector{Int}(),
             Vector{Int}(),
             Vector{Int}(),
             Vector{Int}(),
             selector,
+            num_symbols,
             0,
             0,
             DataStructures.counter(String),
@@ -79,8 +84,8 @@ end
 
 # the inactivated part is stored as dense bit vectors. these are indexed from
 # the right of the matrix.
-@inline _ci2ui(d::Decoder, ci::Int) = d.p.L-ci+1
-@inline _ui2ci(d::Decoder, ui::Int) = d.p.L-ui+1
+@inline _ci2ui(d::Decoder, ci::Int) = d.num_symbols-ci+1
+@inline _ui2ci(d::Decoder, ui::Int) = d.num_symbols-ui+1
 
 """
     setdense!(d::Decoder, rpi::Int, cpi::Int, v)
@@ -118,7 +123,7 @@ end
 
 """return the number of remaining source symbols to process in stage 1."""
 function num_remaining(d::Decoder)
-    return d.p.L - p.num_decoded - p.num_inactivated
+    return d.num_symbols - p.num_decoded - p.num_inactivated
 end
 
 """check if an intermediate symbol is covered."""
@@ -128,7 +133,7 @@ end
 
 """check if all intermediate symbols are covered."""
 function check_cover(d::Decoder)
-    for i in 1:d.p.L
+    for i in 1:d.num_symbols
         if !iscovered(d, i)
             push!(d.metrics, "status", -1)
             error("intermediate symbol with index $i not covered.")
@@ -173,7 +178,7 @@ end
 
 function zerodiag!(d::Decoder, rowi::Row, rpi::Int, cpi::Int, coef)
     ci = d.colperminv[cpi]
-    if ci < d.num_decoded+1 && ci <= d.p.L-d.num_inactivated
+    if ci < d.num_decoded+1 && ci <= d.num_symbols-d.num_inactivated
         rpj = d.rowperm[ci]
         rowj = d.rows[rpj]
         subtract!(d, rpj, rpi, coef, coefficient(rowj, cpi))
@@ -244,7 +249,7 @@ function setinactive!(d::Decoder, rpi::Int)
     row = d.rows[rpi]
     for (cpi, coef) in zip(neighbours(row), coefficients(row))
         ci = d.colperminv[cpi]
-        if ci > d.p.L - d.num_inactivated
+        if ci > d.num_symbols - d.num_inactivated
             setdense!(d, rpi, cpi, coef)
         end
     end
@@ -281,7 +286,7 @@ function vdegree(d::Decoder{RT}, row::RT) where RT
     deg = 0
     i::Int = d.num_decoded
     u::Int = d.num_inactivated
-    L::Int = d.p.L
+    L::Int = d.num_symbols
     for cpi in neighbours(row)
         ci = d.colperminv[cpi]
         deg += Int(i < ci <= L-u)
@@ -341,7 +346,7 @@ L-u columns into diagonal form. Referred to as the first phase in rfc6330.
 
 """
 function diagonalize!(d::Decoder)
-    while d.num_decoded + d.num_inactivated < d.p.L
+    while d.num_decoded + d.num_inactivated < d.num_symbols
 
         ri = select_row(d)
         peel_row!(d, d.rowperm[ri])
@@ -353,12 +358,12 @@ function diagonalize!(d::Decoder)
         i = 1
         cpi = active[i]
         ci = d.colperminv[cpi]
-        while !(d.num_decoded < ci <= d.p.L-d.num_inactivated) && i < length(active)
+        while !(d.num_decoded < ci <= d.num_symbols-d.num_inactivated) && i < length(active)
             i += 1
             cpi = active[i]
             ci = d.colperminv[cpi]
         end
-        if !(d.num_decoded < ci <= d.p.L-d.num_inactivated)
+        if !(d.num_decoded < ci <= d.num_symbols-d.num_inactivated)
             push!(d.metrics, "status", -3)
             error("incorrectly selected a row with no neighbours in V.")
         end
@@ -370,7 +375,7 @@ function diagonalize!(d::Decoder)
         for j in i+1:length(active)
             cpi = active[j]
             ci = d.colperminv[cpi]
-            if (d.num_decoded+1 < ci <= d.p.L-d.num_inactivated)
+            if (d.num_decoded+1 < ci <= d.num_symbols-d.num_inactivated)
                 inactivate!(d, cpi)
                 setdense!(d, rpi, cpi, coefs[j])
             end
@@ -388,8 +393,8 @@ doc"solve for the inactivated intermediate symbols using least-squares."
 function solve_dense!{RT<:QRow{Float64},VT}(d::Decoder{RT,VT})
     firstrow = d.num_decoded+1 # first row of the dense matrix
     lastrow = length(d.rows) # last row of the dense matrix
-    firstcol = d.p.L-d.num_inactivated+1 # first column of the dense matrix
-    lastcol = d.p.L # last column of the dense matrix
+    firstcol = d.num_symbols-d.num_inactivated+1 # first column of the dense matrix
+    lastcol = d.num_symbols # last column of the dense matrix
     @assert firstrow == firstcol "firstrow=$firstrow must be equal to firstcol=$firstcol"
     if lastrow-firstrow+1 < d.num_inactivated
         push!(d.metrics, "status", -4)
@@ -454,7 +459,7 @@ function solve_dense!{RT,VT}(d::Decoder{RT,VT})
             peel_row!(d, rpj)
 
             # zero out the elements below the diagonal
-            for cj in d.p.L-d.num_inactivated+1:d.num_decoded
+            for cj in d.num_symbols-d.num_inactivated+1:d.num_decoded
                 cpj = d.colperm[cj]
                 coef = getdense(d, rpj, cpj)
                 if !iszero(coef)
@@ -487,7 +492,7 @@ function solve_dense!{RT,VT}(d::Decoder{RT,VT})
         swap_cols!(d, ci, cj)
 
         # subtract this row from all rows in u_lower above this one
-        for rj in d.p.L-d.num_inactivated+1:d.num_decoded
+        for rj in d.num_symbols-d.num_inactivated+1:d.num_decoded
             rpj = d.rowperm[rj]
             cpj = d.colperm[d.num_decoded+1]
             coef = getdense(d, rpj, cpj)
@@ -508,9 +513,9 @@ end
 doc"backsolve with the symbols decoded via GE."
 function backsolve!(d::Decoder)
     # TODO: findnext would be more efficient
-    for ri in 1:d.p.L-d.num_inactivated
+    for ri in 1:d.num_symbols-d.num_inactivated
         rpi = d.rowperm[ri]
-        for ci in d.p.L-d.num_inactivated+1:d.p.L
+        for ci in d.num_symbols-d.num_inactivated+1:d.num_symbols
             cpi = d.colperm[ci]
             coef = getdense(d, rpi, cpi)
             if !iszero(coef)
@@ -532,7 +537,7 @@ symbols are the first K LT symbols.
 
 """
 function get_source{RT,VT}(d::Decoder{RT,VT})
-    C = Vector{VT}(d.p.L)
+    C = Vector{VT}(d.num_symbols)
     return get_source!(C, d)
 end
 
@@ -543,10 +548,10 @@ In-place version of get_source()
 
 """
 function get_source!{RT,VT}(C::Vector, d::Decoder{RT,VT})
-    if length(C) != d.p.L
+    if length(C) != d.num_symbols
         error("C must have length L")
     end
-    for i in 1:d.p.L-d.num_inactivated
+    for i in 1:d.num_symbols-d.num_inactivated
         rpi = d.rowperm[i]
         cpi = d.colperm[i]
         coef = coefficient(d.rows[rpi], cpi)
@@ -556,7 +561,7 @@ function get_source!{RT,VT}(C::Vector, d::Decoder{RT,VT})
             C[cpi] = d.values[rpi] / coef
         end
     end
-    for i in d.p.L-d.num_inactivated+1:d.p.L
+    for i in d.num_symbols-d.num_inactivated+1:d.num_symbols
         rpi = d.rowperm[i]
         cpi = d.colperm[i]
         coef = getdense(d, rpi, cpi)
