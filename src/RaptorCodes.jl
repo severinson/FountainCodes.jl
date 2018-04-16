@@ -9,6 +9,7 @@ mutable struct NonBinary <: CoefficientType end
 abstract type Code{T<:CoefficientType} end
 const BinaryCode = Code{Binary}
 const NonBinaryCode = Code{NonBinary}
+abstract type Selector end
 
 doc"symbol value"
 abstract type Value end
@@ -27,13 +28,14 @@ include("Numinv.jl")
 include("Soliton.jl")
 include("Symbols.jl")
 include("Gray.jl")
+include("Matrix.jl")
+include("Decode.jl")
+include("Select_bucket.jl")
 include("R10Tables.jl")
 include("R10.jl")
+include("LT.jl")
 include("RQTables.jl")
 include("RQ.jl")
-include("Matrix.jl")
-include("LT.jl")
-include("Decode.jl")
 include("Simulate.jl")
 
 end # module

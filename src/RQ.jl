@@ -290,3 +290,37 @@ function RQ_hdpc_constraints!(N::Vector, c::RQ)
 
     return N
 end
+
+"""
+    Decoder(c::RQ)
+
+Create a RaptorQ decoder and add the relevant constraint symbols.
+
+"""
+function Decoder(c::RQ)
+    selector = SelectBucket(31)
+    d = Decoder{Union{BRow,QRow{GF256}},Vector{GF256},RQ,SelectBucket}(c, selector)
+    C = zeros(GF256, c.L)
+    N = precode_relations(c)
+
+    # LDPC constraints
+    for (indices, _) in view(N, 1:c.S)
+        s = BSymbol(-1, Vector{GF256}(), indices)
+        add!(d, s)
+    end
+
+    # HDPC constrains
+    for (indices, coefs) in view(N, c.S+1:c.S+c.H)
+        s = QSymbol(-1, Vector{GF256}(), indices, coefs)
+        add!(d, s)
+    end
+
+    # permanent inactivations
+    for i in c.L-c.P+1:c.L
+        inactivate!(d, i)
+    end
+
+    # only count dynamic inactivations
+    push!(d.metrics, "inactivations", -c.P)
+    return d
+end

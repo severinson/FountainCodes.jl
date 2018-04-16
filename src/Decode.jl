@@ -9,7 +9,7 @@ Inactivation decoder. Compatible with Raptor10 (rfc5053) and RaptorQ (rfc6330)
 codes.
 
 """
-mutable struct Decoder{RT<:Row,VT,CODE<:Code}
+mutable struct Decoder{RT<:Row,VT,CODE<:Code,SELECTOR<:Selector}
     p::CODE # type of code
     values::Vector{VT} # source values may be of any type, including arrays
     columns::Vector{Vector{Int}}
@@ -20,14 +20,12 @@ mutable struct Decoder{RT<:Row,VT,CODE<:Code}
     rowperminv::Vector{Int} # maps row object indices to their row indices
     uperm::Vector{Int} # maps ui to upi
     uperminv::Vector{Int} # maps upi to ui
-    rbuckets::Vector{Vector{Tuple{Int,Int}}} # used to select which row to process next
-    lastsorted::Vector{Int} # number of decoded/inactivated symbols when a bucket was last sorted
+    selector::SELECTOR
     num_decoded::Int # denoted by i in the R10 spec.
     num_inactivated::Int # denoted by u in the R10 spec.
     metrics::DataStructures.Accumulator{String,Int}
     status::String # indicates success or stores the reason for decoding failure.
-    function Decoder{RT,VT,CODE}(p::CODE, num_buckets::Int) where {RT<:Row,VT,CODE<:Code}
-        @assert num_buckets > 2 "num_buckets must be > 2"
+    function Decoder{RT,VT,CODE,SELECTOR}(p::CODE, selector::Selector) where {RT<:Row,VT,CODE<:Code,SELECTOR<:Selector}
         d = new(
             p,
             Vector{Vector{VT}}(0),
@@ -39,8 +37,7 @@ mutable struct Decoder{RT<:Row,VT,CODE<:Code}
             Vector{Int}(),
             Vector{Int}(),
             Vector{Int}(),
-            [Vector{Tuple{Int,Int}}() for _ in 1:num_buckets],
-            zeros(Int, num_buckets),
+            selector,
             0,
             0,
             DataStructures.counter(String),
@@ -55,99 +52,6 @@ mutable struct Decoder{RT<:Row,VT,CODE<:Code}
         d.metrics["status"] = 0
         return d
     end
-end
-
-doc"R10 decoder constructor. Automatically adds constraint symbols."
-function Decoder(p::R10)
-    d = Decoder{BRow,Vector{GF256},R10}(p, 40) # maybe use 11?
-    C = [Vector{GF256}() for _ in 1:p.L]
-    N = [Dict{Int,Bool}() for _ in 1:p.L]
-    precode!(C, p, N)
-    for i in (p.K+1):(p.K+p.S+p.H)
-        cs = BSymbol(
-            -1,
-            Vector{GF256}(),
-            sort!(push!(collect(keys(N[i])), i)),
-        )
-        add!(d, cs)
-    end
-    return d
-end
-
-doc"R10_256 decoder constructor. Automatically adds constraint symbols."
-function Decoder(c::R10_256)
-    d = Decoder{Union{BRow,QRow{GF256}},Vector{GF256},R10_256}(c, 41)
-    C = [Vector{GF256}() for _ in 1:c.L]
-    N = [Dict{Int,GF256}() for _ in 1:c.L]
-    precode!(C, c, N)
-
-    # LDPC rows are binary
-    for i in (c.K+1):(c.K+c.S)
-        indices = push!(collect(keys(N[i])), i)
-        cs = BSymbol(
-            -1,
-            Vector{GF256}(),
-            sort!(indices),
-        )
-        add!(d, cs)
-    end
-
-    # HDPC rows are q-ary
-    for i in (c.K+c.S+1):(c.K+c.S+c.H)
-        indices = push!(collect(keys(N[i])), i)
-        coefs = push!(collect(values(N[i])), one(GF256))
-        p = sortperm(indices)
-        cs = QSymbol(
-            -1,
-            Vector{GF256}(),
-            indices[p],
-            coefs[p],
-        )
-        add!(d, cs)
-    end
-    return d
-end
-
-"""
-    Decoder(c::RQ)
-
-Create a RaptorQ decoder and add the relevant constraint symbols.
-
-"""
-function Decoder(c::RQ)
-    d = Decoder{Union{BRow,QRow{GF256}},Vector{GF256},RQ}(c, 31)
-    C = zeros(GF256, c.L)
-    N = precode_relations(c)
-
-    # LDPC constraints
-    for (indices, _) in view(N, 1:c.S)
-        s = BSymbol(-1, Vector{GF256}(), indices)
-        add!(d, s)
-    end
-
-    # HDPC constrains
-    for (indices, coefs) in view(N, c.S+1:c.S+c.H)
-        s = QSymbol(-1, Vector{GF256}(), indices, coefs)
-        add!(d, s)
-    end
-
-    # permanent inactivations
-    for i in c.L-c.P+1:c.L
-        inactivate!(d, i)
-    end
-    return d
-end
-
-doc"Default LT decoder constructor."
-function Decoder(p::LT)
-    buckets = max(3, Int(round(log(p.K))))
-    return Decoder{BRow,Vector{GF256},LT}(p, buckets)
-end
-
-doc"Default non-binary LT decoder constructor."
-function Decoder{CT,DT}(p::LTQ{CT,DT})
-    buckets = max(3, Int(round(log(p.K))))
-    return Decoder{QRow{CT},Vector{CT},LTQ}(p, buckets)
 end
 
 doc"add a row to the decoder."
@@ -368,74 +272,6 @@ function inactivate!(d::Decoder, cpi::Int)
 end
 
 """
-    component_select(d::Decoder, edges::Vector{Int})
-
-Return an edge part of the maximum size component from the graph where the
-vertices are the columns and the rows with non-zero entries in V are the edges.
-
-TODO: Don't need to include decoded/inactivated symbols for IntDisjointSets.
-
-"""
-function component_select(d::Decoder)
-    bucket = d.rbuckets[2]
-
-    # setup union-find to quickly find the largest component
-    vertices = Set{Int}()
-    a = IntDisjointSets(d.p.L)
-    n = Vector{Int}(2)
-    for (ri, deg) in bucket
-        @assert deg == 2
-        rpi = d.rowperm[ri]
-        row = d.rows[rpi]
-        i = 1
-        for cpi in neighbours(row)
-            ci = d.colperminv[cpi]
-            if (d.num_decoded < ci <= d.p.L-d.num_inactivated)
-                n[i] = cpi
-                i += 1
-            end
-        end
-        union!(a, n[1], n[2])
-        push!(vertices, n[1])
-        push!(vertices, n[2])
-    end
-
-    # find the largest component
-    components = DefaultDict{Int,Int}(1)
-    largest_component_root = 0
-    largest_component_size = 0
-    for vertex in vertices
-        root = find_root(a, vertex)
-        components[root] += 1
-        size = components[root]
-        if size > largest_component_size
-            largest_component_root = root
-            largest_component_size = size
-        end
-    end
-
-    # return any edge part of the largest component.
-    for i in length(bucket):-1:1
-        ri, _ = bucket[i]
-        rpi = d.rowperm[ri]
-        row = d.rows[rpi]
-        for cpi in neighbours(row)
-            ci = d.colperminv[cpi]
-            if (d.num_decoded < ci <= d.p.L-d.num_inactivated)
-                if find_root(a, cpi) == largest_component_root
-                    bucket[end], bucket[i] = bucket[i], bucket[end]
-                    rj, _ = pop!(bucket)
-                    @assert ri == ri
-                    return rj
-                end
-            end
-        end
-    end
-    push!(d.metrics, "status", -2)
-    error("could not find a neighbouring row")
-end
-
-"""
     vdegree(d::Decoder, row::Row)
 
 Return the number of non-zero entries this row has in V.
@@ -454,101 +290,19 @@ function vdegree(d::Decoder{RT}, row::RT) where RT
 end
 
 """
-    sort_bucket!(d::Decoder, i::Int)
-
-Sort the i-th row bucket and move any rows whose vdegree has changed into the
-correct bucket. Return the smallest vdegree seen.
-
-"""
-function sort_bucket!(d::Decoder, i::Int)
-    min_bucket = length(d.rbuckets) + 1
-    bucket = d.rbuckets[i]
-    for j in 1:length(bucket)
-        ri, _ = bucket[j]
-        rpi = d.rowperm[ri]
-        row = d.rows[rpi]
-        deg = vdegree(d, row)
-        bucket[j] = (ri, deg)
-    end
-    sort!(bucket, alg=QuickSort, by=x->x[2], rev=true)
-
-    # move rows into their correct buckets. remember the smallest bucket.
-    while length(bucket) > 0 && bucket[end][2] < i
-        ri, deg = pop!(bucket)
-        j = min(deg, length(d.rbuckets))
-        if j > 0
-            push!(d.rbuckets[j], (ri, deg))
-            min_bucket = min(j, min_bucket)
-        end
-    end
-    if length(bucket) > 0
-        min_bucket = min(i, min_bucket)
-    end
-
-    # store the number of known symbols when this bucket was sorted
-    d.lastsorted[i] = d.num_decoded + d.num_inactivated
-
-    return min_bucket
-end
-
-"""
     select_row(d::Decoder)
 
-Select the highest priority row by scanning down.
-
-TODO: may return a row of degree 1 not of lowest original degree. consider using
-a deque.
+Remove a row from the selector and return its index. Used to select rows during
+the diagonalization phase.
 
 """
 function select_row(d::Decoder)
     # push!(d.metrics, "rowselects", 1)
-
-    # no need to consider other buckets if we find a row of vdegree 1
-    bucket = d.rbuckets[1]
-    while length(bucket) > 0
-        ri, _ = pop!(bucket)
-        rpi = d.rowperm[ri]
-        row = d.rows[rpi]
-        deg = vdegree(d, row)
-        @assert deg in [0, 1] "deg=$deg must be in [0, 1]"
-        if deg == 1
-            return ri
-        end
-    end
-
-    # consider all buckets except the last one as it may hold high-degree rows
-    min_bucket = length(d.rbuckets)+1 # smallest non-empty bucket
-    for i in 2:length(d.rbuckets)-1
-        bucket = d.rbuckets[i]
-
-        # stop after finding any row of vdegree 1
-        if min_bucket == 1
-            break
-        end
-
-        # skip if there are no potentially better rows
-        if i - (d.num_decoded + d.num_inactivated - d.lastsorted[i]) > min_bucket
-            continue
-        end
-
-        min_bucket = min(sort_bucket!(d, i), min_bucket)
-    end
-
-    # only consider the last bucket when required
-    if min_bucket > length(d.rbuckets)
-        min_bucket = min(sort_bucket!(d, length(d.rbuckets)), min_bucket)
-    end
-
-    @assert min_bucket <= length(d.rbuckets) "no rows with non-zero vdegree"
-    if min_bucket == 2
-        return component_select(d)
-    end
-    ri, _ = pop!(d.rbuckets[min_bucket])
-    return ri
+    return pop!(d.selector, d)
 end
 
 """
-    process_row(d::Decoder, rpi::Int)
+    peel_row(d::Decoder, rpi::Int)
 
 Peel away previously decoded symbols from a row. Has to be carried out each time
 a row is selected.
@@ -575,9 +329,7 @@ function sortrows!(d::Decoder)
         for ci in neighbours(row)
             push!(d.columns[ci], ri)
         end
-        deg = degree(row)
-        i = min(deg, length(d.rbuckets))
-        push!(d.rbuckets[i], (ri, deg))
+        push!(d.selector, d, ri, row)
     end
 end
 
