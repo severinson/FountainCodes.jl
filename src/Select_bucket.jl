@@ -19,6 +19,16 @@ struct SelectBucket <: Selector
 end
 
 """
+    length(sel::SelectBucket)
+
+Return the number of stored rows.
+
+"""
+function Base.length(sel::SelectBucket)
+    return sum(length(bucket) for bucket in sel.buckets)
+end
+
+"""
     push!(e::Selector, ri::Int, r::Row)
 
 Add row r with index ri to the selector.
@@ -47,13 +57,12 @@ function Base.pop!(sel::SelectBucket, d::Decoder) :: Int
     # no need to consider other buckets if we find a row of vdegree 1
     bucket = sel.buckets[1]
     while length(bucket) > 0
-        ri, _ = pop!(bucket)
-        rpi = d.rowperm[ri]
+        rpi, _ = pop!(bucket)
         row = d.rows[rpi]
         deg = vdegree(d, row)
         @assert deg in [0, 1] "deg=$deg must be in [0, 1]"
         if deg == 1
-            return ri
+            return d.rowperminv[rpi]
         end
     end
 
@@ -87,8 +96,8 @@ function Base.pop!(sel::SelectBucket, d::Decoder) :: Int
     if min_bucket == 2
         return component_select(sel, d)
     end
-    ri, _ = pop!(sel.buckets[min_bucket])
-    return ri
+    rpi, _ = pop!(sel.buckets[min_bucket])
+    return d.rowperminv[rpi]
 end
 
 
@@ -108,9 +117,8 @@ function component_select(sel::SelectBucket, d::Decoder)
     vertices = Set{Int}()
     a = IntDisjointSets(d.num_symbols)
     n = Vector{Int}(2)
-    for (ri, deg) in bucket
+    for (rpi, deg) in bucket
         @assert deg == 2
-        rpi = d.rowperm[ri]
         row = d.rows[rpi]
         i = 1
         for cpi in neighbours(row)
@@ -141,17 +149,15 @@ function component_select(sel::SelectBucket, d::Decoder)
 
     # return any edge part of the largest component.
     for i in length(bucket):-1:1
-        ri, _ = bucket[i]
-        rpi = d.rowperm[ri]
+        rpi, _ = bucket[i]
         row = d.rows[rpi]
         for cpi in neighbours(row)
             ci = d.colperminv[cpi]
             if (d.num_decoded < ci <= d.num_symbols-d.num_inactivated)
                 if find_root(a, cpi) == largest_component_root
                     bucket[end], bucket[i] = bucket[i], bucket[end]
-                    rj, _ = pop!(bucket)
-                    @assert ri == ri
-                    return rj
+                    rpj, _ = pop!(bucket)
+                    return d.rowperminv[rpj]
                 end
             end
         end
@@ -172,20 +178,19 @@ function sort_bucket!(sel::SelectBucket, d::Decoder, i::Int)
     min_bucket = num_buckets + 1
     bucket = sel.buckets[i]
     for j in 1:length(bucket)
-        ri, _ = bucket[j]
-        rpi = d.rowperm[ri]
+        rpi, _ = bucket[j]
         row = d.rows[rpi]
         deg = vdegree(d, row)
-        bucket[j] = (ri, deg)
+        bucket[j] = (rpi, deg)
     end
     sort!(bucket, alg=QuickSort, by=x->x[2], rev=true)
 
     # move rows into their correct buckets. remember the smallest bucket.
     while length(bucket) > 0 && bucket[end][2] < i
-        ri, deg = pop!(bucket)
+        rpi, deg = pop!(bucket)
         j = min(deg, num_buckets)
         if j > 0
-            push!(sel.buckets[j], (ri, deg))
+            push!(sel.buckets[j], (rpi, deg))
             min_bucket = min(j, min_bucket)
         end
     end
