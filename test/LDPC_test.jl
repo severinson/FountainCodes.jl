@@ -27,9 +27,9 @@ end
 function test_ldpc_decoder_2()
     H = Matrix{Bool}(readdlm("./test/H_612_1224.txt"))
     c = LDPC10{GF256}(H)
-    I = [rand(1:c.n) for _ in 1:100]
-    c.erased[I] = true
-    c.Y[I] = 1 # make sure these get reset to 0 during decoding
+    c.erased[1:450] = true
+    shuffle!(c.erased)
+    c.Y[c.erased] = 1 # make sure these get reset to 0 during decoding
     d = Decoder(c)
     decode!(d)
     get_source!(view(c.Y, c.erased), d)
@@ -39,3 +39,19 @@ function test_ldpc_decoder_2()
     return true
 end
 @test test_ldpc_decoder_2()
+
+function test_ldpc_decoder_3()
+    H = Matrix{Bool}(readdlm("./test/H_2400_4800.txt"))
+    c = LDPC10{GF256}(H)
+    c.erased[1:1776] = true
+    shuffle!(c.erased)
+    c.Y[c.erased] = 1 # make sure these get reset to 0 during decoding
+    d = Decoder(c)
+    decode!(d)
+    get_source!(view(c.Y, c.erased), d)
+    if !iszero(c.Y)
+        error("LDPC decoding failed")
+    end
+    return true
+end
+@test test_ldpc_decoder_3()
