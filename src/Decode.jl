@@ -327,12 +327,12 @@ function sortrows!(d::Decoder)
     p = sortperm(d.rows, by=degree)
     d.rows = d.rows[p]
     d.values = d.values[p]
-    for ri in length(d.rows):-1:1
-        row = d.rows[ri]
+    for rpi in 1:length(d.rows)
+        row = d.rows[rpi]
+        push!(d.selector, d, rpi, row)
         for ci in neighbours(row)
-            push!(d.columns[ci], ri)
+            push!(d.columns[ci], rpi)
         end
-        push!(d.selector, d, ri, row)
     end
 end
 
@@ -380,10 +380,6 @@ function diagonalize!(d::Decoder)
         end
         d.num_decoded += 1
     end
-    # TODO: remove
-    # a = d.metrics["rowselects"]
-    # b = d.metrics["rowlookups"]
-    # println("$b lookups over $a selects. avg lookups is $(b/a)")
     return d
 end
 
@@ -574,6 +570,9 @@ end
 
 doc"carry out the decoding and return the source symbols."
 function decode!{RT,VT}(d::Decoder{RT,VT}, raise_on_error=true)
+    if length(d.rows) < d. num_symbols
+        error("there must be at least as many rows as symbols")
+    end
     try
         sortrows!(d)
         check_cover(d)
