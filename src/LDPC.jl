@@ -8,7 +8,7 @@ erased value and false a received value. The erasure pattern must be set before
 creating the decoder.
 
 """
-mutable struct LDPC10{VT} <: BinaryCode
+struct LDPC10{VT} <: BinaryCode
     K::Int # number of source symbols
     n::Int # code length
     H::SparseMatrixCSC{Bool,Int} # parity check matrix
