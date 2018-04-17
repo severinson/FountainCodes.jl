@@ -57,7 +57,12 @@ mutable struct Decoder{RT<:Row,VT,CODE<:Code,SELECTOR<:Selector}
     end
 end
 
-doc"add a row to the decoder."
+"""
+    add!{RT,VT}(d::Decoder{RT,VT}, s::RT, v::VT)
+
+Add a row, i.e., a linear equation of the source symbols, to the decoder.
+
+"""
 function add!{RT,VT}(d::Decoder{RT,VT}, s::RT, v::VT)
     if d.status != ""
         error("cannot add more symbols after decoding has failed")
@@ -383,7 +388,13 @@ function diagonalize!(d::Decoder)
     return d
 end
 
-doc"solve for the inactivated intermediate symbols using least-squares."
+"""
+    solve_dense!{RT<:QRow{Float64},VT}(d::Decoder{RT,VT})
+
+Solve the dense system of equations consisting of the inactivated symbols using
+least-squares. Applicable for real-number codes.
+
+"""
 function solve_dense!{RT<:QRow{Float64},VT}(d::Decoder{RT,VT})
     firstrow = d.num_decoded+1 # first row of the dense matrix
     lastrow = length(d.rows) # last row of the dense matrix
@@ -504,7 +515,13 @@ function solve_dense!{RT,VT}(d::Decoder{RT,VT})
     return d
 end
 
-doc"backsolve with the symbols decoded via GE."
+"""
+    backsolve!(d::Decoder)
+
+Subtract the symbols decoded in solve_dense from the above rows of the
+constraint matrix.
+
+"""
 function backsolve!(d::Decoder)
     # TODO: findnext would be more efficient
     for ri in 1:d.num_symbols-d.num_inactivated
@@ -568,7 +585,13 @@ function get_source!{RT,VT}(C::AbstractArray{VT}, d::Decoder{RT,VT})
     return C
 end
 
-doc"carry out the decoding and return the source symbols."
+"""
+    decode!{RT,VT}(d::Decoder{RT,VT}, raise_on_error=true)
+
+Decode the source symbols. Raise an exception on decoding failure if
+raise_on_error is true.
+
+"""
 function decode!{RT,VT}(d::Decoder{RT,VT}, raise_on_error=true)
     if length(d.rows) < d. num_symbols
         error("there must be at least as many rows as symbols")
