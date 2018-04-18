@@ -5,9 +5,11 @@ Store rows in buckets, with the first bucket containing rows of vdegree 1 and so
 on. During row selection only the minimum number of buckets are considered. The
 last bucket is only considered when all other buckets are empty.
 
+Rows are stored as tuples (rpi, vdegree, original_degree).
+
 """
 struct SelectBucket <: Selector
-    buckets::Vector{Vector{Tuple{Int,Int}}} # bucket[i] stores rows of vdegree i
+    buckets::Vector{Vector{Tuple{Int,Int,Int}}} # bucket[i] stores rows of vdegree i
     lastsorted::Vector{Int} # number of decoded/inactivated symbols when a bucket was last sorted
     function SelectBucket(num_buckets::Int)
         @assert num_buckets > 2 "num_buckets must be > 2"
@@ -35,10 +37,11 @@ Add row r with index ri to the selector.
 
 """
 function Base.push!(sel::SelectBucket, d::Decoder, ri::Int, row::Row)
-    deg::Int = vdegree(d, row)
+    vdeg::Int = vdegree(d, row)
+    deg = degree(row)
     if !iszero(deg)
-        i::Int = min(deg, length(sel.buckets))
-        push!(sel.buckets[i], (ri, deg))
+        i::Int = min(vdeg, length(sel.buckets))
+        push!(sel.buckets[i], (ri, vdeg, deg))
     end
     return
 end
@@ -49,7 +52,7 @@ end
 Remove a row from the selector and return its index.
 
 TODO: may return a row of degree 1 not of lowest original degree. consider using
-a deque.
+a deque. Or sort the first bucket before exiting.
 
 """
 function Base.pop!(sel::SelectBucket, d::Decoder) :: Int
@@ -57,11 +60,10 @@ function Base.pop!(sel::SelectBucket, d::Decoder) :: Int
     # no need to consider other buckets if we find a row of vdegree 1
     bucket = sel.buckets[1]
     while length(bucket) > 0
-        rpi, _ = pop!(bucket)
+        rpi, _, _ = pop!(bucket)
         row = d.rows[rpi]
-        deg = vdegree(d, row)
-        @assert deg in [0, 1] "deg=$deg must be in [0, 1]"
-        if deg == 1
+        vdeg = vdegree(d, row)
+        if vdeg == 1
             return d.rowperminv[rpi]
         end
     end
@@ -94,9 +96,13 @@ function Base.pop!(sel::SelectBucket, d::Decoder) :: Int
         error("no rows with non-zero vdegree")
     end
     if min_bucket == 2
-        return component_select(sel, d)
+        rpi = component_select(sel, d)
+    else
+        rpi, _, _ = pop!(sel.buckets[min_bucket])
     end
-    rpi, _ = pop!(sel.buckets[min_bucket])
+
+    # we need to sort the first bucket as we may have added rows to it.
+    sort!(sel.buckets[1], alg=QuickSort, by=x->x[2]+x[3]/d.num_symbols, rev=true)
     return d.rowperminv[rpi]
 end
 
@@ -117,8 +123,8 @@ function component_select(sel::SelectBucket, d::Decoder)
     vertices = Set{Int}()
     a = IntDisjointSets(d.num_symbols)
     n = Vector{Int}(2)
-    for (rpi, deg) in bucket
-        @assert deg == 2
+    for (rpi, vdeg, deg) in bucket
+        @assert vdeg == 2
         row = d.rows[rpi]
         i = 1
         for cpi in neighbours(row)
@@ -149,15 +155,15 @@ function component_select(sel::SelectBucket, d::Decoder)
 
     # return any edge part of the largest component.
     for i in length(bucket):-1:1
-        rpi, _ = bucket[i]
+        rpi, _, _ = bucket[i]
         row = d.rows[rpi]
         for cpi in neighbours(row)
             ci = d.colperminv[cpi]
             if (d.num_decoded < ci <= d.num_symbols-d.num_inactivated)
                 if find_root(a, cpi) == largest_component_root
                     bucket[end], bucket[i] = bucket[i], bucket[end]
-                    rpj, _ = pop!(bucket)
-                    return d.rowperminv[rpj]
+                    rpj, _, _ = pop!(bucket)
+                    return rpj
                 end
             end
         end
@@ -180,17 +186,20 @@ function sort_bucket!(sel::SelectBucket, d::Decoder, i::Int)
     for j in 1:length(bucket)
         rpi, _ = bucket[j]
         row = d.rows[rpi]
-        deg = vdegree(d, row)
-        bucket[j] = (rpi, deg)
+        vdeg = vdegree(d, row)
+        deg = degree(row)
+        bucket[j] = (rpi, vdeg, deg)
     end
-    sort!(bucket, alg=QuickSort, by=x->x[2], rev=true)
+
+    # sort first by vdegree and second by original degree
+    sort!(bucket, alg=QuickSort, by=x->x[2]+x[3]/d.num_symbols, rev=true)
 
     # move rows into their correct buckets. remember the smallest bucket.
     while length(bucket) > 0 && bucket[end][2] < i
-        rpi, deg = pop!(bucket)
-        j = min(deg, num_buckets)
+        rpi, vdeg, deg = pop!(bucket)
+        j = min(vdeg, num_buckets)
         if j > 0
-            push!(sel.buckets[j], (rpi, deg))
+            push!(sel.buckets[j], (rpi, vdeg, deg))
             min_bucket = min(j, min_bucket)
         end
     end
