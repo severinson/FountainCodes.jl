@@ -23,7 +23,7 @@ function sample(c::LDPC10)
     return d.metrics
 end
 
-function parameterdct(c::R10)
+function parameterdct(c::Union{R10,RQ})
     dct = Dict{String,Int}()
     dct["num_inputs"] = c.K
     return dct
