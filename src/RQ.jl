@@ -298,8 +298,8 @@ Create a RaptorQ decoder and add the relevant constraint symbols.
 
 """
 function Decoder(c::RQ)
-    selector = SelectBucket(31)
-    d = Decoder{Union{BRow,QRow{GF256}},Vector{GF256},RQ,SelectBucket}(
+    selector = HeapSelect4(31)
+    d = Decoder{Union{BRow,QRow{GF256}},Vector{GF256},RQ,HeapSelect4}(
         c,
         selector,
         c.L,

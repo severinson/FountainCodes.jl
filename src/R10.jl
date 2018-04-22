@@ -1,6 +1,11 @@
 export R10, R10_256, precode!, ltgenerate
 
-doc"R10 parameters container."
+"""
+    R10
+
+Raptor10 rateless erasure code.
+
+"""
 struct R10 <: BinaryCode
     K::Int # number of source symbols
     S::Int # number of LDPC symbols
@@ -238,8 +243,8 @@ Return a decoder for Raptor10 codes.
 
 """
 function Decoder(c::R10)
-    selector = SelectBucket(41)
-    d = Decoder{BRow,Vector{GF256},R10,SelectBucket}(
+    selector = HeapSelect4(41)
+    d = Decoder{BRow,Vector{GF256},R10,HeapSelect4}(
         c,
         selector,
         c.L,
@@ -265,8 +270,8 @@ Return a decoder for Raptor10-256 codes.
 
 """
 function Decoder(c::R10_256)
-    selector = SelectBucket(41)
-    d = Decoder{Union{BRow,QRow{GF256}},Vector{GF256},R10_256,SelectBucket}(
+    selector = HeapSelect4(41)
+    d = Decoder{Union{BRow,QRow{GF256}},Vector{GF256},R10_256,HeapSelect4}(
         c,
         selector,
         c.L,
