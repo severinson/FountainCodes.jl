@@ -40,8 +40,8 @@ function Decoder(c::LDPC10{VT}) where VT
     @assert length(c.Y) == c.n "Y must have length n"
     @assert length(c.erased) == c.n "erasures must have length n"
     num_buckets = max(3, Int(round(log(c.n))))
-    selector = SelectBucket(num_buckets)
-    d = Decoder{BRow,VT,LDPC10,SelectBucket}(c, selector, countnz(c.erased))
+    selector = HeapSelect(num_buckets)
+    d = Decoder{BRow,VT,LDPC10,HeapSelect}(c, selector, countnz(c.erased))
     y = c.H[:,.!(c.erased)] * c.Y[.!(c.erased)]
     @assert length(y) == (c.n-c.K)
     M = transpose(c.H[:,c.erased])
