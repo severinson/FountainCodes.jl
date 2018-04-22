@@ -106,15 +106,77 @@ function Base.pop!(sel::HeapSelect, d::Decoder) :: Int
         push!(d.metrics, "status", -2)
         error("no rows with non-zero vdegree")
     end
-    # TODO: implement
-    # if min_bucket == 2
-    #     rpi = component_select(sel, d)
-    # else
-    #     rpi = dequeue!(sel.buckets[min_bucket])
-    # end
-    rpi = dequeue!(sel.buckets[min_bucket])
+    if min_bucket == 2
+        rpi = component_select(sel, d)
+    else
+        rpi = dequeue!(sel.buckets[min_bucket])
+    end
     sel.vdegree_from_rpi[rpi] = 0
     return d.rowperminv[rpi]
+end
+
+"""
+    component_select(d::Decoder, edges::Vector{Int})
+
+Return an edge part of the maximum size component from the graph where the
+vertices are the columns and the rows with non-zero entries in V are the edges.
+
+TODO: Don't need to include decoded/inactivated symbols for IntDisjointSets. Or
+create a permanent data structure that is reset between calls.
+
+"""
+function component_select(sel::HeapSelect, d::Decoder)
+    bucket = sel.buckets[2]
+
+    # setup union-find to quickly find the largest component
+    vertices = Set{Int}()
+    a = IntDisjointSets(d.num_symbols)
+    n = Vector{Int}(2)
+    for (rpi, deg) in bucket.xs
+        vdeg = sel.vdegree_from_rpi[rpi]
+        @assert vdeg == 2
+        row = d.rows[rpi]
+        i = 1
+        for cpi in neighbours(row)
+            ci = d.colperminv[cpi]
+            if (d.num_decoded < ci <= d.num_symbols-d.num_inactivated)
+                n[i] = cpi
+                i += 1
+            end
+        end
+        union!(a, n[1], n[2])
+        push!(vertices, n[1])
+        push!(vertices, n[2])
+    end
+
+    # find the largest component
+    components = DefaultDict{Int,Int}(1)
+    largest_component_root = 0
+    largest_component_size = 0
+    for vertex in vertices
+        root = find_root(a, vertex)
+        components[root] += 1
+        size = components[root]
+        if size > largest_component_size
+            largest_component_root = root
+            largest_component_size = size
+        end
+    end
+
+    # return any edge part of the largest component.
+    for (rpi, _) in bucket.xs
+        row = d.rows[rpi]
+        for cpi in neighbours(row)
+            ci = d.colperminv[cpi]
+            if (d.num_decoded < ci <= d.num_symbols-d.num_inactivated)
+                if find_root(a, cpi) == largest_component_root
+                    return dequeue!(bucket, rpi)
+                end
+            end
+        end
+    end
+    push!(d.metrics, "status", -2)
+    error("could not find a neighbouring row")
 end
 
 """
