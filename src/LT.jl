@@ -122,8 +122,8 @@ Return a decoder for binary LT codes.
 """
 function Decoder(p::LT)
     num_buckets = max(3, Int(round(log(p.K))))
-    selector = SelectBucket(num_buckets)
-    return Decoder{BRow,Vector{GF256},LT,SelectBucket}(
+    selector = HeapSelect(num_buckets)
+    return Decoder{BRow,Vector{GF256},LT,HeapSelect}(
         p,
         selector,
         p.K,
@@ -138,8 +138,8 @@ Return a decoder for non-binary LT codes.
 """
 function Decoder{CT,DT}(p::LTQ{CT,DT})
     num_buckets = max(3, Int(round(log(p.K))))
-    selector = SelectBucket(num_buckets)
-    return Decoder{QRow{CT},Vector{CT},LTQ,SelectBucket}(
+    selector = HeapSelect(num_buckets)
+    return Decoder{QRow{CT},Vector{CT},LTQ,HeapSelect}(
         p,
         selector,
         p.K,
