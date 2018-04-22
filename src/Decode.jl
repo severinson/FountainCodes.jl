@@ -266,8 +266,7 @@ adjacent rows.
 
 """
 function inactivate!(d::Decoder, cpi::Int)
-    # TODO: use num_symbols
-    rightmost_active_col = length(d.columns) - d.num_inactivated
+    rightmost_active_col = d.num_symbols - d.num_inactivated
     ci = d.colperminv[cpi]
     if ci > rightmost_active_col
         return
