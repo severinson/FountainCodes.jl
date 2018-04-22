@@ -64,6 +64,11 @@ doc"get the index of any non-zero inactive element"
     return findfirst(r.inactive)
 end
 
+"""return the inactive elements of r"""
+function inactive(r::BRow)
+    return r.inactive
+end
+
 doc"set an element of the dense part of the matrix."
 @inline function setdense!(row::BRow, upi::Int, v::Bool)
     if !v && upi > length(row.inactive) # unallocated elements are implicitly zero
@@ -250,7 +255,10 @@ doc"get the index of any non-zero inactive element"
     return findfirst(r.dense)
 end
 
-
+"""return the inactive elements of r"""
+function inactive(r::QRow)
+    return r.dense
+end
 
 """
     setdense!{CT}(row::QRow{CT}, upi::Int, v::CT)
