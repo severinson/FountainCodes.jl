@@ -1,14 +1,12 @@
 struct HeapSelect <: Selector
     buckets::Vector{PriorityQueue{Int,Int,Base.Order.ForwardOrdering}}
     lastsorted::Vector{Int} # number of decoded/inactivated symbols when a bucket was last sorted
-    bucket_from_rpi::Vector{Int}
     vdegree_from_rpi::Vector{Int}
     function HeapSelect(num_buckets::Int)
         @assert num_buckets > 2 "num_buckets must be > 2"
         new(
             [PriorityQueue{Int,Int}() for _ in 1:num_buckets],
             zeros(Int, num_buckets),
-            Vector{Int}(),
             Vector{Int}(),
         )
     end
@@ -36,12 +34,6 @@ function Base.push!(sel::HeapSelect, d::Decoder, rpi::Int, row::Row)
     if iszero(i)
         return
     end
-    if rpi > length(sel.bucket_from_rpi)
-        append!(
-            sel.bucket_from_rpi,
-            zeros(Int, rpi-length(sel.bucket_from_rpi)),
-        )
-    end
     if rpi > length(sel.vdegree_from_rpi)
         append!(
             sel.vdegree_from_rpi,
@@ -50,7 +42,6 @@ function Base.push!(sel::HeapSelect, d::Decoder, rpi::Int, row::Row)
     end
     deg::Int = degree(row)
     enqueue!(sel.buckets[i], rpi, deg)
-    sel.bucket_from_rpi[rpi] = i
     sel.vdegree_from_rpi[rpi] = vdeg
     return
 end
@@ -122,7 +113,6 @@ function Base.pop!(sel::HeapSelect, d::Decoder) :: Int
     #     rpi = dequeue!(sel.buckets[min_bucket])
     # end
     rpi = dequeue!(sel.buckets[min_bucket])
-    sel.bucket_from_rpi[rpi] = 0
     sel.vdegree_from_rpi[rpi] = 0
     return d.rowperminv[rpi]
 end
@@ -174,7 +164,6 @@ function process_bucket!(sel::HeapSelect, d::Decoder, i::Int)
         if j > 0
             enqueue!(sel.buckets[j], rpi, deg)
             min_bucket = min(j, min_bucket)
-            sel.bucket_from_rpi[rpi] = j # TODO: remove
         end
     end
     if length(bucket) > 0
