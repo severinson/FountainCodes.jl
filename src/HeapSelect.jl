@@ -140,6 +140,9 @@ end
 """
     remove_column!(sel::HeapSelect, d::Decoder, cpi::Int)
 
+Mark a column as decoded/inactivated. This is taken into account when computing
+the vdegree of a row.
+
 """
 function remove_column!(sel::HeapSelect, d::Decoder, cpi::Int)
     for rpi in d.columns[cpi]
@@ -148,6 +151,12 @@ function remove_column!(sel::HeapSelect, d::Decoder, cpi::Int)
     return
 end
 
+"""
+    process_bucket!(sel::HeapSelect, d::Decoder, i::Int)
+
+Move the rows in the i-th bucket into their correct buckets.
+
+"""
 function process_bucket!(sel::HeapSelect, d::Decoder, i::Int)
     buffer = Vector{Tuple{Int,Int}}()
     num_buckets = length(sel.buckets)
