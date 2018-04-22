@@ -55,7 +55,7 @@ function test_select_row_1()
     row = d.rows[rpi]
     deg = RaptorCodes.degree(row)
     if deg != 1
-        error("selected row $i has degree $deg but should have degree 1")
+        error("selected row $deg has degree $deg but should have degree 1")
     end
     return true
 end
