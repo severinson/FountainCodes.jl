@@ -266,6 +266,7 @@ adjacent rows.
 
 """
 function inactivate!(d::Decoder, cpi::Int)
+    # TODO: use num_symbols
     rightmost_active_col = length(d.columns) - d.num_inactivated
     ci = d.colperminv[cpi]
     if ci > rightmost_active_col
@@ -273,6 +274,7 @@ function inactivate!(d::Decoder, cpi::Int)
     end
     push!(d.uperm, d.num_inactivated+1)
     push!(d.uperminv, d.num_inactivated+1)
+    remove_column!(d.selector, d, cpi)
     d.num_inactivated += 1
     push!(d.metrics, "inactivations", 1)
     swap_cols!(d, ci, rightmost_active_col)
@@ -371,6 +373,7 @@ function diagonalize!(d::Decoder)
             error("incorrectly selected a row with no neighbours in V.")
         end
         swap_cols!(d, ci, d.num_decoded+1)
+        remove_column!(d.selector, d, cpi)
 
         # inactivate the remaining neighbouring symbols
         rpi = d.rowperm[d.num_decoded+1]
@@ -523,16 +526,18 @@ constraint matrix.
 
 """
 function backsolve!(d::Decoder)
-    # TODO: findnext would be more efficient
     for ri in 1:d.num_symbols-d.num_inactivated
         rpi = d.rowperm[ri]
-        for ci in d.num_symbols-d.num_inactivated+1:d.num_symbols
-            cpi = d.colperm[ci]
-            coef = getdense(d, rpi, cpi)
-            if !iszero(coef)
-                rpj = d.rowperm[ci]
-                subtract!(d, rpj, rpi, coef, getdense(d, rpj, cpi))
+        row = d.rows[rpi]
+        for (upi, coef) in enumerate(IndexLinear(), inactive(row))
+            if iszero(coef)
+                continue
             end
+            ui = d.uperminv[upi]
+            ci = _ui2ci(d, ui)
+            cpi = d.colperm[ci]
+            rpj = d.rowperm[ci]
+            subtract!(d, rpj, rpi, coef, getdense(d, rpj, cpi))
         end
     end
     return d
@@ -593,9 +598,6 @@ raise_on_error is true.
 
 """
 function decode!{RT,VT}(d::Decoder{RT,VT}, raise_on_error=true)
-    if length(d.rows) < d. num_symbols
-        error("there must be at least as many rows as symbols")
-    end
     try
         sortrows!(d)
         check_cover(d)
