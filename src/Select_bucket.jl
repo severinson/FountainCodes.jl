@@ -51,9 +51,6 @@ end
 
 Remove a row from the selector and return its index.
 
-TODO: may return a row of degree 1 not of lowest original degree. consider using
-a deque. Or sort the first bucket before exiting.
-
 """
 function Base.pop!(sel::SelectBucket, d::Decoder) :: Int
 
@@ -177,6 +174,11 @@ end
 
 Sort the i-th row bucket and move any rows whose vdegree has changed into the
 correct bucket. Return the smallest vdegree seen.
+
+TODO: we don't need to sort the bucket by vdegree. we only need to move any rows
+of wrong vdegree to the right bucket. once we've found any row of smallest
+possible degree we can move on since any later rows we find will have higher
+original degree. maybe use deques to avoid sorting by original degree.
 
 """
 function sort_bucket!(sel::SelectBucket, d::Decoder, i::Int)
