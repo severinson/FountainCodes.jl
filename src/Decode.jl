@@ -63,16 +63,19 @@ end
 Add a row, i.e., a linear equation of the source symbols, to the decoder.
 
 """
-function add!{RT,VT}(d::Decoder{RT,VT}, s::RT, v::VT)
+function add!{RT,VT}(d::Decoder{RT,VT}, row::RT, v::VT)
     if d.status != ""
         error("cannot add more symbols after decoding has failed")
     end
     push!(d.values, v)
-    push!(d.rows, s)
+    push!(d.rows, row)
     i = length(d.rowperm) + 1
     push!(d.rowperm, i)
     push!(d.rowperminv, i)
-    return d
+    push!(d.selector, d, i, row)
+    for ci in neighbours(row)
+        push!(d.columns[ci], i)
+    end
 end
 
 """
@@ -320,26 +323,6 @@ a row is selected.
 function peel_row!(d::Decoder, rpi::Int)
     setinactive!(d, rpi)
     zerodiag!(d, rpi)
-end
-
-"""
-    sortrows!(d::Decoder)
-
-Sort the rows of the matrix according to their original degree and add all rows
-to the priority queue.
-
-"""
-function sortrows!(d::Decoder)
-    p = sortperm(d.rows, by=degree)
-    d.rows = d.rows[p]
-    d.values = d.values[p]
-    for rpi in 1:length(d.rows)
-        row = d.rows[rpi]
-        push!(d.selector, d, rpi, row)
-        for ci in neighbours(row)
-            push!(d.columns[ci], rpi)
-        end
-    end
 end
 
 """
@@ -598,7 +581,6 @@ raise_on_error is true.
 """
 function decode!{RT,VT}(d::Decoder{RT,VT}, raise_on_error=true)
     try
-        sortrows!(d)
         check_cover(d)
         diagonalize!(d)
         solve_dense!(d)
