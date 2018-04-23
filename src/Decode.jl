@@ -235,6 +235,9 @@ end
 
 """track performance metrics"""
 function update_metrics!(d::Decoder, row::Row, coef)
+    if iszero(coef)
+        return
+    end
     weight = inactive_degree(row)
     push!(d.metrics, "decoding_additions", weight)
     push!(d.metrics, "rowadds", 1)
