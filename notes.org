@@ -157,3 +157,13 @@ which its coefficients are defined. For example, binary, q* TODO ary, real.
   dispatch works on types and not values.
 - We would want to get the types once and then call methods based on their
   types.
+- We'd want to use a BitMatrix for the dense binary part. This gives optimal
+  data locality. We'll may have to expand the matrix during inactivations. If we
+  always put multiples of 64 columns this problem will likely be small. Could
+  even double the number of columns every time.
+- Then we can drop the row objects. Instead, we could use a sparse matrix with
+  coefficients of type CT to store the rows. Can figure out if a row is binary
+  or not by having a separate isbinary BitVector.
+* TODO RQ metrics
+- Store the number of GF256 operations in a separate column.
+- Store Kp as the number of source symbols.
