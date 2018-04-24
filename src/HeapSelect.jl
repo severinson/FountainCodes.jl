@@ -53,15 +53,13 @@ Remove a row from the selector and return its index.
 
 """
 function Base.pop!(sel::HeapSelect, d::Decoder) :: Int
-    # store the smallest non-empty bucket and original degree
-    min_bucket = length(sel.buckets)+1
-    min_deg = d.num_symbols+1
+    min_bucket = length(sel.buckets)+1 # smallest non-empty bucket
+    min_deg = d.num_symbols+1 # smallest original degree in min_bucket
 
     # remove rows of vdegree 0 from the first bucket
     bucket = sel.buckets[1]
-    deg = 0
     while length(bucket) > 0
-        rpi, deg = peek(bucket)
+        rpi, _ = peek(bucket)
         vdeg = sel.vdegree_from_rpi[rpi]
         if vdeg > 0
             break
@@ -70,13 +68,13 @@ function Base.pop!(sel::HeapSelect, d::Decoder) :: Int
     end
     if length(bucket) > 0
         min_bucket = 1
-        min_deg = deg
+        _, min_deg = peek(bucket)
     end
 
-    # look for better rows. the final bucket is only considered if there are no
-    # other rows since it contains high-degree rows.
-    for i in 2:length(sel.buckets)-1
-        if length(sel.buckets[i]) == 0
+    # look for better rows in the remaining buckets
+    for i in 2:length(sel.buckets)
+        bucket = sel.buckets[i]
+        if length(bucket) == 0
             continue
         end
         min_vdegree_in_bucket = i - (d.num_decoded + d.num_inactivated - sel.lastsorted[i])
@@ -85,7 +83,7 @@ function Base.pop!(sel::HeapSelect, d::Decoder) :: Int
             continue
         end
         if min_vdegree_in_bucket <= min_bucket && min_bucket == 1
-            _, deg = peek(sel.buckets[i])
+            _, deg = peek(bucket)
             if deg >= min_deg
                 push!(d.metrics, "skip2", 1)
                 continue
@@ -97,16 +95,11 @@ function Base.pop!(sel::HeapSelect, d::Decoder) :: Int
             _, min_deg = peek(sel.buckets[j])
         end
     end
-
-    # consider the final bucket if there are no other rows
-    if min_bucket > length(sel.buckets)
-        min_bucket = min(process_bucket!(sel, d, length(sel.buckets)), min_bucket)
-    end
     if min_bucket > length(sel.buckets)
         push!(d.metrics, "status", -2)
         error("no rows with non-zero vdegree")
     end
-    if min_bucket == 2
+    if min_bucket == 2 # special case given in rfc6330
         rpi = component_select(sel, d)
     else
         rpi = dequeue!(sel.buckets[min_bucket])
@@ -136,6 +129,9 @@ function component_select(sel::HeapSelect, d::Decoder)
         vdeg = sel.vdegree_from_rpi[rpi]
         @assert vdeg == 2
         row = d.rows[rpi]
+        if row isa QRow # don't consider non-binary rows
+            continue
+        end
         i = 1
         for cpi in neighbours(row)
             ci = d.colperminv[cpi]
@@ -163,9 +159,12 @@ function component_select(sel::HeapSelect, d::Decoder)
         end
     end
 
-    # return any edge part of the largest component.
+    # return any edge (row) part of the largest component
     for (rpi, _) in bucket.xs
         row = d.rows[rpi]
+        if row isa QRow # don't consider non-binary rows
+            continue
+        end
         for cpi in neighbours(row)
             ci = d.colperminv[cpi]
             if (d.num_decoded < ci <= d.num_symbols-d.num_inactivated)
@@ -175,8 +174,9 @@ function component_select(sel::HeapSelect, d::Decoder)
             end
         end
     end
-    push!(d.metrics, "status", -2)
-    error("could not find a neighbouring row")
+
+    # there are only non-binary rows of vdegree 2
+    return dequeue!(bucket)
 end
 
 """
@@ -214,14 +214,14 @@ function process_bucket!(sel::HeapSelect, d::Decoder, i::Int)
     num_buckets = length(sel.buckets)
     min_bucket = num_buckets + 1
     bucket = sel.buckets[i]
-    for (rpi, deg) in bucket.xs
+    for (rpi, deg) in bucket.xs # find rows that need to be moved
         vdeg = sel.vdegree_from_rpi[rpi]
         j = min(vdeg, num_buckets)
         if j != i
             push!(buffer, (rpi, j))
         end
     end
-    for (rpi, j) in buffer
+    for (rpi, j) in buffer # move rows into their correct bucket
         _, deg = dequeue_pair!(bucket, rpi)
         if j > 0
             enqueue!(sel.buckets[j], rpi, deg)
