@@ -54,17 +54,16 @@ def load(directory=None, index='overhead', only_success=True, refresh=False):
 
     # normalize by number of inputs
     for column in df:
-        if column == 'num_inputs':
+        if column == 'num_inputs' or column == 'inactivations':
             continue
         df[column] /= df['num_inputs']
 
     # compute complexity
     df['complexity'] = df['decoding_additions']
-    df['complexity'] += df['decoding_multiplications']
-    df['complexity'] *= multiplier
-    df['complexity'] += df['rowadds'] * 8
-    df['complexity'] += df['rowmuls'] * 8
-
+    df['complexity'] *= 1+7*(df['decoding_multiplications'] > 0)
+    df['complexity'] += 24*df['decoding_multiplications'] # n logn multiplication complexity
+    df['complexity'] += 8*df['rowadds']
+    df['complexity'] += 24*df['rowmuls']
     df.to_csv(filename)
     return df
 
