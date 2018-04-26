@@ -570,10 +570,6 @@ def main():
     dfs_success = (load(f, index='overhead', only_success=True) for f in directories)
     dfs_any = (load(f, index='overhead', only_success=False) for f in directories)
 
-
-    # dfs_success = [load(f, only_success=True, refresh=refresh) for f in directories]
-    # dfs_any = [load(f, only_success=False, refresh=refresh) for f in directories]
-
     # make plots
     failure_plot(dfs_any, descriptors)
     complexity_plot(dfs_success, descriptors, complexity_multipliers)
