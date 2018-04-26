@@ -17,7 +17,58 @@ plt.rcParams["figure.dpi"] = 200
 def success_filter(df):
     return df.loc[df['success'] == 1.0, :]
 
-def load(directory=None, multiplier=1, only_success=True, refresh=False):
+def dfgen(pattern, index, only_success=False):
+    for df in (pd.read_csv(f) for f in glob.glob(pattern)):
+        if only_success:
+            df = success_filter(df)
+        df['count'] = 1
+        df.set_index(index)
+        df = df.groupby(index).sum()
+        yield df
+    return
+
+def load(directory=None, index='overhead', only_success=True, refresh=False):
+    '''load df's from directory, average the columns and return a new df'''
+    filename = directory + "-" + str(only_success) + ".csv"
+    print('loading', filename)
+    if not refresh:
+        try:
+            return pd.read_csv(filename)
+        except FileNotFoundError:
+            pass
+    pattern = path.join(directory, "*.csv")
+    g = dfgen(pattern, index) # load dfs iteratively
+    agg = next(g)
+    for df in g:
+        agg = agg.add(df, fill_value=0)
+
+    # compute average
+    for column in df:
+        if column == 'overhead':
+            continue
+        df[column] /= df['count']
+
+    # give the x variable a predictable name
+    df['x'] = df[index]
+    df.sort_values(by=['x'], inplace=True)
+
+    # normalize by number of inputs
+    for column in df:
+        if column == 'num_inputs':
+            continue
+        df[column] /= df['num_inputs']
+
+    # compute complexity
+    df['complexity'] = df['decoding_additions']
+    df['complexity'] += df['decoding_multiplications']
+    df['complexity'] *= multiplier
+    df['complexity'] += df['rowadds'] * 8
+    df['complexity'] += df['rowmuls'] * 8
+
+    df.to_csv(filename)
+    return df
+
+def load_old(directory=None, multiplier=1, only_success=True, refresh=False):
     '''load df's from directory, average the columns and return a new df'''
     filename = directory + "-" + str(only_success) + ".csv"
     print('loading', filename)
@@ -136,8 +187,8 @@ def failure_plot(dfs=None, descriptors=None):
     plt.xlabel("Erasure Rate")
     # plt.xlabel("Relative Overhead")
     plt.ylabel("FER")
-    plt.xlim((0.4, 0.5))
-    plt.ylim((1e-6, 1))
+    # plt.xlim((0.4, 0.5))
+    # plt.ylim((1e-6, 1))
     # plt.xlim((0, 0.1))
     # plt.ylim((1e-4, 1))
     plt.legend()
@@ -145,7 +196,7 @@ def failure_plot(dfs=None, descriptors=None):
     # plt.title("Raptor Failure-Overhead Curve")
     # plt.autoscale(enable=True)
     plt.tight_layout()
-    plt.savefig("ldpc-failure-overhead.png", dpi="figure")
+    # plt.savefig("ldpc-failure-overhead.png", dpi="figure")
     # plt.savefig("./plots/180419/rq.png", dpi="figure")
     return
 
@@ -412,7 +463,7 @@ def check_status(directory=None, multiplier=1, only_success=True, refresh=True):
 
 def main():
     prefix = "./simulations/"
-    refresh = False
+    refresh = True
 
     # directories = [d for d in glob.glob("./simulations/R10*") if path.isdir(d)]
     directories = [
@@ -474,7 +525,7 @@ def main():
         "LDPC10(2400, 4800, 16104329366021199122)",
     ]
 
-    # directories = ['R10(1000)', 'RQ(1000)', 'R10(2000)', 'RQ(2000)', 'R10(4000)', 'RQ(4000)']
+    directories = ['R10(1000)', 'RQ(1000)', 'R10(2000)', 'RQ(2000)', 'R10(4000)', 'RQ(4000)']
 
     directories = [prefix + d for d in directories]
     descriptors = [d.strip(prefix) for d in directories]
@@ -516,8 +567,12 @@ def main():
     complexity_multipliers = np.ones(len(directories))
 
     # aggregate dataframes
-    dfs_success = [load(f, only_success=True, refresh=refresh) for f in directories]
-    dfs_any = [load(f, only_success=False, refresh=refresh) for f in directories]
+    dfs_success = (load(f, index='overhead', only_success=True) for f in directories)
+    dfs_any = (load(f, index='overhead', only_success=False) for f in directories)
+
+
+    # dfs_success = [load(f, only_success=True, refresh=refresh) for f in directories]
+    # dfs_any = [load(f, only_success=False, refresh=refresh) for f in directories]
 
     # make plots
     failure_plot(dfs_any, descriptors)
