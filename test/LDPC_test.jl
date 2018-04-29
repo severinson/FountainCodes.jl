@@ -55,3 +55,19 @@ function test_ldpc_decoder_3()
     return true
 end
 @test test_ldpc_decoder_3()
+
+function test_ldpc_decoder_4()
+    H = Matrix{Bool}(readdlm("./test/H_612_1224.txt"))
+    c = LDPC10{GF256}(H)
+    c.erased[1:590] = true
+    shuffle!(c.erased)
+    c.Y[c.erased] = 1 # make sure these get reset to 0 during decoding
+    d = Decoder(c)
+    decode!(d)
+    get_source!(view(c.Y, c.erased), d)
+    if !iszero(c.Y)
+        error("LDPC decoding failed")
+    end
+    return true
+end
+@test test_ldpc_decoder_4()
