@@ -22,7 +22,6 @@ def dfgen(pattern, index, only_success=False):
         if only_success:
             df = success_filter(df)
         df['count'] = 1
-        df.set_index(index)
         df = df.groupby(index).sum()
         yield df
     return
@@ -43,29 +42,35 @@ def load(directory=None, index='overhead', only_success=True, refresh=False):
         agg = agg.add(df, fill_value=0)
 
     # compute average
-    for column in df:
-        if column == 'overhead':
+    # if column in ['overhead', 'num_inputs', 'inactivations', 'length', 'count']:
+    for column in agg:
+        if column == 'count':
             continue
-        df[column] /= df['count']
+        agg[column] /= agg['count']
 
     # give the x variable a predictable name
-    df['x'] = df[index]
-    df.sort_values(by=['x'], inplace=True)
+    if index == 'overhead':
+        agg['x'] = agg.index / agg['num_inputs']
+    elif index == 'erasures':
+        agg['x'] = agg.index / agg['length']
+
+    agg.sort_values(by=['x'], inplace=True)
 
     # normalize by number of inputs
-    for column in df:
-        if column == 'num_inputs' or column == 'inactivations':
-            continue
-        df[column] /= df['num_inputs']
+    agg['decoding_additions'] /= agg['num_inputs']
+    agg['decoding_multiplications'] /= agg['num_inputs']
+    agg['rowadds'] /= agg['num_inputs']
+    agg['rowmuls'] /= agg['num_inputs']
 
     # compute complexity
-    df['complexity'] = df['decoding_additions']
-    df['complexity'] *= 1+7*(df['decoding_multiplications'] > 0)
-    df['complexity'] += 24*df['decoding_multiplications'] # n logn multiplication complexity
-    df['complexity'] += 8*df['rowadds']
-    df['complexity'] += 24*df['rowmuls']
-    df.to_csv(filename)
-    return df
+    agg['complexity'] = agg['decoding_additions']
+    agg['complexity'] *= 1+7*(agg['decoding_multiplications'] > 0)
+    agg['complexity'] += 24*agg['decoding_multiplications'] # n logn multiplication complexity
+    agg['complexity'] += 8*agg['rowadds']
+    agg['complexity'] += 24*agg['rowmuls']
+    agg['failure'] = 1-agg['success']
+    agg.to_csv(filename)
+    return agg
 
 def load_old(directory=None, multiplier=1, only_success=True, refresh=False):
     '''load df's from directory, average the columns and return a new df'''
@@ -153,19 +158,19 @@ def failure_plot(dfs=None, descriptors=None):
     # plt.semilogy(overhead/df['num_inputs'].mean(), 1/np.power(2, overhead), label="$2^{-\delta}$")
 
     # plot lower bound
-    # K = 4000
-    # M = 3998
-    # delta = 0.9999999701976676
-    # soliton = pyrateless.Soliton(delta=delta, symbols=K, mode=M)
-    # overheads = np.linspace(0.25, 0.4, 10)
-    # failure = [
-    #     pyrateless.optimize.decoding_failure_prob_estimate(
-    #         soliton=soliton,
-    #         num_inputs=K,
-    #         overhead=1+x,
-    #     ) for x in overheads
-    # ]
-    # plt.semilogy(overheads, failure, label="Bound, 4000")
+    K = 4000
+    M = 3998
+    delta = 0.999
+    soliton = pyrateless.Soliton(delta=delta, symbols=K, mode=M)
+    overheads = np.linspace(0.25, 0.4, 10)
+    failure = [
+        pyrateless.optimize.decoding_failure_prob_estimate(
+            soliton=soliton,
+            num_inputs=K,
+            overhead=1+x,
+        ) for x in overheads
+    ]
+    plt.semilogy(overheads, failure, label="Bound, 4000")
 
     # K = 8000
     # M = K-2
@@ -183,19 +188,19 @@ def failure_plot(dfs=None, descriptors=None):
 
     plt.setp(ax.get_xticklabels())
     plt.setp(ax.get_yticklabels())
-    plt.xlabel("Erasure Rate")
-    # plt.xlabel("Relative Overhead")
+    # plt.xlabel("Erasure Rate")
+    plt.xlabel("Relative Overhead")
     plt.ylabel("FER")
     # plt.xlim((0.4, 0.5))
-    # plt.ylim((1e-6, 1))
+    # plt.ylim((1e-7, 1))
     # plt.xlim((0, 0.1))
     # plt.ylim((1e-4, 1))
     plt.legend()
-    plt.title("LDPC (2400, 4800) Failure-Erasure Curve")
+    plt.title("LDPC Failure-Erasure Curve")
     # plt.title("Raptor Failure-Overhead Curve")
     # plt.autoscale(enable=True)
     plt.tight_layout()
-    # plt.savefig("ldpc-failure-overhead.png", dpi="figure")
+    # plt.savefig("612_2400_ldpc-failure-overhead.png", dpi="figure")
     # plt.savefig("./plots/180419/rq.png", dpi="figure")
     return
 
@@ -416,11 +421,9 @@ def complexity_prediction_plot(dfs, descriptors):
     return
 
 def complexity_plot(dfs=None, descriptors=None, complexity_coefficients=None):
-    if complexity_coefficients is None:
-        complexity_coefficients = np.ones(len(dfs))
     plt.figure()
     ax = plt.subplot()
-    for df, descriptor, multiplier in zip(dfs, descriptors, complexity_coefficients):
+    for df, descriptor in zip(dfs, descriptors):
         print("{}:".format(descriptor))
         # print(df.head())
         plt.semilogy(df['x'], df['complexity'], label=descriptor)
@@ -428,12 +431,12 @@ def complexity_plot(dfs=None, descriptors=None, complexity_coefficients=None):
     plt.title("Raptor Complexity")
     plt.xlabel("Relative Overhead")
     plt.ylabel("Complexity")
-    plt.xlim((0, 0.1))
-    plt.ylim((10, 2e3))
+    # plt.xlim((0, 0.1))
+    # plt.ylim((10, 2e3))
     plt.legend()
     # plt.autoscale(enable=True)
     # plt.tight_layout()
-    plt.savefig("./plots/180419/raptor_complexity.png")
+    # plt.savefig("./plots/180419/raptor_complexity.png")
     return
 
 
@@ -463,6 +466,7 @@ def check_status(directory=None, multiplier=1, only_success=True, refresh=True):
 def main():
     prefix = "./simulations/"
     refresh = True
+
 
     # directories = [d for d in glob.glob("./simulations/R10*") if path.isdir(d)]
     directories = [
@@ -514,17 +518,27 @@ def main():
     # ]
 
 
-    # directories = [
-    #     "LTQ{Float64,DT}(4000, Soliton(4000, 3998, 0.9999999701976676))",
-    #     "LTQ{Float64,DT}(8000, Soliton(8000, 7998, 0.9999999701976676))",
-    # ]
-
     directories = [
-        # "LDPC10(612, 1224, 6810298610506088827)",
-        "LDPC10(2400, 4800, 16104329366021199122)",
+        "LTQ{Float64,DT}(1000, Soliton(1000, 998, 0.999))",
+        "LTQ{Float64,DT}(2000, Soliton(2000, 1998, 0.999))",
+        "LTQ{Float64,DT}(4000, Soliton(4000, 3998, 0.999))",
+        "LTQ{Float64,DT}(8000, Soliton(8000, 7998, 0.999))",
+        "R10(1000)",
+        "R10(2000)",
+        "R10(4000)",
+        "R10(8000)",
+        "RQ(1000)",
+        "RQ(2000)",
+        "RQ(4000)",
+        "RQ(8000)",
     ]
 
-    directories = ['R10(1000)', 'RQ(1000)', 'R10(2000)', 'RQ(2000)', 'R10(4000)', 'RQ(4000)']
+    # directories = [
+    #     "LDPC10(612, 1224, 6810298610506088827)",
+    #     "LDPC10(2400, 4800, 16104329366021199122)",
+    # ]
+
+    # directories = ['R10(1000)', 'RQ(1000)', 'R10(2000)', 'RQ(2000)', 'R10(4000)', 'RQ(4000)']
 
     directories = [prefix + d for d in directories]
     descriptors = [d.strip(prefix) for d in directories]
@@ -562,16 +576,16 @@ def main():
     #     # "LT-Float64(4000, 3998, 0.9999...)",
     #     # "LT-Float64-1e10(4000, 3998, 0.9999...)",
     # ]
-    # complexity_multipliers = [1, 1, 1, 1, 1, 1, 1, 8, 1, 8, 8*4, 8*4]
-    complexity_multipliers = np.ones(len(directories))
 
     # aggregate dataframes
-    dfs_success = (load(f, index='overhead', only_success=True) for f in directories)
-    dfs_any = (load(f, index='overhead', only_success=False) for f in directories)
+    # dfs_success = (load(f, index='overhead', only_success=True, refresh=refresh) for f in directories)
+    # dfs_any = (load(f, index='overhead', only_success=False, refresh=refresh) for f in directories)
+    dfs_success = (load(f, index='overhead', only_success=True, refresh=refresh) for f in directories)
+    dfs_any = (load(f, index='overhead', only_success=False, refresh=refresh) for f in directories)
 
     # make plots
     failure_plot(dfs_any, descriptors)
-    complexity_plot(dfs_success, descriptors, complexity_multipliers)
+    complexity_plot(dfs_success, descriptors)
     # required_overhead_plot(dfs_any, descriptors)
     # required_complexity_plot(dfs_success, descriptors)
     # cdf_plot(dfs_any, descriptors)
