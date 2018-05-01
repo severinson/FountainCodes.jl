@@ -67,13 +67,11 @@ function ltqsim(K::Int, overheads::Vector{Int})
 end
 
 function ltqrsim(K::Int, overheads::Vector{Int})
-    @assert K == 8000
-    # mode = 3998
     mode = K-2
-    delta = 0.9999999701976676
+    delta = 0.999
     dd = RaptorCodes.Soliton(K, mode, delta)
     c = LTQ{Float64}(K, dd)
-    for _ in 1:100
+    for _ in 1:1000
         df = RaptorCodes.linearsims(overheads, c, 100)
         println(df)
     end
@@ -84,12 +82,13 @@ function ltsim(K::Int, overheads::Vector{Int})
     # delta = 0.9999999701976676
     # delta = 0.999
 
-    mode = 998
-    delta = 0.9999999701976676
+    mode = K-2
+    delta = 0.999
+    # delta = 0.9999999701976676
     dd = RaptorCodes.Soliton(K, mode, delta)
     c = LT(K, dd)
-    for _ in 1:100
-        df = RaptorCodes.linearsims(overheads, c, 10)
+    for _ in 1:1000
+        df = RaptorCodes.linearsims(overheads, c, 100)
         println(df)
     end
 end
@@ -111,8 +110,8 @@ function RQsim(K::Int, overheads::Vector{Int})
 end
 
 function ldpc10sim(erasures::Vector{Int})
-    # H = Matrix{Bool}(readdlm("./test/H_612_1224.txt"))
-    H = Matrix{Bool}(readdlm("./test/H_2400_4800.txt"))
+    H = Matrix{Bool}(readdlm("./test/H_612_1224.txt"))
+    # H = Matrix{Bool}(readdlm("./test/H_2400_4800.txt"))
     c = LDPC10{GF256}(H)
     for _ in 1:1000
         df = RaptorCodes.linearsims(erasures, c, 10000)
@@ -123,13 +122,14 @@ end
 # K = 4800
 # reloverheads = linspace(0.3, 0.5, 10)
 # num_erasures = Vector{Int}(round.(K*reloverheads))
-num_erasures = [1973, 2080]#, 2187, 2240] #, 2293, 2347, 2400]
-ldpc10sim(num_erasures)
+# num_erasures = [1973, 2080]#, 2187, 2240] #, 2293, 2347, 2400]
+# num_erasures = [490, 503]#, 517]#, 530, 544]#, 558, 571]#, 585, 598]
+# ldpc10sim(num_erasures)
 
-# K = 1000
-# reloverheads = linspace(0.25, 0.4, 10)
-# overheads = Vector{Int}(round.(K*reloverheads))
-# ltqrsim(K, overheads)
+K = 8000
+reloverheads = linspace(0.25, 0.4, 10)
+overheads = Vector{Int}(round.(K*reloverheads))
+ltqrsim(K, overheads)
 
 # ltsim(K, overheads)
 # reloverheads = linspace(0.05, 0.5, 100)
@@ -137,7 +137,7 @@ ldpc10sim(num_erasures)
 
 # overheads = collect(0:20)
 
-# K = 4000
+# K = 1000
 # reloverheads = linspace(0, 0.1, 10)
 # overheads = Vector{Int}(round.(K*reloverheads))
 # RQsim(K, overheads)
