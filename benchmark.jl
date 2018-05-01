@@ -29,7 +29,7 @@ end
 
 function main(K=1000, r=500, n=100)
     Profile.clear()
-    p = R10_256(K)
+    p = R10(K)
     # dd = Soliton(K, Int(round(K*2/3)), 0.01)
     # p = RaptorCodes.LTQ(K, dd)
     C = Vector{Vector{GF256}}(p.L)
@@ -54,10 +54,11 @@ function main(K=1000, r=500, n=100)
     for i in 1:n
         d = init_decoder(p, C, r, i)
         td += @elapsed @profile RaptorCodes.decode!(d)
+        println(d.metrics)
     end
     @printf "%.3fGbps\n" 256*8*p.K/(td/n)/1000/1000/1000
 
-    Profile.print()
+    # Profile.print()
     ProfileView.view()
 end
 
