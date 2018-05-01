@@ -164,6 +164,14 @@ which its coefficients are defined. For example, binary, q* TODO ary, real.
 - Then we can drop the row objects. Instead, we could use a sparse matrix with
   coefficients of type CT to store the rows. Can figure out if a row is binary
   or not by having a separate isbinary BitVector.
+- QMatrix is pretty much working. There are performance enhancements to be made
+  and some small features that need to be added but otherwise it seems fine.
+- Also need to implement upscaling the matrix. Probably by creating a new one
+  and assigning the old one to it. This will only have to be done rarely.
+- Next we need to make the decoder use it. This requires rewriting the setdense
+  and subtract calls to use it.
+- Once this is done we can remove the BRow/QRow distinction and use a vector of
+  vectors style. We could even use an stdlib sparse matrix.
 * TODO RQ metrics
 - Store the number of GF256 operations in a separate column.
 - Store Kp as the number of source symbols.
