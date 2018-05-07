@@ -59,6 +59,13 @@ end
     return b
 end
 
+# TODO: remove
+@inline function subtract!(b::BRow, a::BRow, coef)
+    @assert coef == one(coef)
+    subtract!(b, a, true)
+    return b
+end
+
 doc"get the index of any non-zero inactive element"
 @inline function getinactive(r::BRow)
     return findfirst(r.inactive)

@@ -32,16 +32,24 @@ struct QMatrix{T}
     binary::BitMatrix # binary data
     qary::Dict{Int,Vector{T}} # qary data
     function QMatrix{T}(m::Int, n::Int) where T
+        if m % 64 != 0 # allows for working over the BitMatrix chunks directly
+            throw(ArgumentError("the number of QMatrix rows must be a multiple of 64"))
+        end
         new(m, n, falses(m, n), Dict{Int,Vector{T}}())
     end
 end
 
+## for finding chunk indices ##
+@inline _div64(l) = l >> 6
+@inline _mod64(l) = l & 63
+@inline get_chunks_id(i::Integer) = _div64(Int(i)-1)+1, _mod64(Int(i)-1)
+
 function rows(M::QMatrix)
-    return m
+    return M.m
 end
 
 function cols(M::QMatrix)
-    return n
+    return M.n
 end
 
 function Base.size(M::QMatrix)
@@ -53,16 +61,12 @@ function Base.getindex{T}(M::QMatrix{T}, r::Int, c::Int)
     if haskey(M.qary, c)
         return M.qary[c][r]
     end
-    if M.binary[r,c]
-        return one(T)
-    else
-        return zero(T)
-    end
+    return T(M.binary[r,c])
 end
 
 function Base.setindex!{T}(M::QMatrix{T}, d::T, r::Int, c::Int)
     @boundscheck checkbounds(M.binary, r, c)
-    if iszero(d) || d == one(d)
+    if iszero(d) || d == one(T)
         if haskey(M.qary, c)
             M.qary[c][r] = d
         else
@@ -79,20 +83,32 @@ end
 
 function getcolumn{T}(M::QMatrix{T}, c::Int)
     @boundscheck checkbounds(M.binary, 1, c)
-    if haskey(M.qary)
-        return M.qary[c][r]
+    if haskey(M.qary, c)
+        return M.qary[c]
     end
     return Vector{T}(M.binary[:,c])
 end
 
-# function setcolumn(M::QMatrix{T}, d::Vector{T}, c::Int)
-#     # TODO: checkbounds
-#     if haskey(M.qary)
-#         M.qary[c][:] = d
-#     else
+"""
+    countnz(M::QMatrix, c::Int)
 
-#     end
-# end
+Return the number of non-zero entries in the c-th column of M.
+
+"""
+function Base.countnz(M::QMatrix, c::Int)
+    if haskey(M.qary, c)
+        n = 0
+        for d in M.qary[c]
+            if !iszero(d)
+                n += 1
+            end
+        end
+        return n        
+    else
+        n = sum(M.binary[:,c])
+        return n
+    end
+end
 
 """
     isbinary(M::QMatrix)
@@ -128,10 +144,16 @@ function subtract!{T}(M::QMatrix{T}, c1::Int, c2::Int)
             q1[i]= q1[i] - q2[i]
         end
     else
-        @views M.binary[:,c1] .= xor.(M.binary[:,c1], M.binary[:,c2])
+        kd0, ld0 = get_chunks_id(sub2ind((M.m,M.n), 1, c1))
+        kd1, ld1 = get_chunks_id(sub2ind((M.m,M.n), M.m, c1))
+        offset = (c2-c1)*div(M.m,64)
+        for i in kd0:kd1
+            @inbounds M.binary.chunks[i] = xor(M.binary.chunks[i], M.binary.chunks[i+offset])
+        end
     end
     return
 end
+
 
 """
     subtract!(M::QMatrix{T}, d::T, c1::Int, c2::Int)
@@ -140,6 +162,7 @@ Subtract column d*c2 from column c1, i.e., M[:,c1] = M[:,c1] - d*M[:,c2].
 
 """
 function subtract!{T}(M::QMatrix{T}, d::T, c1::Int, c2::Int)
+    # TODO: use subeq!
     if iszero(d)
         return
     end
@@ -167,6 +190,7 @@ function subtract!{T}(M::QMatrix{T}, d::T, c1::Int, c2::Int)
     end
 end
 
+## Benchmark code ##
 function xor!(c::BitArray, a::BitArray, b::BitArray) :: BitArray
     for i in 1:length(a.chunks)
         c.chunks[i] = xor(a.chunks[i], b.chunks[i])
@@ -190,6 +214,21 @@ function col_wise(n::Int, b::BitMatrix)
     return
 end
 
+function dots(n::Int, c::BitArray, a::BitArray, b::BitArray) :: BitArray
+    for _ in 1:n
+        c .= xor.(a, b)
+    end
+    return c
+end
+
+function chunks(n::Int, c::BitArray, a::BitArray, b::BitArray) :: BitArray
+    for _ in 1:n
+        c.chunks .= xor.(a.chunks, b.chunks)
+    end
+    return c
+end
+    
+
 function mixed(n::Int, M::QMatrix)
     for i in 2:n
         subtract!(M, i-1, i)
@@ -197,8 +236,9 @@ function mixed(n::Int, M::QMatrix)
 end
 
 function main()
-    m, n = 10000, 10000
-    b = BitMatrix(rand(Bool, m, n))
+    m, n = 10000-16, 10000
+    a = BitVector(rand(Bool, m))
+    b = BitVector(rand(Bool, m))
     M = QMatrix{UInt8}(m, n)
 
     # set a few dense entries
@@ -207,15 +247,17 @@ function main()
     end
 
     # warm up the jit
-    row_wise(1, b)
-    col_wise(1, b)
-    mixed(1, M)
+    # mixed(1, M)
+    # dots(1, a, a, b)
+    # chunks(1, a, a, b)
+    # @timev dots(1000, a, a, b)
+    # @timev chunks(1000, a, a, b)
 
     # row-wise dense binary
-    @timev row_wise(m, b)
+    # @timev row_wise(m, b)
 
     # column-wise dense binary
-    @timev col_wise(n, b)
+    # @timev col_wise(n, b)
 
     # column-wise mixed
     @timev mixed(n, M)

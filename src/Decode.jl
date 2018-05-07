@@ -7,11 +7,16 @@ Inactivation decoder. Compatible with Raptor10 (rfc5053) and RaptorQ (rfc6330)
 codes.
 
 """
+# TODO: Replace row type with coefficient type
+# TODO: Replace rows with a QMatrix
+# TODO: Give CT as parametric type instead of row
+# TODO: Use sparse matrices to store row indices/coefs
 mutable struct Decoder{RT<:Row,VT,CODE<:Code,SELECTOR<:Selector}
     p::CODE # type of code
     values::Vector{VT} # source values may be of any type, including arrays
     columns::Vector{Vector{Int}}
     rows::Vector{RT} # binary and q-ary codes use different row types
+    dense::QMatrix{GF256} # dense (inactivated) symbols are stored separately
     colperm::Vector{Int} # maps column indices to their respective objects
     colperminv::Vector{Int} # maps column object indices to their column indices
     rowperm::Vector{Int} # maps row indices to their respective objects
@@ -28,24 +33,23 @@ mutable struct Decoder{RT<:Row,VT,CODE<:Code,SELECTOR<:Selector}
         p::CODE,
         selector::Selector,
         num_symbols::Int) where {RT<:Row,VT,CODE<:Code,SELECTOR<:Selector}
-        d = new(
-            p,
-            Vector{VT}(),
-            [Vector{Int}() for _ in 1:num_symbols],
-            Vector{RT}(),
-            Vector(1:num_symbols),
-            Vector(1:num_symbols),
-            Vector{Int}(),
-            Vector{Int}(),
-            Vector{Int}(),
-            Vector{Int}(),
-            selector,
-            num_symbols,
-            0,
-            0,
-            DataStructures.counter(String),
-            "",
-        )
+        d = new(p,
+                Vector{VT}(),
+                [Vector{Int}() for _ in 1:num_symbols],
+                Vector{RT}(),
+                QMatrix{GF256}(64, num_symbols), # expanded once all rows have been added
+                Vector(1:num_symbols),
+                Vector(1:num_symbols),
+                Vector{Int}(),
+                Vector{Int}(),
+                Vector{Int}(),
+                Vector{Int}(),
+                selector,
+                num_symbols,
+                0,
+                0,
+                DataStructures.counter(String),
+                "")
         d.metrics["success"] = 0
         d.metrics["decoding_additions"] = 0
         d.metrics["decoding_multiplications"] = 0
@@ -64,6 +68,8 @@ Add a row, i.e., a linear equation of the source symbols, to the decoder.
 
 """
 function add!{RT,VT}(d::Decoder{RT,VT}, row::RT, v::VT)
+    # TODO: replace with two methods. one that only gives indices for
+    # binary and one that gives both indiced and coefs for non-binary.
     if d.status != ""
         error("cannot add more symbols after decoding has failed")
     end
@@ -85,6 +91,7 @@ Add a code symbol to the decoder.
 
 """
 function add!{RT}(d::Decoder{RT}, s::CodeSymbol)
+    # TODO: call new add! methods
     add!(d, row(RT, s), s.value)
 end
 
@@ -100,13 +107,19 @@ Set the element of the dense matrix corresponding to permuted row and column
 indices (rpi, cpi) to value v.
 
 """
-function setdense!(d::Decoder, rpi::Int, cpi::Int, v)
+function setdense!(d::Decoder{RT,VT}, rpi::Int, cpi::Int, v) where {RT,VT}
+    # TODO: expand QMatrix on-demand
     row = d.rows[rpi]
     ci = d.colperminv[cpi]
     ui = _ci2ui(d, ci)
     upi = d.uperm[ui]
-    d.rows[rpi] = setdense!(row, upi, v) # may allocate a new row object
-    return
+    # TODO: we shouldn't need this if
+    if v isa Bool && v
+        d.dense[upi,rpi] = GF256(1)
+    else
+        d.dense[upi,rpi] = v
+    end
+    return v
 end
 
 """
@@ -124,7 +137,28 @@ function getdense(d::Decoder, rpi::Int, cpi::Int)
         return false # TODO: type instability
     end
     upi = d.uperm[ui]
-    return getdense(row, upi)
+    return d.dense[upi,rpi]
+end
+
+"""
+    expand_dense(d::Decoder)
+
+Expand the matrix storing inactivated symbols.
+
+"""
+function expand_dense!(d::Decoder)
+    # TODO: doesn't carry over values
+    m = 64
+    while m < d.num_inactivated
+        m *= 2
+    end
+    n = length(d.rows)
+    if m == rows(d.dense) && n == cols(d.dense)
+        return
+    end
+    d.dense = QMatrix{GF256}(m, n)
+    println("creating ($m, $n) QMatrix")
+    return
 end
 
 """return the number of remaining source symbols to process in stage 1."""
@@ -210,10 +244,10 @@ rows[rpj]. New row objects are only allocated when needed.
 
 """
 function subtract!(d::Decoder, rpi::Int, rpj::Int, coefi, coefj)
-    # coef = promote_rule(typeof(coefi), typeof(coefj))(coefi)
     @assert !iszero(coefj) "coefj must be non-zero, but is $coefj and type $(typeof(coefj))"
     coef = coefi / coefj
-    d.rows[rpj] = subtract!(d.rows[rpj], d.rows[rpi], coef)
+    # d.rows[rpj] = subtract!(d.rows[rpj], d.rows[rpi], coef) # TODO: remove
+    subtract!(d.dense, coef, rpj, rpi)
     if iszero(d.values[rpj])
         d.values[rpj] = zeros(d.values[rpi])
     end
@@ -224,7 +258,10 @@ end
 
 function subtract!(d::Decoder, rpi::Int, rpj::Int, coefi::Bool, coefj::Bool)
     @assert !iszero(coefj) "coefj must be non-zero, but is $coefj and type $(typeof(coefj))"
-    d.rows[rpj] = subtract!(d.rows[rpj], d.rows[rpi], coefi)
+    # d.rows[rpj] = subtract!(d.rows[rpj], d.rows[rpi], coefi) # TODO: remove
+    if !iszero(coefi)
+        subtract!(d.dense, rpj, rpi)
+    end
     if iszero(d.values[rpj])
         d.values[rpj] = zero(d.values[rpi])
     end
@@ -312,7 +349,7 @@ the diagonalization phase.
 
 """
 function select_row(d::Decoder)
-    # push!(d.metrics, "rowselects", 1)
+    # TODO: doesn't need to be a separate method
     return pop!(d.selector, d)
 end
 
@@ -336,6 +373,7 @@ L-u columns into diagonal form. Referred to as the first phase in rfc6330.
 
 """
 function diagonalize!(d::Decoder)
+    expand_dense!(d)
     while d.num_decoded + d.num_inactivated < d.num_symbols
 
         ri = select_row(d)
@@ -452,6 +490,7 @@ function solve_dense!{RT,VT}(d::Decoder{RT,VT})
             peel_row!(d, rpj)
 
             # zero out the elements below the diagonal
+            # TODO: call QMatrix getcolumn instead?
             for cj in d.num_symbols-d.num_inactivated+1:d.num_decoded
                 cpj = d.colperm[cj]
                 coef = getdense(d, rpj, cpj)
@@ -462,7 +501,7 @@ function solve_dense!{RT,VT}(d::Decoder{RT,VT})
                     subtract!(d, rpk, rpj, coef, coef2)
                 end
             end
-            if inactive_degree(d.rows[rpj]) > 0
+            if countnz(d.dense, rpj) > 0
                 ri = rj
                 rpi = rpj
                 break
@@ -475,8 +514,7 @@ function solve_dense!{RT,VT}(d::Decoder{RT,VT})
         swap_rows!(d, d.num_decoded+1, ri)
 
         # swap any non-zero entry into the i-th column of u_lower
-        row = d.rows[rpi]
-        upi = getinactive(row)
+        upi = findfirst(getcolumn(d.dense, rpi))
         @assert upi <= d.num_inactivated "$upi must be <= $(d.num_inactivated) row=$row"
         ui = d.uperminv[upi]
         cj = _ui2ci(d, ui)
@@ -513,8 +551,7 @@ constraint matrix.
 function backsolve!(d::Decoder)
     for ri in 1:d.num_symbols-d.num_inactivated
         rpi = d.rowperm[ri]
-        row = d.rows[rpi]
-        for (upi, coef) in enumerate(IndexLinear(), inactive(row))
+        for (upi, coef) in enumerate(IndexLinear(), getcolumn(d.dense, rpi))
             if iszero(coef)
                 continue
             end
