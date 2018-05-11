@@ -8,9 +8,10 @@ codes.
 
 """
 # TODO: Replace row type with coefficient type
-# TODO: Replace rows with a QMatrix
 # TODO: Give CT as parametric type instead of row
 # TODO: Use sparse matrices to store row indices/coefs
+# TODO: Look into QMatrix speed for all-qary codes.
+# DONE: Replace rows.dense with a QMatrix
 mutable struct Decoder{RT<:Row,VT,CODE<:Code,SELECTOR<:Selector}
     p::CODE # type of code
     values::Vector{VT} # source values may be of any type, including arrays
@@ -69,7 +70,7 @@ Add a row, i.e., a linear equation of the source symbols, to the decoder.
 """
 function add!{RT,VT}(d::Decoder{RT,VT}, row::RT, v::VT)
     # TODO: replace with two methods. one that only gives indices for
-    # binary and one that gives both indiced and coefs for non-binary.
+    # binary and one that gives both indices and coefs for non-binary.
     if d.status != ""
         error("cannot add more symbols after decoding has failed")
     end
@@ -112,7 +113,7 @@ function setdense!(d::Decoder{RT,VT}, rpi::Int, cpi::Int, v) where {RT,VT}
     ci = d.colperminv[cpi]
     ui = _ci2ui(d, ci)
     upi = d.uperm[ui]
-    # TODO: we shouldn't need this if
+    # TODO: remove this if once all datatypes are of type CT
     expand_dense!(d)
     if v isa Bool && v
         d.dense[upi,rpi] = GF256(1)
@@ -134,7 +135,7 @@ function getdense(d::Decoder, rpi::Int, cpi::Int)
     ci = d.colperminv[cpi]
     ui = _ci2ui(d, ci)
     if ui > length(d.uperm)
-        return false # TODO: type instability
+        return false # TODO: return zero(CT) after removing rows
     end
     upi = d.uperm[ui]
     return d.dense[upi,rpi]
@@ -200,6 +201,8 @@ end
     d.rowperminv[d.rowperm[rj]] = rj
 end
 
+# TODO: rewrite zerodiag functions to iterate over sparse matrix columns.
+
 """zero out any elements of rows[rpi] below the diagonal"""
 function zerodiag!(d::Decoder, rpi::Int) :: Int
     row = d.rows[rpi]
@@ -207,6 +210,7 @@ function zerodiag!(d::Decoder, rpi::Int) :: Int
     return rpi
 end
 
+# TODO: this should iterate over sparse matrix columns
 function zerodiag!(d::Decoder, rowi::Row, rpi::Int)
     for (cpi, coef) in zip(neighbours(rowi), coefficients(rowi))
         zerodiag!(d, rowi, rpi, cpi, coef)
@@ -244,7 +248,6 @@ rows[rpj]. New row objects are only allocated when needed.
 function subtract!(d::Decoder, rpi::Int, rpj::Int, coefi, coefj)
     @assert !iszero(coefj) "coefj must be non-zero, but is $coefj and type $(typeof(coefj))"
     coef = coefi / coefj
-    # d.rows[rpj] = subtract!(d.rows[rpj], d.rows[rpi], coef) # TODO: remove
     subtract!(d.dense, coef, rpj, rpi)
     if iszero(d.values[rpj])
         d.values[rpj] = zeros(d.values[rpi])
@@ -254,9 +257,9 @@ function subtract!(d::Decoder, rpi::Int, rpj::Int, coefi, coefj)
     return
 end
 
+# TODO: remove after implementing TC
 function subtract!(d::Decoder, rpi::Int, rpj::Int, coefi::Bool, coefj::Bool)
     @assert !iszero(coefj) "coefj must be non-zero, but is $coefj and type $(typeof(coefj))"
-    # d.rows[rpj] = subtract!(d.rows[rpj], d.rows[rpi], coefi) # TODO: remove
     if !iszero(coefi)
         subtract!(d.dense, rpj, rpi)
     end
@@ -290,6 +293,7 @@ Set the dense elements of row rpi based on which columns have been inactivated.
 
 """
 function setinactive!(d::Decoder, rpi::Int)
+    # TODO: iterate over sparse matrix columns
     row = d.rows[rpi]
     for (cpi, coef) in zip(neighbours(row), coefficients(row))
         ci = d.colperminv[cpi]
@@ -302,8 +306,8 @@ end
 """
     inactivate!(d::Decoder, cpi::Int)
 
-Inactivate the column with permuted index cpi and update the priority of all
-adjacent rows.
+Inactivate the column with permuted index cpi and update the priority
+of all adjacent rows.
 
 """
 function inactivate!(d::Decoder, cpi::Int)
@@ -396,7 +400,7 @@ function diagonalize!(d::Decoder)
         swap_cols!(d, ci, d.num_decoded+1)
         remove_column!(d.selector, d, cpi)
 
-        # inactivate the remaining neighbouring symbols
+        # inactivate the remaining neighboring symbols
         rpi = d.rowperm[d.num_decoded+1]
         coefs = coefficients(d.rows[rpi])
         for j in i+1:length(active)
