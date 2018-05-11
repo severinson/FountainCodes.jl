@@ -108,12 +108,14 @@ indices (rpi, cpi) to value v.
 
 """
 function setdense!(d::Decoder{RT,VT}, rpi::Int, cpi::Int, v) where {RT,VT}
-    # TODO: expand QMatrix on-demand
     row = d.rows[rpi]
     ci = d.colperminv[cpi]
     ui = _ci2ui(d, ci)
     upi = d.uperm[ui]
     # TODO: we shouldn't need this if
+    if upi > rows(d.dense) # expand matrix on-demand
+        resize!(d.dense, 2*rows(d.dense), cols(d.dense))
+    end
     if v isa Bool && v
         d.dense[upi,rpi] = GF256(1)
     else
