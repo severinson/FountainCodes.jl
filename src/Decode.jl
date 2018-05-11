@@ -37,7 +37,7 @@ mutable struct Decoder{RT<:Row,VT,CODE<:Code,SELECTOR<:Selector}
                 Vector{VT}(),
                 [Vector{Int}() for _ in 1:num_symbols],
                 Vector{RT}(),
-                QMatrix{GF256}(64, num_symbols), # expanded once all rows have been added
+                QMatrix{GF256}(64, 1), # expanded once all rows have been added
                 Vector(1:num_symbols),
                 Vector(1:num_symbols),
                 Vector{Int}(),
@@ -113,9 +113,7 @@ function setdense!(d::Decoder{RT,VT}, rpi::Int, cpi::Int, v) where {RT,VT}
     ui = _ci2ui(d, ci)
     upi = d.uperm[ui]
     # TODO: we shouldn't need this if
-    if upi > rows(d.dense) # expand matrix on-demand
-        resize!(d.dense, 2*rows(d.dense), cols(d.dense))
-    end
+    expand_dense!(d)
     if v isa Bool && v
         d.dense[upi,rpi] = GF256(1)
     else
@@ -149,8 +147,7 @@ Expand the matrix storing inactivated symbols.
 
 """
 function expand_dense!(d::Decoder)
-    # TODO: doesn't carry over values
-    m = 64
+    m = rows(d.dense)
     while m < d.num_inactivated
         m *= 2
     end
@@ -158,8 +155,7 @@ function expand_dense!(d::Decoder)
     if m == rows(d.dense) && n == cols(d.dense)
         return
     end
-    d.dense = QMatrix{GF256}(m, n)
-    println("creating ($m, $n) QMatrix")
+    resize!(d.dense, m, n)
     return
 end
 

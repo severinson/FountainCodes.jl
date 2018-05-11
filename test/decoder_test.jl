@@ -150,6 +150,7 @@ function test_subtract_gf256_1()
     s = RaptorCodes.ltgenerate(C, 1, p)
     RaptorCodes.add!(d, s)
     RaptorCodes.add!(d, s)
+    RaptorCodes.expand_dense!(d)
     RaptorCodes.subtract!(d, 1, 2, GF256(1))
     if !iszero(d.values[2])
         error("values[2]=$(d.values[2]) should be zero")
@@ -163,6 +164,7 @@ function test_subtract_gf256_2()
     a = GF256(3)
     RaptorCodes.add!(d, QSymbol(1, [a], [1, 2], Vector{GF256}([1, 2])))
     RaptorCodes.add!(d, QSymbol(1, [GF256(2)*a], [1, 2], Vector{GF256}([2, 4])))
+    RaptorCodes.expand_dense!(d)
     RaptorCodes.subtract!(d, 1, 2, GF256(2))
     if !iszero(d.values[2])
         error("values[2]=$(d.values[2]) should be zero")
@@ -176,6 +178,7 @@ function test_subtract_float64_1()
     s = RaptorCodes.ltgenerate(C, 1, p)
     RaptorCodes.add!(d, s)
     RaptorCodes.add!(d, s)
+    RaptorCodes.expand_dense!(d)
     RaptorCodes.subtract!(d, 1, 2, Float64(1))
     if !iszero(d.values[2])
         error("values[2]=$(d.values[2]) should be zero")
@@ -189,6 +192,7 @@ function test_zerodiag_gf256()
     RaptorCodes.add!(d, QSymbol(1, [GF256(2)], [1], Vector{GF256}([2])))
     RaptorCodes.add!(d, QSymbol(1, [GF256(3)], [1], Vector{GF256}([3])))
     d.num_decoded += 1
+    RaptorCodes.expand_dense!(d)
     RaptorCodes.zerodiag!(d, 2)
     if !iszero(d.values[2])
         error("values[2]=$(d.values[2]) should be zero")
@@ -344,7 +348,7 @@ function test_ge_2()
         if d.values[rpi] != correct
             error("GE failed. values[$rpi] is $(d.values[rpi]) but should be $correct")
         end
-        if countnz(d.dense, rpi) != 1            
+        if countnz(d.dense, rpi) != 1
             error("GE failed. row[$rpi]=$(getcolumn(d.dense,rpi)) does not sum to 1.")
         end
     end
@@ -369,9 +373,9 @@ function test_ge_gf256_1()
         if d.values[rpi] != correct
             error("GE failed. values[$rpi] is $(d.values[rpi]) but should be $correct")
         end
-        if countnz(d.dense, rpi) != 1            
+        if countnz(d.dense, rpi) != 1
             error("GE failed. row[$rpi]=$(getcolumn(d.dense,rpi)) does not sum to 1.")
-        end        
+        end
     end
     return true
 end
@@ -394,9 +398,9 @@ function test_ge_gf256_2()
         if d.values[rpi] != correct
             error("GE failed. values[$rpi] is $(d.values[rpi]) but should be $correct")
         end
-        if countnz(d.dense, rpi) != 1            
+        if countnz(d.dense, rpi) != 1
             error("GE failed. row[$rpi]=$(getcolumn(d.dense,rpi)) does not sum to 1.")
-        end        
+        end
     end
     return true
 end
