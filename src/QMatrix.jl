@@ -61,6 +61,12 @@ function Base.size(M::QMatrix)
     return rows(M), cols(M)
 end
 
+"""
+    getindex{T}(M::QMatrix{T}, r::Int, c::Int)
+
+Implements M[i,j]
+
+"""
 function Base.getindex{T}(M::QMatrix{T}, r::Int, c::Int)
     @boundscheck checkbounds(M.binary, r, c)
     if haskey(M.qary, c)
@@ -69,6 +75,12 @@ function Base.getindex{T}(M::QMatrix{T}, r::Int, c::Int)
     return T(M.binary[r,c])
 end
 
+"""
+    setindex!{T}(M::QMatrix{T}, d::T, r::Int, c::Int)
+
+Implements M[i,j] = d
+
+"""
 function Base.setindex!{T}(M::QMatrix{T}, d::T, r::Int, c::Int)
     @boundscheck checkbounds(M.binary, r, c)
     if iszero(d) || d == one(T)
@@ -120,6 +132,12 @@ function Base.resize!{T}(M::QMatrix{T}, m, n)
     return
 end
 
+"""
+    getcolumn{T}(M::QMatrix{T}, c::Int)
+
+Return the c-th column of the matrix.
+
+"""
 function getcolumn{T}(M::QMatrix{T}, c::Int)
     @boundscheck checkbounds(M.binary, 1, c)
     if haskey(M.qary, c)
