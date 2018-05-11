@@ -25,8 +25,13 @@ Need a findfirst.
 
 The matrix is column-major.
 
+Need a way to create a new QMatrix and move over all elements. Q-rows
+are easy. We call resize! on each of the vectors to expend them. Need
+to initialize the new elements to zero. For the binary rows we need to
+create a BitMatrix and copy over all of the data.
+
 """
-struct QMatrix{T}
+mutable struct QMatrix{T}
     m::Int # number of rows
     n::Int # number of columns
     binary::BitMatrix # binary data
@@ -39,7 +44,7 @@ struct QMatrix{T}
     end
 end
 
-## for finding chunk indices ##
+## for finding chunk indices. copied from the BitArray module ##
 @inline _div64(l) = l >> 6
 @inline _mod64(l) = l & 63
 @inline get_chunks_id(i::Integer) = _div64(Int(i)-1)+1, _mod64(Int(i)-1)
@@ -81,6 +86,40 @@ function Base.setindex!{T}(M::QMatrix{T}, d::T, r::Int, c::Int)
     return d
 end
 
+"""
+    resize!(M::QMatrix{T}, m, n)
+
+Resize the matrix to have m rows and n columns. The given m and n must
+be larger than the original values.
+
+"""
+function Base.resize!{T}(M::QMatrix{T}, m, n)
+    if m < M.m
+        error("the given m must not be smaller than its original value")
+    end
+    if n < M.n
+        error("the given n must not be smaller than its original value")
+    end
+    if m % 64 != 0 # allows for working over the BitMatrix chunks directly
+        throw(ArgumentError("the number of QMatrix rows must be a multiple of 64"))
+    end
+    for v in values(M.qary)
+        resize!(v, m)
+        for i in M.m+1:m # zero out the new values
+            v[i] = zero(T)
+        end
+    end
+    binary = falses(m, n)
+    cm, cmo = _div64(m), _div64(M.m)
+    for i in 1:length(M.binary.chunks)
+        j = cm*(div(i-1, cmo)) + i % cmo + 1
+        binary.chunks[j] = M.binary.chunks[i]
+    end
+    M.binary = binary
+    M.m, M.n = m, n
+    return
+end
+
 function getcolumn{T}(M::QMatrix{T}, c::Int)
     @boundscheck checkbounds(M.binary, 1, c)
     if haskey(M.qary, c)
@@ -103,7 +142,7 @@ function Base.countnz(M::QMatrix, c::Int)
                 n += 1
             end
         end
-        return n        
+        return n
     else
         n = sum(M.binary[:,c])
         return n
@@ -227,7 +266,7 @@ function chunks(n::Int, c::BitArray, a::BitArray, b::BitArray) :: BitArray
     end
     return c
 end
-    
+
 
 function mixed(n::Int, M::QMatrix)
     for i in 2:n
