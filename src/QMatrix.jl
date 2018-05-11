@@ -2,33 +2,11 @@ export QMatrix, subtract!
 
 """
 
-Idea is to have a BitMatrix for storing the binary data. Non-binary data is
-stored using a dict of rows. To figure out if a row is binary we only need to
-check for the existence of an entry in the dict.
-
-One problem is that the size of the matrix has to be set in advance. We can Set
-the matrix to be a few percent larger than the minimum initially and grow it
-dynamically.
-
-The non-changing sparse values should be a vector of tuples (index, value). This
-allows for efficiently iterating over the indices and coefficients together. The
-dense rows should store
-
-Column-wise operations are significantly faster. However, I've been thinking in
-terms of rows all this time. We need to work over columns instead.
-
-Need a subtract method.
-
-Need a get-column.
-
-Need a findfirst.
-
-The matrix is column-major.
-
-Need a way to create a new QMatrix and move over all elements. Q-rows
-are easy. We call resize! on each of the vectors to expend them. Need
-to initialize the new elements to zero. For the binary rows we need to
-create a BitMatrix and copy over all of the data.
+This module implements a matrix that allows mixing binary columns with
+non-binary columns of element type T. Binary data is stored using a
+BitMatrix and non-binary columns are stored in a dict of
+Vector{T}. The module implements efficient methods to subtract one
+column from another.
 
 """
 mutable struct QMatrix{T}
