@@ -77,6 +77,27 @@ function Base.setindex!{T}(M::QMatrix{T}, d::T, r::Int, c::Int)
 end
 
 """
+    setindex!{T}(M::QMatrix{T}, d::T, r::Int, c::Int)
+
+Implements M[i,j] = d
+
+"""
+function Base.setindex!{T}(M::QMatrix{T}, d::T, ::Colon, c::Int)
+    @boundscheck checkbounds(M.binary, 1, c)
+    if iszero(d) || d == one(T)
+        delete!(M.qary, c)
+        @views M.binary[:,c] = d
+        return d
+    else
+        if !haskey(M.qary, c)
+            M.qary[c] = Vector{T}(M.binary[:,c])
+        end
+        @views M.qary[c][:] = d
+    end
+    return d
+end
+
+"""
     resize!(M::QMatrix{T}, m, n)
 
 Resize the matrix to have m rows and n columns. The given m and n must

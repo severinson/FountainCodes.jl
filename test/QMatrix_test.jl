@@ -12,3 +12,5 @@ using RaptorCodes, Base.Test
 @test (M = QMatrix{Int}(64, 10); M[64,10] = 1; resize!(M, 128, 10); M[64,10] == 1)
 @test (M = QMatrix{Int}(64, 10); M[64,10] = 1; resize!(M, 256, 20); M[64,10] == 1)
 @test (M = QMatrix{Int}(64, 10); M[64,10] = 2; resize!(M, 256, 20); M[64,10] == 2 && M[65,11] == 0)
+@test (M = QMatrix{Int}(64, 10); M[64,10] = 1; M[:,10] = 0; M[64,10] == 0)
+@test (M = QMatrix{Int}(64, 10); M[64,10] = 1; M[:,10] = 2; M[1,10] == 2)
