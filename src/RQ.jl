@@ -174,8 +174,7 @@ function precode!(C::Vector, c::RQ)
     end
     for X in 1:c.Kp
         s = ltgenerate(C, X, c)
-        s = BSymbol(X, C[X], s.neighbours)
-        add!(d, s)
+        add!(d, s.neighbours, C[X])
     end
     decode!(d)
     get_source!(C, d)
@@ -298,8 +297,8 @@ Create a RaptorQ decoder and add the relevant constraint symbols.
 
 """
 function Decoder(c::RQ)
-    selector = HeapSelect(31)
-    d = Decoder{Union{BRow,QRow{GF256}},Vector{GF256},RQ,HeapSelect}(
+    selector = HeapSelect(31) # one more than the highest LT symbol degree
+    d = Decoder{GF256,Vector{GF256},RQ,HeapSelect}(
         c,
         selector,
         c.L,
@@ -309,14 +308,12 @@ function Decoder(c::RQ)
 
     # LDPC constraints
     for (indices, _) in view(N, 1:c.S)
-        s = BSymbol(-1, Vector{GF256}(), indices)
-        add!(d, s)
+        add!(d, indices, Vector{GF256}())
     end
 
     # HDPC constrains
     for (indices, coefs) in view(N, c.S+1:c.S+c.H)
-        s = QSymbol(-1, Vector{GF256}(), indices, coefs)
-        add!(d, s)
+        add!(d, indices, coefs, Vector{GF256}())
     end
 
     # permanent inactivations

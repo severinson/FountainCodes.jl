@@ -51,8 +51,8 @@ function test_select_row_1()
     RaptorCodes.add!(d, BSymbol(3, Vector{GF256}([1]), [1, 2, 3, 4]))
     ri = RaptorCodes.select_row(d)
     rpi = d.rowperm[ri]
-    row = d.rows[rpi]
-    deg = RaptorCodes.degree(row)
+    row = d.sparse[rpi]
+    deg = countnz(row)
     if deg != 1
         error("selected row $deg has degree $deg but should have degree 1")
     end
@@ -62,36 +62,21 @@ end
 
 function test_select_row_2()
     p, d, C = init()
-    RaptorCodes.add!(d, BSymbol(1, Vector{GF256}([1]), [1]))
-    RaptorCodes.add!(d, BSymbol(2, Vector{GF256}([1]), [1, 2]))
-    RaptorCodes.add!(d, BSymbol(3, Vector{GF256}([1]), [1, 2, 3, 4]))
-    RaptorCodes.subtract!(d, p.S+p.H+3, p.S+p.H+1, true)
-    RaptorCodes.setpriority!(d, 1)
-    i = RaptorCodes.select_row(d)
-    correct = p.S + p.H + 2
-    if i != correct
-        error("selected row $i. should have selected row $correct.")
-    end
-    return true
-end
-# @test test_select_row_2()
-
-function test_select_row_3()
-    p, d, C = init()
     RaptorCodes.add!(d, BSymbol(0, Vector{GF256}([1]), [7, 8]))
     RaptorCodes.add!(d, BSymbol(0, Vector{GF256}([1]), [1, 2]))
     RaptorCodes.add!(d, BSymbol(0, Vector{GF256}([1]), [2, 3]))
     RaptorCodes.add!(d, BSymbol(0, Vector{GF256}([1]), [5, 6]))
+    RaptorCodes.expand_dense!(d)
     ri = RaptorCodes.select_row(d)
     rpi = d.rowperm[ri]
-    row = d.rows[rpi]
-    deg = RaptorCodes.degree(row)
+    row = d.sparse[rpi]
+    deg = countnz(row)
     if deg != 2
         error("selected row $i has degree $deg but should have degree 2")
     end
     return true
 end
-@test test_select_row_3()
+@test test_select_row_2()
 
 function test_diagonalize_1()
     p, d, C = init()
@@ -104,7 +89,6 @@ function test_diagonalize_1()
         rpi = d.rowperm[i]
         cpi = d.colperm[i]
         correct = C[cpi]
-        row = d.rows[rpi]
         for ci in 1:d.p.L
             cpj = d.colperm[ci]
             if !iszero(RaptorCodes.getdense(d, rpi, cpj))
@@ -130,7 +114,6 @@ function test_diagonalize_2()
         rpi = d.rowperm[i]
         cpi = d.colperm[i]
         correct = C[cpi]
-        row = d.rows[rpi]
         for ci in 1:d.p.L
             cpj = d.colperm[ci]
             if !iszero(RaptorCodes.getdense(d, rpi, cpj))
@@ -185,7 +168,7 @@ function test_subtract_float64_1()
     end
     return true
 end
-# @test test_subtract_float64_1()
+@test test_subtract_float64_1()
 
 function test_zerodiag_gf256()
     p, d, C = init_gf256(10)
@@ -235,8 +218,7 @@ function test_diagonalize_gf256_1()
     for i in 1:d.num_decoded
         rpi = d.rowperm[i]
         cpi = d.colperm[i]
-        row = d.rows[rpi]
-        coef = RaptorCodes.coefficient(row, cpi)
+        coef = d.sparse[rpi][cpi]
         correct = coef*C[cpi]
         for ci in 1:d.p.L
             cpj = d.colperm[ci]
@@ -263,8 +245,7 @@ function test_diagonalize_gf256_2()
     for i in 1:d.num_decoded
         rpi = d.rowperm[i]
         cpi = d.colperm[i]
-        row = d.rows[rpi]
-        coef = RaptorCodes.coefficient(row, cpi)
+        coef = d.sparse[rpi][cpi]
         correct = coef*C[cpi]
         for ci in 1:d.p.L
             cpj = d.colperm[ci]
@@ -291,8 +272,7 @@ function test_diagonalize_float64_1()
     for i in 1:d.num_decoded
         rpi = d.rowperm[i]
         cpi = d.colperm[i]
-        row = d.rows[rpi]
-        coef = RaptorCodes.coefficient(row, cpi)
+        coef = d.sparse[rpi][cpi]
         correct = coef*C[cpi]
         for ci in 1:d.p.L
             cpj = d.colperm[ci]
@@ -308,7 +288,7 @@ function test_diagonalize_float64_1()
     end
     return true
 end
-# @test test_diagonalize_float64_1()
+@test test_diagonalize_float64_1()
 
 function test_ge_1()
     p, d, C = init()
@@ -367,7 +347,6 @@ function test_ge_gf256_1()
     for i in d.p.L-d.num_inactivated+1:d.p.L
         rpi = d.rowperm[i]
         cpi = d.colperm[i]
-        row = d.rows[rpi]
         coef = RaptorCodes.getdense(d, rpi, cpi)
         correct = coef*C[cpi]
         if d.values[rpi] != correct
@@ -392,7 +371,6 @@ function test_ge_gf256_2()
     for i in d.p.L-d.num_inactivated+1:d.p.L
         rpi = d.rowperm[i]
         cpi = d.colperm[i]
-        row = d.rows[rpi]
         coef = RaptorCodes.getdense(d, rpi, cpi)
         correct = coef*C[cpi]
         if d.values[rpi] != correct
@@ -417,7 +395,6 @@ function test_backsolve_gf256()
     RaptorCodes.backsolve!(d)
     for ri in 1:d.p.L-d.num_inactivated
         rpi = d.rowperm[ri]
-        row = d.rows[rpi]
         for ci in d.p.L-d.num_inactivated+1:d.p.L
             cpi = d.colperm[ci]
             coef = RaptorCodes.getdense(d, rpi, cpi)
@@ -504,14 +481,6 @@ function test_decoder_5()
     for i in 1:p.K
         if output[i] != C[i]
             error("decoding failure. source[$i] is $(output[i]). should be $(C[i]).")
-        end
-    end
-    for row in d.rows
-        for upi in d.num_inactivated+1:p.L
-            coef = RaptorCodes.getdense(row, upi)
-            if !iszero(coef)
-                error("row $row has a non-zero entry at upi=$upi, when num_inactivated=$(d.num_inactivated)")
-            end
         end
     end
     return true
@@ -646,7 +615,7 @@ function test_dense_float64()
     end
     return true
 end
-# @test test_dense_float64()
+@test test_dense_float64()
 
 function test_decoder_float64_1()
     p, d, C = init_float64()
@@ -663,7 +632,7 @@ function test_decoder_float64_1()
     end
     return true
 end
-# @test test_decoder_float64_1()
+@test test_decoder_float64_1()
 
 function test_decoder_float64_2()
     p, d, C = init_float64(100)
@@ -680,7 +649,7 @@ function test_decoder_float64_2()
     end
     return true
 end
-# @test test_decoder_float64_2()
+@test test_decoder_float64_2()
 
 function test_decoder_R10_256_1()
     p, d, C = init_R10_256()

@@ -23,14 +23,15 @@ function Base.length(sel::HeapSelect)
 end
 
 """
-    push!(e::Selector, d::Decoder, rpi::Int, r::Row)
+    push!(e::Selector, d::Decoder, rpi::Int, degree::Int, vdegree::Int)
 
-Add row with index rpi to the selector.
+Add row with index rpi and to the selector. degree and vdegree is the
+original degree and the number of non-zero entries in V of the row,
+respectively.
 
 """
-function Base.push!(sel::HeapSelect, d::Decoder, rpi::Int, row::Row)
-    vdeg::Int = vdegree(d, row)
-    i::Int = min(vdeg, length(sel.buckets))
+function Base.push!(sel::HeapSelect, d::Decoder, rpi::Int, degree::Int, vdegree::Int)
+    i::Int = min(vdegree, length(sel.buckets))
     if iszero(i)
         return
     end
@@ -40,9 +41,8 @@ function Base.push!(sel::HeapSelect, d::Decoder, rpi::Int, row::Row)
             zeros(Int, rpi-length(sel.vdegree_from_rpi)),
         )
     end
-    deg::Int = degree(row)
-    enqueue!(sel.buckets[i], rpi, deg)
-    sel.vdegree_from_rpi[rpi] = vdeg
+    enqueue!(sel.buckets[i], rpi, degree)
+    sel.vdegree_from_rpi[rpi] = vdegree
     return
 end
 
@@ -128,12 +128,13 @@ function component_select(sel::HeapSelect, d::Decoder)
     for (rpi, deg) in bucket.xs
         vdeg = sel.vdegree_from_rpi[rpi]
         @assert vdeg == 2
-        row = d.rows[rpi]
-        if row isa QRow # don't consider non-binary rows
+        # row = d.rows[rpi]
+        if !isbinary(d.dense, rpi) # don't consider non-binary rows
             continue
         end
         i = 1
-        for cpi in neighbours(row)
+        for cpi in d.sparse[rpi].nzind
+            # for cpi in neighbours(row)
             ci = d.colperminv[cpi]
             if (d.num_decoded < ci <= d.num_symbols-d.num_inactivated)
                 n[i] = cpi
@@ -161,11 +162,10 @@ function component_select(sel::HeapSelect, d::Decoder)
 
     # return any edge (row) part of the largest component
     for (rpi, _) in bucket.xs
-        row = d.rows[rpi]
-        if row isa QRow # don't consider non-binary rows
+        if !isbinary(d.dense, rpi) # don't consider non-binary rows
             continue
         end
-        for cpi in neighbours(row)
+        for cpi in d.sparse[rpi].nzind
             ci = d.colperminv[cpi]
             if (d.num_decoded < ci <= d.num_symbols-d.num_inactivated)
                 if find_root(a, cpi) == largest_component_root

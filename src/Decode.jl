@@ -1,23 +1,21 @@
 export Decoder, add!, decode!, get_source, get_source!
 
 """
-    Decoder{RT<:Row,VT,CODE<:Code}
+    Decoder{CT,VT,CODE<:Code}
 
-Inactivation decoder. Compatible with Raptor10 (rfc5053) and RaptorQ (rfc6330)
-codes.
+Inactivation decoder compatible with Raptor10 (rfc5053) and RaptorQ
+(rfc6330) codes.
+
+TODO: Look into QMatrix speed for all-qary codes. If it's an issue,
+add the option of using a dense matrix of the type.
 
 """
-# TODO: Replace row type with coefficient type
-# TODO: Give CT as parametric type instead of row
-# TODO: Use sparse matrices to store row indices/coefs
-# TODO: Look into QMatrix speed for all-qary codes.
-# DONE: Replace rows.dense with a QMatrix
-mutable struct Decoder{RT<:Row,VT,CODE<:Code,SELECTOR<:Selector}
+mutable struct Decoder{CT,VT,CODE<:Code,SELECTOR<:Selector}
     p::CODE # type of code
     values::Vector{VT} # source values may be of any type, including arrays
     columns::Vector{Vector{Int}}
-    rows::Vector{RT} # binary and q-ary codes use different row types
-    dense::QMatrix{GF256} # dense (inactivated) symbols are stored separately
+    sparse::Vector{SparseVector{CT,Int}} # sparse row indices
+    dense::QMatrix{CT} # dense (inactivated) symbols are stored separately
     colperm::Vector{Int} # maps column indices to their respective objects
     colperminv::Vector{Int} # maps column object indices to their column indices
     rowperm::Vector{Int} # maps row indices to their respective objects
@@ -30,15 +28,15 @@ mutable struct Decoder{RT<:Row,VT,CODE<:Code,SELECTOR<:Selector}
     num_inactivated::Int # denoted by u in the R10 spec.
     metrics::DataStructures.Accumulator{String,Int}
     status::String # indicates success or stores the reason for decoding failure.
-    function Decoder{RT,VT,CODE,SELECTOR}(
+    function Decoder{CT,VT,CODE,SELECTOR}(
         p::CODE,
         selector::Selector,
-        num_symbols::Int) where {RT<:Row,VT,CODE<:Code,SELECTOR<:Selector}
+        num_symbols::Int) where {CT,VT,CODE<:Code,SELECTOR<:Selector}
         d = new(p,
                 Vector{VT}(),
                 [Vector{Int}() for _ in 1:num_symbols],
-                Vector{RT}(),
-                QMatrix{GF256}(64, 1), # expanded once all rows have been added
+                Vector{SparseVector{CT,Int}}(),
+                QMatrix{CT}(64, 1), # expanded once all rows have been added
                 Vector(1:num_symbols),
                 Vector(1:num_symbols),
                 Vector{Int}(),
@@ -63,41 +61,62 @@ mutable struct Decoder{RT<:Row,VT,CODE<:Code,SELECTOR<:Selector}
 end
 
 """
-    add!{RT,VT}(d::Decoder{RT,VT}, s::RT, v::VT)
+    add!{CT,VT}(d::Decoder{CT,VT}, nzind::Vector{Int}, nzval::Vector{CT}, v::VT)
 
-Add a row, i.e., a linear equation of the source symbols, to the decoder.
+Add a row with non-zero values nzval at indices nzind to the system of
+equations . v is the corresponding value in the right-hand side of the
+system.
+
+TOOD: consider renaming to push!
 
 """
-function add!{RT,VT}(d::Decoder{RT,VT}, row::RT, v::VT)
-    # TODO: replace with two methods. one that only gives indices for
-    # binary and one that gives both indices and coefs for non-binary.
+function add!{CT,VT}(d::Decoder{CT,VT}, nzind::Vector{Int}, nzval::Vector{CT}, v::VT)
+    @assert length(nzind) == length(nzval)
     if d.status != ""
         error("cannot add more symbols after decoding has failed")
     end
     push!(d.values, v)
-    push!(d.rows, row)
+    p = sortperm(nzind)
+    push!(d.sparse, sparsevec(nzind[p], nzval[p]))
     i = length(d.rowperm) + 1
     push!(d.rowperm, i)
     push!(d.rowperminv, i)
-    push!(d.selector, d, i, row)
-    for ci in neighbours(row)
-        push!(d.columns[ci], i)
+    push!(d.selector, d, i, length(nzind), vdegree(d, i))
+    for cpi in nzind
+        push!(d.columns[cpi], i)
     end
+    return
 end
 
 """
-    add!{RT}(d::Decoder{RT}, s::CodeSymbol)
+    add!{CT,VT}(d::Decoder{CT,VT}, nzind::Vector{Int}, v::VT)
+
+Add a row to the system of equations. All non-zero coefficients are
+assumed to be one.
+
+"""
+function add!{CT,VT}(d::Decoder{CT,VT}, nzind::Vector{Int}, v::VT)
+    add!(d, nzind, ones(CT, length(nzind)), v)
+    return
+end
+
+"""
+    add!(d::Decoder{RT}, s::CodeSymbol)
 
 Add a code symbol to the decoder.
 
 """
-function add!{RT}(d::Decoder{RT}, s::CodeSymbol)
-    # TODO: call new add! methods
-    add!(d, row(RT, s), s.value)
+function add!(d::Decoder, s::BSymbol)
+    add!(d, s.neighbours, s.value)
+    return
 end
 
-# the inactivated part is stored as dense bit vectors. these are indexed from
-# the right of the matrix.
+function add!(d::Decoder, s::QSymbol)
+    add!(d, s.neighbours, s.coefficients, s.value)
+    return
+end
+
+## for indexing into the dense matrix storing inactivated symbol values ##
 @inline _ci2ui(d::Decoder, ci::Int) = d.num_symbols-ci+1
 @inline _ui2ci(d::Decoder, ui::Int) = d.num_symbols-ui+1
 
@@ -108,18 +127,25 @@ Set the element of the dense matrix corresponding to permuted row and column
 indices (rpi, cpi) to value v.
 
 """
-function setdense!(d::Decoder{RT,VT}, rpi::Int, cpi::Int, v) where {RT,VT}
-    row = d.rows[rpi]
+function setdense!{CT,VT}(d::Decoder{CT,VT}, rpi::Int, cpi::Int, v::CT)
+    expand_dense!(d)
     ci = d.colperminv[cpi]
     ui = _ci2ui(d, ci)
     upi = d.uperm[ui]
-    # TODO: remove this if once all datatypes are of type CT
+    d.dense[upi,rpi] = v
+    return v
+end
+
+"""
+    setdense!(d::Decoder, rpi::Int, ::Colon, v)
+
+Set all elements of the dense matrix corresponding to permuted row
+index rpi to value v.
+
+"""
+function setdense!{CT,VT}(d::Decoder{CT,VT}, rpi::Int, ::Colon, v::CT)
     expand_dense!(d)
-    if v isa Bool && v
-        d.dense[upi,rpi] = GF256(1)
-    else
-        d.dense[upi,rpi] = v
-    end
+    d.dense[:,rpi] = v
     return v
 end
 
@@ -130,12 +156,11 @@ Return the element of the dense matrix corresponding to permuted row and column
 indices (rpi, cpi).
 
 """
-function getdense(d::Decoder, rpi::Int, cpi::Int)
-    row = d.rows[rpi]
+function getdense{CT}(d::Decoder{CT}, rpi::Int, cpi::Int)
     ci = d.colperminv[cpi]
     ui = _ci2ui(d, ci)
     if ui > length(d.uperm)
-        return false # TODO: return zero(CT) after removing rows
+        return zero(CT)
     end
     upi = d.uperm[ui]
     return d.dense[upi,rpi]
@@ -152,7 +177,7 @@ function expand_dense!(d::Decoder)
     while m < d.num_inactivated
         m *= 2
     end
-    n = length(d.rows)
+    n = length(d.values)
     if m == rows(d.dense) && n == cols(d.dense)
         return
     end
@@ -201,30 +226,18 @@ end
     d.rowperminv[d.rowperm[rj]] = rj
 end
 
-# TODO: rewrite zerodiag functions to iterate over sparse matrix columns.
-
 """zero out any elements of rows[rpi] below the diagonal"""
 function zerodiag!(d::Decoder, rpi::Int) :: Int
-    row = d.rows[rpi]
-    zerodiag!(d, row, rpi)
-    return rpi
-end
-
-# TODO: this should iterate over sparse matrix columns
-function zerodiag!(d::Decoder, rowi::Row, rpi::Int)
-    for (cpi, coef) in zip(neighbours(rowi), coefficients(rowi))
-        zerodiag!(d, rowi, rpi, cpi, coef)
+    rowi = d.sparse[rpi]
+    for cpi in rowi.nzind
+        ci = d.colperminv[cpi]
+        if ci < d.num_decoded+1 && ci <= d.num_symbols-d.num_inactivated
+            rpj = d.rowperm[ci]
+            rowj = d.sparse[rpj]
+            subtract!(d, rpj, rpi, rowi[cpi], rowj[cpi])
+        end
     end
     return rpi
-end
-
-function zerodiag!(d::Decoder, rowi::Row, rpi::Int, cpi::Int, coef)
-    ci = d.colperminv[cpi]
-    if ci < d.num_decoded+1 && ci <= d.num_symbols-d.num_inactivated
-        rpj = d.rowperm[ci]
-        rowj = d.rows[rpj]
-        subtract!(d, rpj, rpi, coef, coefficient(rowj, cpi))
-    end
 end
 
 """
@@ -253,11 +266,11 @@ function subtract!(d::Decoder, rpi::Int, rpj::Int, coefi, coefj)
         d.values[rpj] = zeros(d.values[rpi])
     end
     d.values[rpj] = subeq!(d.values[rpj], d.values[rpi], coef)
-    update_metrics!(d, d.rows[rpi], coef)
+    update_metrics!(d, rpi, coefi)
     return
 end
 
-# TODO: remove after implementing TC
+# TODO: remove after implementing CT
 function subtract!(d::Decoder, rpi::Int, rpj::Int, coefi::Bool, coefj::Bool)
     @assert !iszero(coefj) "coefj must be non-zero, but is $coefj and type $(typeof(coefj))"
     if !iszero(coefi)
@@ -267,16 +280,16 @@ function subtract!(d::Decoder, rpi::Int, rpj::Int, coefi::Bool, coefj::Bool)
         d.values[rpj] = zero(d.values[rpi])
     end
     d.values[rpj] = subeq!(d.values[rpj], d.values[rpi], coefi)
-    update_metrics!(d, d.rows[rpi], coefi)
+    update_metrics!(d, rpi, coefi)
     return
 end
 
 """track performance metrics"""
-function update_metrics!(d::Decoder, row::Row, coef)
+function update_metrics!(d::Decoder, rpi::Int, coef)
     if iszero(coef)
         return
     end
-    weight = inactive_degree(row)
+    weight = min(countnz(d.dense, rpi), d.num_inactivated)
     push!(d.metrics, "decoding_additions", weight)
     push!(d.metrics, "rowadds", 1)
     if coef != one(coef)
@@ -293,12 +306,11 @@ Set the dense elements of row rpi based on which columns have been inactivated.
 
 """
 function setinactive!(d::Decoder, rpi::Int)
-    # TODO: iterate over sparse matrix columns
-    row = d.rows[rpi]
-    for (cpi, coef) in zip(neighbours(row), coefficients(row))
+    row = d.sparse[rpi]
+    for cpi in row.nzind
         ci = d.colperminv[cpi]
         if ci > d.num_symbols - d.num_inactivated
-            setdense!(d, rpi, cpi, coef)
+            setdense!(d, rpi, cpi, row[cpi])
         end
     end
 end
@@ -326,17 +338,17 @@ function inactivate!(d::Decoder, cpi::Int)
 end
 
 """
-    vdegree(d::Decoder, row::Row)
+    vdegree(d::Decoder, rpi::Int)
 
-Return the number of non-zero entries this row has in V.
+Return the number of non-zero entries the row with index rpi has in V.
 
 """
-function vdegree(d::Decoder{RT}, row::RT) where RT
+function vdegree(d::Decoder, rpi::Int)
     deg = 0
     i::Int = d.num_decoded
     u::Int = d.num_inactivated
     L::Int = d.num_symbols
-    for cpi in neighbours(row)
+    for cpi in d.sparse[rpi].nzind
         ci = d.colperminv[cpi]
         deg += Int(i < ci <= L-u)
     end
@@ -383,14 +395,13 @@ function diagonalize!(d::Decoder)
         swap_rows!(d, ri, d.num_decoded+1)
 
         # swap any non-zero entry in V into the first column of V
-        row = d.rows[d.rowperm[d.num_decoded+1]]
-        active = neighbours(row)
+        row = d.sparse[d.rowperm[d.num_decoded+1]]
         i = 1
-        cpi = active[i]
+        cpi = row.nzind[i]
         ci = d.colperminv[cpi]
-        while !(d.num_decoded < ci <= d.num_symbols-d.num_inactivated) && i < length(active)
+        while !(d.num_decoded < ci <= d.num_symbols-d.num_inactivated) && i < length(row.nzind)
             i += 1
-            cpi = active[i]
+            cpi = row.nzind[i]
             ci = d.colperminv[cpi]
         end
         if !(d.num_decoded < ci <= d.num_symbols-d.num_inactivated)
@@ -402,13 +413,12 @@ function diagonalize!(d::Decoder)
 
         # inactivate the remaining neighboring symbols
         rpi = d.rowperm[d.num_decoded+1]
-        coefs = coefficients(d.rows[rpi])
-        for j in i+1:length(active)
-            cpi = active[j]
+        for j in i+1:length(row.nzind)
+            cpi = row.nzind[j]
             ci = d.colperminv[cpi]
             if (d.num_decoded+1 < ci <= d.num_symbols-d.num_inactivated)
                 inactivate!(d, cpi)
-                setdense!(d, rpi, cpi, coefs[j])
+                setdense!(d, rpi, cpi, row[cpi])
             end
         end
         d.num_decoded += 1
@@ -417,15 +427,15 @@ function diagonalize!(d::Decoder)
 end
 
 """
-    solve_dense!{RT<:QRow{Float64},VT}(d::Decoder{RT,VT})
+    solve_dense!{CT<:Float64,VT}(d::Decoder{RT,VT})
 
 Solve the dense system of equations consisting of the inactivated symbols using
 least-squares. Applicable for real-number codes.
 
 """
-function solve_dense!{RT<:QRow{Float64},VT}(d::Decoder{RT,VT})
+function solve_dense!{CT<:Float64,VT}(d::Decoder{CT,VT})
     firstrow = d.num_decoded+1 # first row of the dense matrix
-    lastrow = length(d.rows) # last row of the dense matrix
+    lastrow = length(d.values) # last row of the dense matrix
     firstcol = d.num_symbols-d.num_inactivated+1 # first column of the dense matrix
     lastcol = d.num_symbols # last column of the dense matrix
     @assert firstrow == firstcol "firstrow=$firstrow must be equal to firstcol=$firstcol"
@@ -436,12 +446,12 @@ function solve_dense!{RT<:QRow{Float64},VT}(d::Decoder{RT,VT})
 
     # copy the matrix u_lower into a separate array
     A = zeros(
-        eltype(VT),
+        CT,
         lastrow-firstrow+1,
         d.num_inactivated,
     )
     b = zeros(
-        eltype(VT),
+        CT,
         lastrow-firstrow+1,
         length(d.values[1]), # assuming all entries have the same length
     )
@@ -458,13 +468,12 @@ function solve_dense!{RT<:QRow{Float64},VT}(d::Decoder{RT,VT})
     # solve for x using least squares
     x = A\b
 
-    # store the results and set the coefficients along the diagonal to 1.0
+    # store the resulting values and set the diagonal coefficients to 1.0
     for i in firstrow:lastcol
         rpi = d.rowperm[i]
         cpi = d.colperm[i]
-        row = d.rows[rpi]
-        d.rows[rpi] = QRow{Float64}(row.indices, row.values)
-        setdense!(d, rpi, cpi, 1.0)
+        setdense!(d, rpi, :, zero(CT))
+        setdense!(d, rpi, cpi, one(CT))
         d.values[rpi] = x[i-firstrow+1,:]
     end
     d.num_decoded += d.num_inactivated
@@ -478,7 +487,7 @@ Solve for the inactivated symbols from the system of equations consisting of the
 inactivated columns using Gaussian Elimination.
 
 """
-function solve_dense!{RT,VT}(d::Decoder{RT,VT})
+function solve_dense!{CT,VT}(d::Decoder{CT,VT})
 
     for i in 1:d.num_inactivated
 
@@ -487,7 +496,7 @@ function solve_dense!{RT,VT}(d::Decoder{RT,VT})
         cpi = d.colperm[ci]
         ri = 0
         rpi = 0
-        for rj in d.num_decoded+1:length(d.rows)
+        for rj in d.num_decoded+1:length(d.values)
             rpj = d.rowperm[rj]
             peel_row!(d, rpj)
 
@@ -538,7 +547,7 @@ function solve_dense!{RT,VT}(d::Decoder{RT,VT})
         ri = d.num_decoded
         rpi = d.rowperm[d.num_decoded]
         cpi = d.colperm[d.num_decoded]
-        @assert !iszero(getdense(d, rpi, cpi)) "[$ri, $ri] is zero. row=$(d.rows[rpi])"
+        @assert !iszero(getdense(d, rpi, cpi)) "[$ri, $ri] is zero. row=$(d.sparse[rpi])"
     end
     return d
 end
@@ -568,7 +577,7 @@ function backsolve!(d::Decoder)
 end
 
 """
-    get_source{RT,VT}(d::Decoder{RT,VT})
+    get_source{CT,VT}(d::Decoder{RT,VT})
 
 Return the decoded intermediate symbols.
 
@@ -576,25 +585,25 @@ Return the decoded intermediate symbols.
 symbols are the first K LT symbols.
 
 """
-function get_source{RT,VT}(d::Decoder{RT,VT})
+function get_source{CT,VT}(d::Decoder{CT,VT})
     C = Vector{VT}(d.num_symbols)
     return get_source!(C, d)
 end
 
 """
-    get_source!{RT,VT}(C::Vector, d::Decoder{RT,VT})
+    get_source!{CT,VT}(C::Vector, d::Decoder{RT,VT})
 
 In-place version of get_source()
 
 """
-function get_source!{RT,VT}(C::AbstractArray{VT}, d::Decoder{RT,VT})
+function get_source!{CT,VT}(C::AbstractArray{VT}, d::Decoder{CT,VT})
     if length(C) != d.num_symbols
         error("C must have length num_symbols")
     end
     for i in 1:d.num_symbols-d.num_inactivated
         rpi = d.rowperm[i]
         cpi = d.colperm[i]
-        coef = coefficient(d.rows[rpi], cpi)
+        coef = d.sparse[rpi][cpi]
         if coef == one(coef)
             C[cpi] = d.values[rpi]
         else
@@ -615,13 +624,13 @@ function get_source!{RT,VT}(C::AbstractArray{VT}, d::Decoder{RT,VT})
 end
 
 """
-    decode!{RT,VT}(d::Decoder{RT,VT}, raise_on_error=true)
+    decode!{CT,VT}(d::Decoder{CT,VT}, raise_on_error=true)
 
 Decode the source symbols. Raise an exception on decoding failure if
 raise_on_error is true.
 
 """
-function decode!{RT,VT}(d::Decoder{RT,VT}, raise_on_error=true)
+function decode!{CT,VT}(d::Decoder{CT,VT}, raise_on_error=true)
     try
         check_cover(d)
         diagonalize!(d)

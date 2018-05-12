@@ -244,7 +244,7 @@ Return a decoder for Raptor10 codes.
 """
 function Decoder(c::R10)
     selector = HeapSelect(41)
-    d = Decoder{BRow,Vector{GF256},R10,HeapSelect}(
+    d = Decoder{Bool,Vector{GF256},R10,HeapSelect}(
         c,
         selector,
         c.L,
@@ -253,12 +253,7 @@ function Decoder(c::R10)
     N = [Dict{Int,Bool}() for _ in 1:c.L]
     precode!(C, c, N)
     for i in (c.K+1):(c.K+c.S+c.H)
-        cs = BSymbol(
-            -1,
-            Vector{GF256}(),
-            sort!(push!(collect(keys(N[i])), i)),
-        )
-        add!(d, cs)
+        add!(d, sort!(push!(collect(keys(N[i])), i)), Vector{GF256}())
     end
     return d
 end
@@ -271,7 +266,7 @@ Return a decoder for Raptor10-256 codes.
 """
 function Decoder(c::R10_256)
     selector = HeapSelect(41)
-    d = Decoder{Union{BRow,QRow{GF256}},Vector{GF256},R10_256,HeapSelect}(
+    d = Decoder{GF256,Vector{GF256},R10_256,HeapSelect}(
         c,
         selector,
         c.L,
@@ -283,26 +278,14 @@ function Decoder(c::R10_256)
     # LDPC rows are binary
     for i in (c.K+1):(c.K+c.S)
         indices = push!(collect(keys(N[i])), i)
-        cs = BSymbol(
-            -1,
-            Vector{GF256}(),
-            sort!(indices),
-        )
-        add!(d, cs)
+        add!(d, indices, Vector{GF256}())
     end
 
     # HDPC rows are q-ary
     for i in (c.K+c.S+1):(c.K+c.S+c.H)
         indices = push!(collect(keys(N[i])), i)
         coefs = push!(collect(values(N[i])), one(GF256))
-        p = sortperm(indices)
-        cs = QSymbol(
-            -1,
-            Vector{GF256}(),
-            indices[p],
-            coefs[p],
-        )
-        add!(d, cs)
+        add!(d, indices, coefs, Vector{GF256}())
     end
     return d
 end

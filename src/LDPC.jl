@@ -41,15 +41,14 @@ function Decoder(c::LDPC10{VT}) where VT
     @assert length(c.erased) == c.n "erasures must have length n"
     num_buckets = max(3, Int(round(log(c.n))))
     selector = HeapSelect(num_buckets)
-    d = Decoder{BRow,VT,LDPC10,HeapSelect}(c, selector, countnz(c.erased))
+    d = Decoder{Bool,VT,LDPC10,HeapSelect}(c, selector, countnz(c.erased))
     y = c.H[:,.!(c.erased)] * c.Y[.!(c.erased)]
     @assert length(y) == (c.n-c.K)
     M = transpose(c.H[:,c.erased])
     rows, cols = size(M)
     @assert cols == (c.n-c.K)
     for i in 1:(c.n-c.K)
-        row = BRow(find(M[:,i]))
-        add!(d, row, y[i])
+        add!(d, find(M[:,i]), y[i])
     end
     return d
 end
