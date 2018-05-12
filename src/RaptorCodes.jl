@@ -11,14 +11,11 @@ const BinaryCode = Code{Binary}
 const NonBinaryCode = Code{NonBinary}
 abstract type Selector end
 
-doc"symbol value"
+"symbol value"
 abstract type Value end
 
-doc"coded symbol"
+"coded symbol"
 abstract type CodeSymbol end
-
-doc"matrix row"
-abstract type Row end
 
 # set the random seed
 srand(3)
