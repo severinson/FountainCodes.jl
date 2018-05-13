@@ -82,7 +82,7 @@ function Base.pop!(sel::HeapSelect, d::Decoder) :: Int
             # push!(d.metrics, "skip1", 1)
             continue
         end
-        if min_vdegree_in_bucket <= min_bucket && min_bucket == 1
+        if min_bucket == 1
             _, deg = peek(bucket)
             if deg >= min_deg
                 # push!(d.metrics, "skip2", 1)
@@ -114,8 +114,8 @@ end
 Return an edge part of the maximum size component from the graph where the
 vertices are the columns and the rows with non-zero entries in V are the edges.
 
-TODO: Don't need to include decoded/inactivated symbols for IntDisjointSets. Or
-create a permanent data structure that is reset between calls.
+TODO: create permanent data structures that are reset and re-used each
+time. includes IntDisjointSets, DefaultDict.
 
 """
 function component_select(sel::HeapSelect, d::Decoder)
@@ -128,13 +128,11 @@ function component_select(sel::HeapSelect, d::Decoder)
     for (rpi, deg) in bucket.xs
         vdeg = sel.vdegree_from_rpi[rpi]
         @assert vdeg == 2
-        # row = d.rows[rpi]
         if !isbinary(d.dense, rpi) # don't consider non-binary rows
             continue
         end
         i = 1
         for cpi in d.sparse[rpi].nzind
-            # for cpi in neighbours(row)
             ci = d.colperminv[cpi]
             if (d.num_decoded < ci <= d.num_symbols-d.num_inactivated)
                 n[i] = cpi
