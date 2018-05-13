@@ -128,15 +128,22 @@ end
 Generate an LT symbol from the intermediate symbol vector C and its encoded
 symbol identifier, X.
 
+TODO: C[x] may have zero length for some x. this is handled by calling
+iszero(C[x]). we should look into finding a better approach.
+
 """
 function ltgenerate(C::Vector, X::Int, c::RQ)
     d, a, b, d1, a1, b1 = RQ_tuple(X, c)
     indices = Vector{Int}(d+d1)
-    value = C[b+1]
+    value = copy(C[b+1])
     indices[1] = b+1
     for j in 1:d-1
         b = (b + a) % c.W
-        value += C[b+1]
+        if iszero(value)
+            value = copy(C[b+1])
+        elseif !iszero(C[b+1])
+            value += C[b+1]
+        end
         indices[j+1] = b+1
     end
     while (b1 >= c.P) b1 = (b1+a1) % c.P1 end
@@ -145,7 +152,7 @@ function ltgenerate(C::Vector, X::Int, c::RQ)
     for j in 1:d1-1
         b1 = (b1 + a1) % c.P1
         while (b1 >= c.P) b1 = (b1+a1) % c.P1 end
-        value += C[c.W+b1+1]
+        if !iszero(C[c.W+b1+1]) value += C[c.W+b1+1] end
         indices[d+j+1] = c.W+b1+1
     end
     sort!(indices)
@@ -169,10 +176,10 @@ function precode!(C::Vector, c::RQ)
     if length(C) != c.L
         error("C must have length L")
     end
-    for i in c.K+1:c.L
+    for i in c.K+1:c.L # TODO: remove?
         C[i] = zero(C[1])
     end
-    for X in 1:c.Kp
+    for X in 1:c.K
         s = ltgenerate(C, X, c)
         add!(d, s.neighbours, C[X])
     end
@@ -190,15 +197,15 @@ relations and the remaining H entries correspond to HDPC relations.
 
 """
 function precode_relations(c::RQ)
-    N = Vector{Tuple{Vector{Int},Vector{GF256}}}(c.L)
+    N = Vector{Tuple{Vector{Int},Vector{GF256}}}(c.S+c.H)
     N = RQ_ldpc_constraints!(N, c)
     N = RQ_hdpc_constraints!(N, c)
     return N
 end
 
 function RQ_ldpc_constraints!(N::Vector, c::RQ)
-    if length(N) != c.L
-        error("N must have length c.L = $(c.L)")
+    if length(N) != c.S+c.H
+        error("N must have length c.S+c.H")
     end
     for i in 1:c.S
         N[i] = (Vector{Int}(), Vector{GF256}())
@@ -230,8 +237,8 @@ end
 
 function RQ_hdpc_constraints!(N::Vector, c::RQ)
     alpha = 0x02
-    if length(N) != c.L
-        error("N must have length c.L = $(c.L)")
+    if length(N) != c.S+c.H
+        error("N must have length c.S+c.H")
     end
     i0 = c.S+1
     for i in i0:c.S+c.H
@@ -259,7 +266,7 @@ function RQ_hdpc_constraints!(N::Vector, c::RQ)
         for j in 1:c.Kp+c.S
             N[i0+i-1][2][j] = A[i,j]
         end
-        N[i0+i-1][1][end] = c.S+c.H+i
+        N[i0+i-1][1][end] = c.Kp+c.S+i
         N[i0+i-1][2][end] = one(GF256)
     end
 
@@ -303,7 +310,7 @@ function Decoder(c::RQ)
         selector,
         c.L,
     )
-    C = zeros(GF256, c.L)
+    # C = zeros(GF256, c.L)
     N = precode_relations(c)
 
     # LDPC constraints
@@ -311,9 +318,14 @@ function Decoder(c::RQ)
         add!(d, indices, Vector{GF256}())
     end
 
-    # HDPC constrains
+    # HDPC constraints
     for (indices, coefs) in view(N, c.S+1:c.S+c.H)
         add!(d, indices, coefs, Vector{GF256}())
+    end
+
+    # implicit zero symbols to make it Kp source symbols
+    for i in c.K+1:c.Kp
+        add!(d, [i], Vector{GF256}())
     end
 
     # permanent inactivations
