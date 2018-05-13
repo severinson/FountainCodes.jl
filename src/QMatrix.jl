@@ -1,4 +1,4 @@
-export QMatrix, subtract!
+export QMatrix, subtract!, getcolumn
 
 """
 
@@ -181,6 +181,9 @@ end
     subtract!(M::QMatrix{T}, c1::Int, c2::Int)
 
 Subtract column c2 from column c1, i.e., M[:,c1] = M[:,c1] - M[:,c2].
+
+TODO: consider using a separate BitVector to store which columns are
+qary in order to speed up haskey operations.
 
 """
 function subtract!{T}(M::QMatrix{T}, c1::Int, c2::Int)
