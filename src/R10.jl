@@ -90,7 +90,7 @@ function ltgenerate(C::Vector, X::Int, p::Code)
     end
     N = Vector{Int}(min(d, p.L))
     N[1] = b+1
-    value = C[b+1]
+    value = copy(C[b+1])
     for j in 1:min(d-1, p.L-1)
         b = (b + a) % p.Lp
         while (b >= p.L)
