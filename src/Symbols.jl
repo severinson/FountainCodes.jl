@@ -77,7 +77,7 @@ function subeq!(a::Vector{GF256}, b::Vector{GF256}, c::GF256) :: Vector{GF256}
         a .-= b
     else
         clog = logrq(c)
-        @simd for i in 1:length(b)
+        for i in 1:length(b)::Int
             if !iszero(b[i])
                 a[i] -= exprq(logrq(b[i])+clog)
             end
