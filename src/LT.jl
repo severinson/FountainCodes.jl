@@ -1,10 +1,10 @@
 export LT, LTQ
 
-doc"LT code parameters."
+"LT code parameters."
 struct LT{T <: Sampleable{Univariate, Discrete}} <: BinaryCode
     K::Int # number of source symbols
     L::Int # number of intermediate symbols
-    Lp::Int
+    Lp::Int # smallest prime larger than K
     dd::T # degree distribution
     function LT{T}(K::Int, dd::T) where T
         Lp = Primes.nextprime(K)
@@ -14,11 +14,11 @@ end
 LT(K::Int, dd::T) where {T <: Sampleable{Univariate, Discrete}} = LT{T}(K, dd)
 Base.repr(p::LT) = "LT($(p.K), $(repr(p.dd)))"
 
-doc"q-ary LT code parameters."
+"q-ary LT code parameters."
 struct LTQ{CT,DT <: Sampleable{Univariate, Discrete}} <: NonBinaryCode
     K::Int # number of source symbols
     L::Int # number of intermediate symbols
-    Lp::Int
+    Lp::Int # smallest prime larger than K
     dd::DT # degree distribution
     function LTQ{CT,DT}(K::Int, dd::DT) where {CT,DT}
         Lp = Primes.nextprime(K)
@@ -52,7 +52,6 @@ function coefficient{CT,DT}(p::LTQ{CT,DT})
     return c
 end
 
-doc"Map a number 0 <= v <= 1 to a coefficient."
 function coefficient{CT<:Float64,DT}(p::LTQ{CT,DT})
     return randn(CT)/1e10+1
 end
@@ -79,14 +78,14 @@ function ltgenerate(C::Vector, X::Int, p::LT)
     end
     neighbours = Vector{Int}(min(d, p.L))
     neighbours[1] = b+1
-    value = C[b+1]
+    value = copy(C[b+1])
     for j in 1:min(d-1, p.L-1)
         b = (b + a) % p.Lp
         while (b >= p.L)
             b = (b + a) % p.Lp
         end
         neighbours[j+1] = b+1
-        value = value + C[b+1]
+        value += C[b+1]
     end
     return BSymbol(X, value, neighbours)
 end
@@ -123,7 +122,7 @@ Return a decoder for binary LT codes.
 function Decoder(p::LT)
     num_buckets = max(3, Int(round(log(p.K))))
     selector = HeapSelect(num_buckets)
-    return Decoder{Bool,Vector{GF256},LT,HeapSelect}(
+    return Decoder{GF256,Vector{GF256},LT,HeapSelect}(
         p,
         selector,
         p.K,
