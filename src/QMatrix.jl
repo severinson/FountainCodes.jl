@@ -199,9 +199,7 @@ function subtract!{T}(M::QMatrix{T}, c1::Int, c2::Int)
         M.qary[c1] = M.binary[:,c1] - M.qary[c2]
     elseif h1 && h2
         q1, q2 = M.qary[c1], M.qary[c2]
-        for i in 1:M.m
-            q1[i]= q1[i] - q2[i]
-        end
+        q1 .-= q2
     else
         kd0, ld0 = get_chunks_id(sub2ind((M.m,M.n), 1, c1))
         kd1, ld1 = get_chunks_id(sub2ind((M.m,M.n), M.m, c1))
@@ -221,7 +219,6 @@ Subtract column d*c2 from column c1, i.e., M[:,c1] = M[:,c1] - d*M[:,c2].
 
 """
 function subtract!{T}(M::QMatrix{T}, d::T, c1::Int, c2::Int)
-    # TODO: use subeq!
     if iszero(d)
         return
     end
@@ -232,15 +229,13 @@ function subtract!{T}(M::QMatrix{T}, d::T, c1::Int, c2::Int)
     if h1 && !h2
         q = M.qary[c1]
         for i in find(M.binary[:,c2])
-            q[i] = q[i] - d
+            q[i] -= d
         end
     elseif !h1 && h2
-        M.qary[c1] = M.binary[:,c1] - d*M.qary[c2]
+        M.qary[c1] = subeq!(Vector{T}(M.binary[:,c1]), M.qary[c2], d)
     elseif h1 && h2
         q1, q2 = M.qary[c1], M.qary[c2]
-        for i in 1:M.m
-            q1[i]= q1[i] - d*q2[i]
-        end
+        subeq!(q1, q2, d)
     else
         M.qary[c1] = M.binary[:,c1]
         for i in find(M.binary[:,c2])
