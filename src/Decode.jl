@@ -258,29 +258,30 @@ Subtract coefi/coefj*rows[rpi] from rows[rpj] and assign the result to
 rows[rpj]. New row objects are only allocated when needed.
 
 """
-function subtract!(d::Decoder, rpi::Int, rpj::Int, coefi, coefj)
+function subtract!{CT,VT<:Vector}(d::Decoder{CT,VT}, rpi::Int, rpj::Int, coefi::CT, coefj::CT)
     @assert !iszero(coefj) "coefj must be non-zero, but is $coefj and type $(typeof(coefj))"
-    coef = coefi / coefj
+    coef = coefi
+    if coefj != one(coefj)
+        coef /= coefj
+    end
     subtract!(d.dense, coef, rpj, rpi)
     if iszero(d.values[rpj])
         d.values[rpj] = zeros(d.values[rpi])
     end
     d.values[rpj] = subeq!(d.values[rpj], d.values[rpi], coef)
-    update_metrics!(d, rpi, coefi)
+    # update_metrics!(d, rpi, coefi)
     return
 end
 
-# TODO: remove after implementing CT
-function subtract!(d::Decoder, rpi::Int, rpj::Int, coefi::Bool, coefj::Bool)
+function subtract!{CT,VT}(d::Decoder{CT,VT}, rpi::Int, rpj::Int, coefi::CT, coefj::CT)
     @assert !iszero(coefj) "coefj must be non-zero, but is $coefj and type $(typeof(coefj))"
-    if !iszero(coefi)
-        subtract!(d.dense, rpj, rpi)
+    coef = coefi
+    if coefj != one(coefj)
+        coef /= coefj
     end
-    if iszero(d.values[rpj])
-        d.values[rpj] = zero(d.values[rpi])
-    end
-    d.values[rpj] = subeq!(d.values[rpj], d.values[rpi], coefi)
-    update_metrics!(d, rpi, coefi)
+    subtract!(d.dense, coef, rpj, rpi)
+    d.values[rpj] = d.values[rpj] - d.values[rpi] * coef
+    # update_metrics!(d, rpi, coefi)
     return
 end
 
@@ -481,13 +482,55 @@ function solve_dense!{CT<:Float64,VT}(d::Decoder{CT,VT})
 end
 
 """
+    print_dense(d::Decoder, ri::Int)
+
+Print row with index ri of the dense submatrix.
+
+"""
+function print_dense(d::Decoder, ri::Int)
+    rpi = d.rowperm[ri]
+    print("ri=$ri / rpi=$rpi\t[ ")
+    correct = Vector{GF256}([0])
+    for ci in d.num_symbols-d.num_inactivated+1:d.num_symbols
+        cpi = d.colperm[ci]
+        c = getdense(d, rpi, cpi)
+        if !iszero(c)
+            print("$c ")
+            if c == one(c)
+                correct += Vector{GF256}([cpi % 256])
+            else
+                correct += c*Vector{GF256}([cpi % 256])
+            end
+        else
+            print("  ")
+        end
+    end
+    actual = d.values[rpi]
+    println(" ] $actual | $correct")
+    return
+end
+
+"""
+    print_dense(d::Decoder)
+
+Print the dense submatrix. Useful for debugging.
+
+"""
+function print_dense(d::Decoder)
+    for ri in d.num_symbols-d.num_inactivated+1:d.num_symbols
+        print_dense(d, ri)
+    end
+    return
+end
+
+"""
     solve_dense!(d::Decoder)
 
 Solve for the inactivated symbols from the system of equations consisting of the
 inactivated columns using Gaussian Elimination.
 
 """
-function solve_dense!{CT,VT}(d::Decoder{CT,VT})
+function solve_dense!(d::Decoder)
 
     for i in 1:d.num_inactivated
 
@@ -512,6 +555,7 @@ function solve_dense!{CT,VT}(d::Decoder{CT,VT})
                     subtract!(d, rpk, rpj, coef, coef2)
                 end
             end
+
             if countnz(d.dense, rpj) > 0
                 ri = rj
                 rpi = rpj
@@ -525,7 +569,7 @@ function solve_dense!{CT,VT}(d::Decoder{CT,VT})
         swap_rows!(d, d.num_decoded+1, ri)
 
         # swap any non-zero entry into the i-th column of u_lower
-        upi = findfirst(getcolumn(d.dense, rpi))
+        upi = findfirst(getcolumn(d.dense, rpi)) # TODO: unnecessary allocation
         @assert upi <= d.num_inactivated "$upi must be <= $(d.num_inactivated) row=$row"
         ui = d.uperminv[upi]
         cj = _ui2ci(d, ui)
@@ -544,10 +588,18 @@ function solve_dense!{CT,VT}(d::Decoder{CT,VT})
             end
         end
         d.num_decoded += 1
-        ri = d.num_decoded
-        rpi = d.rowperm[d.num_decoded]
-        cpi = d.colperm[d.num_decoded]
-        @assert !iszero(getdense(d, rpi, cpi)) "[$ri, $ri] is zero. row=$(d.sparse[rpi])"
+        ## debug printouts ##
+        # ri = d.num_decoded
+        # rpi = d.rowperm[ri]
+        # cpi = d.colperm[ri]
+        # coef = getdense(d, rpi, cpi)
+        # v1 = UInt8(cpi % 256)
+        # v2 = d.values[rpi]
+        # if coef != one(coef)
+        #     v2 /= coef
+        # end
+        # println("$(countnz(d.dense, rpi)) symbol $cpi $(Vector{UInt8}([v1])) = $(v2)")
+        # @assert !iszero(getdense(d, rpi, cpi)) "[$ri, $ri] is zero. row=$(d.sparse[rpi])"
     end
     return d
 end
@@ -557,6 +609,9 @@ end
 
 Subtract the symbols decoded in solve_dense from the above rows of the
 constraint matrix.
+
+TODO: use some sort of in-place processing. this method allocates
+memory when calling getcolumn.
 
 """
 function backsolve!(d::Decoder)
