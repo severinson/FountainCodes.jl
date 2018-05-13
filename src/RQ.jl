@@ -147,12 +147,17 @@ function ltgenerate(C::Vector, X::Int, c::RQ)
         indices[j+1] = b+1
     end
     while (b1 >= c.P) b1 = (b1+a1) % c.P1 end
-    value += C[c.W+b1+1]
+    if iszero(value)
+        value = copy(C[c.W+b1+1])
+    else
+        value += C[c.W+b1+1]
+    end
     indices[d+1] = c.W+b1+1
     for j in 1:d1-1
         b1 = (b1 + a1) % c.P1
         while (b1 >= c.P) b1 = (b1+a1) % c.P1 end
-        if !iszero(C[c.W+b1+1]) value += C[c.W+b1+1] end
+        if iszero(value) value = copy(C[c.W+b1+1])
+        elseif !iszero(C[c.W+b1+1]) value += C[c.W+b1+1] end
         indices[d+j+1] = c.W+b1+1
     end
     sort!(indices)
