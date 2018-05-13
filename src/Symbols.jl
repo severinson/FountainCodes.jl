@@ -74,7 +74,7 @@ function subeq!(a::Vector{GF256}, b::Vector{GF256}, c::GF256) :: Vector{GF256}
         return a
     end
     if c == one(c)
-        a -= b
+        a .-= b
     else
         clog = logrq(c)
         @simd for i in 1:length(b)
@@ -90,28 +90,28 @@ function subeq!(a::Vector{GF256}, b::Vector{GF256}, c::Bool) :: Vector{GF256}
     if iszero(c) || iszero(b)
         return a
     end
-    a -= b
+    a .-= b
     return a
 end
 
 ## fallback in-place arithmetic functions ##
 function subeq!(a, b)
-    a -= b
+    a .-= b
     return a
 end
 
 function subeq!(a, b, c)
-    a -= b.*c
+    a .-= b.*c
     return a
 end
 
 function muleq!(a, b)
-    a *= b
+    a .*= b
     return a
 end
 
 function diveq!(a, b)
-    a /= b
+    a ./= b
     return a
 end
 
