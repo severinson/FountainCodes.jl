@@ -262,7 +262,7 @@ function subtract!{CT,VT<:Vector}(d::Decoder{CT,VT}, rpi::Int, rpj::Int, coefi::
     @assert !iszero(coefj) "coefj must be non-zero, but is $coefj and type $(typeof(coefj))"
     coef = coefi
     if coefj != one(coefj)
-        coef /= coefj
+        coef = (coef / coefj)::CT
     end
     subtract!(d.dense, coef, rpj, rpi)
     if iszero(d.values[rpj])
