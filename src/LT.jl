@@ -59,7 +59,7 @@ end
 doc"Maps an encoding symbol ID X to a triple (d, a, b)"
 function trip(X::Int, p::Union{LT,LTQ})
     Q = 65521 # the largest prime smaller than 2^16
-    JK = J[p.K+1]
+    JK = 1 # no systematic indices for LT codes
     A = (53591 + JK*997) % Q
     B = 10267*(JK+1) % Q
     Y = (B + X*A) % Q
