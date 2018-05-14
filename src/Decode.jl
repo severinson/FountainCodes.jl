@@ -269,7 +269,7 @@ function subtract!{CT,VT<:Vector}(d::Decoder{CT,VT}, rpi::Int, rpj::Int, coefi::
         d.values[rpj] = zeros(d.values[rpi])
     end
     d.values[rpj] = subeq!(d.values[rpj], d.values[rpi], coef)
-    # update_metrics!(d, rpi, coefi)
+    update_metrics!(d, rpi, coefi)
     return
 end
 
@@ -281,7 +281,7 @@ function subtract!{CT,VT}(d::Decoder{CT,VT}, rpi::Int, rpj::Int, coefi::CT, coef
     end
     subtract!(d.dense, coef, rpj, rpi)
     d.values[rpj] = d.values[rpj] - d.values[rpi] * coef
-    # update_metrics!(d, rpi, coefi)
+    update_metrics!(d, rpi, coefi)
     return
 end
 
