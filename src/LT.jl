@@ -51,9 +51,7 @@ Return a randomly generated coefficient.
 """
 function coefficient{CT}(X::Int, j::Int, p::LTQ{CT})
     coef = rand(CT)
-    while iszero(coef)
-        coef = rand(CT)
-    end
+    while iszero(coef) coef = rand(CT) end
     return coef
 end
 
@@ -75,7 +73,7 @@ function trip(X::Int, p::Union{LT,LTQ})
     return d, a, b
 end
 
-doc"generate an LT symbol from the intermediate symbols."
+"generate an LT symbol from the intermediate symbols."
 function ltgenerate(C::Vector, X::Int, p::LT)
     d, a, b = trip(X, p)
     while (b >= p.L)
