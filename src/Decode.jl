@@ -13,7 +13,7 @@ add the option of using a dense matrix of the type.
 mutable struct Decoder{CT,VT,CODE<:Code,SELECTOR<:Selector}
     p::CODE # type of code
     values::Vector{VT} # source values may be of any type, including arrays
-    columns::Vector{Vector{Int}}
+    columns::Vector{Vector{Int}} # stores which rows neighbour each column
     sparse::Vector{SparseVector{CT,Int}} # sparse row indices
     dense::QMatrix{CT} # dense (inactivated) symbols are stored separately
     colperm::Vector{Int} # maps column indices to their respective objects
@@ -26,8 +26,9 @@ mutable struct Decoder{CT,VT,CODE<:Code,SELECTOR<:Selector}
     num_symbols::Int # code length
     num_decoded::Int # denoted by i in the R10 spec.
     num_inactivated::Int # denoted by u in the R10 spec.
-    metrics::DataStructures.Accumulator{String,Int}
+    metrics::DataStructures.Accumulator{String,Int} # stores performance metrics
     status::String # indicates success or stores the reason for decoding failure.
+    phase::String # diagonalize, solve_dense, or backsolve. used for logging metrics.
     function Decoder{CT,VT,CODE,SELECTOR}(
         p::CODE,
         selector::Selector,
@@ -48,12 +49,14 @@ mutable struct Decoder{CT,VT,CODE<:Code,SELECTOR<:Selector}
                 0,
                 0,
                 DataStructures.counter(String),
-                "")
+                "", "")
         d.metrics["success"] = 0
-        d.metrics["decoding_additions"] = 0
-        d.metrics["decoding_multiplications"] = 0
-        d.metrics["rowadds"] = 0
-        d.metrics["rowmuls"] = 0
+        for phase in ["diagonalize", "solve_dense", "backsolve"]
+            d.metrics[string(phase, "_", "decoding_additions")] = 0
+            d.metrics[string(phase, "_", "decoding_multiplications")] = 0
+            d.metrics[string(phase, "_", "rowadds")] = 0
+            d.metrics[string(phase, "_", "rowmuls")] = 0
+        end
         d.metrics["inactivations"] = 0
         d.metrics["status"] = 0
         return d
@@ -291,11 +294,11 @@ function update_metrics!(d::Decoder, rpi::Int, coef)
         return
     end
     weight = min(countnz(d.dense, rpi), d.num_inactivated)
-    push!(d.metrics, "decoding_additions", weight)
-    push!(d.metrics, "rowadds", 1)
+    push!(d.metrics, string(d.phase, "_", "decoding_additions"), weight)
+    push!(d.metrics, string(d.phase, "_", "rowadds"), 1)
     if coef != one(coef)
-        push!(d.metrics, "decoding_multiplications", weight)
-        push!(d.metrics, "rowmuls", 1)
+        push!(d.metrics, string(d.phase, "_", "decoding_multiplications"), weight)
+        push!(d.metrics, string(d.phase, "_", "rowmuls"), 1)
     end
     return
 end
@@ -688,8 +691,11 @@ raise_on_error is true.
 function decode!{CT,VT}(d::Decoder{CT,VT}, raise_on_error=true)
     try
         check_cover(d)
+        d.phase = "diagonalize"
         diagonalize!(d)
+        d.phase = "solve_dense"
         solve_dense!(d)
+        d.phase = "backsolve"
         backsolve!(d)
         d.metrics["success"] = 1
         return get_source(d)
