@@ -78,6 +78,23 @@ function test_select_row_2()
 end
 @test test_select_row_2()
 
+function test_columns_1()
+    p, d, C = init()
+    for i in 1:20
+        s = RaptorCodes.ltgenerate(C, i, p)
+        RaptorCodes.add!(d, s)
+    end
+    for (cpi, col) in enumerate(d.columns)
+        for rpi in col
+            if !(cpi in d.sparse[rpi].nzind)
+                error("row with indices $(d.sparse[rpi].nzind) does not neighbor $cpi")
+            end
+        end
+    end
+    return true
+end
+@test test_columns_1()
+
 function test_diagonalize_1()
     p, d, C = init()
     for i in 1:20
