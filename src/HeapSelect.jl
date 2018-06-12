@@ -30,8 +30,9 @@ original degree and the number of non-zero entries in V of the row,
 respectively.
 
 """
-function Base.push!(sel::HeapSelect, d::Decoder, rpi::Int, degree::Int, vdegree::Int)
-    i::Int = min(vdegree, length(sel.buckets))
+function Base.push!(sel::HeapSelect, d::Decoder, rpi::Int, degree::Int)
+    vdeg = vdegree(d, rpi)
+    i::Int = min(vdeg, length(sel.buckets))
     if iszero(i)
         return
     end
@@ -42,7 +43,7 @@ function Base.push!(sel::HeapSelect, d::Decoder, rpi::Int, degree::Int, vdegree:
         )
     end
     enqueue!(sel.buckets[i], rpi, degree)
-    sel.vdegree_from_rpi[rpi] = vdegree
+    sel.vdegree_from_rpi[rpi] = vdeg
     return
 end
 
@@ -104,7 +105,6 @@ function Base.pop!(sel::HeapSelect, d::Decoder) :: Int
     else
         rpi = dequeue!(sel.buckets[min_bucket])
     end
-    sel.vdegree_from_rpi[rpi] = 0
     return d.rowperminv[rpi]
 end
 
