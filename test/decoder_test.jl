@@ -385,8 +385,8 @@ end
 @test test_ge_gf256_2()
 
 function test_backsolve_gf256()
-    p, d, C = init_gf256(15)
-    for i in 1:15
+    p, d, C = init_gf256(20)
+    for i in 1:22
         s = RaptorCodes.ltgenerate(C, i, p)
         RaptorCodes.add!(d, s)
     end
@@ -636,7 +636,7 @@ end
 
 function test_decoder_float64_2()
     p, d, C = init_float64(100)
-    for i in 1:120
+    for i in 1:130
         s = RaptorCodes.ltgenerate(C, i, p)
         RaptorCodes.add!(d, s)
     end
