@@ -33,30 +33,35 @@ function LTQ{CT}(K::Int, dd::DT) where {CT,DT <: Sampleable{Univariate, Discrete
 end
 Base.repr{CT,DT}(p::LTQ{CT,DT}) = "LTQ{$CT,DT}($(p.K), $(repr(p.dd)))"
 
-doc"LT codes have no pre-code, so do nothing."
+"LT codes have no pre-code, so do nothing."
 function precode!(C::Vector, p::Code)
     return C
 end
 
-doc"Map a number 0 <= v <= 1 to a degree."
+"Map a number 0 <= v <= 1 to a degree."
 function deg(v::Real, p::Code) :: Int
     return quantile(p.dd, v)
 end
 
-doc"Map a number 0 <= v <= 1 to a coefficient."
-function coefficient{CT,DT}(p::LTQ{CT,DT})
-    c = zero(CT)
-    while iszero(c)
-        c = rand(CT)
+"""
+    coefficient{CT,DT}(p::LTQ{CT})
+
+Return a randomly generated coefficient.
+
+"""
+function coefficient{CT}(X::Int, j::Int, p::LTQ{CT})
+    coef = rand(CT)
+    while iszero(coef)
+        coef = rand(CT)
     end
-    return c
+    return coef
 end
 
-function coefficient{CT<:Float64,DT}(p::LTQ{CT,DT})
+function coefficient{CT<:Float64}(X::Int, i::Int, p::LTQ{CT})
     return randn(CT)/1e10+1
 end
 
-doc"Maps an encoding symbol ID X to a triple (d, a, b)"
+"Maps an encoding symbol ID X to a triple (d, a, b)"
 function trip(X::Int, p::Union{LT,LTQ})
     Q = 65521 # the largest prime smaller than 2^16
     JK = 1 # no systematic indices for LT codes
@@ -90,26 +95,43 @@ function ltgenerate(C::Vector, X::Int, p::LT)
     return BSymbol(X, value, neighbours)
 end
 
-doc"generate an LT symbol from the intermediate symbols."
+# Using this method results in significantly higher
+# probability of decoding failure.
+#
+# "generate an LT symbol from the intermediate symbols."
+# function ltgenerate{CT}(C::Vector, X::Int, p::LTQ{CT})
+#     d, a, b = trip(X, p)
+#     while (b >= p.L)
+#         b = (b + a) % p.Lp
+#     end
+#     indices = Vector{Int}(min(d, p.L))
+#     coefficients = Vector{CT}(min(d, p.L))
+#     indices[1] = b+1
+#     coefficients[1] = coefficient(X, p)
+#     value = C[b+1] * coefficients[1]
+#     for j in 1:min(d-1, p.L-1)
+#         b = (b + a) % p.Lp
+#         while (b >= p.L)
+#             b = (b + a) % p.Lp
+#         end
+#         indices[j+1] = b+1
+#         coefficients[j+1] = coefficient(X, p)
+#         value = value + C[b+1] * coefficients[j+1]
+#     end
+#     return QSymbol(X, value, indices, coefficients)
+# end
+
+"generate an LT symbol from the intermediate symbols."
 function ltgenerate{CT}(C::Vector, X::Int, p::LTQ{CT})
-    d, a, b = trip(X, p)
-    while (b >= p.L)
-        b = (b + a) % p.Lp
+    d, _, _ = trip(X, p)
+    d = min(d, p.L)
+    set = Set{Int}()
+    while length(set) < d
+        push!(set, rand(1:p.L))
     end
-    indices = Vector{Int}(min(d, p.L))
-    coefficients = Vector{CT}(min(d, p.L))
-    indices[1] = b+1
-    coefficients[1] = coefficient(p)
-    value = C[b+1] * coefficients[1]
-    for j in 1:min(d-1, p.L-1)
-        b = (b + a) % p.Lp
-        while (b >= p.L)
-            b = (b + a) % p.Lp
-        end
-        indices[j+1] = b+1
-        coefficients[j+1] = coefficient(p)
-        value = value + C[b+1] * coefficients[j+1]
-    end
+    indices = sort!(collect(set))
+    coefficients = [coefficient(X, i, p) for i in 1:d]
+    value = sum(C[indices[i]]*coefficients[i] for i in 1:d)
     return QSymbol(X, value, indices, coefficients)
 end
 
