@@ -230,12 +230,20 @@ function RQ_ldpc_constraints!(N::Vector, c::RQ)
     for i in 0:c.S-1
         a = i % c.P
         b = (i + 1) % c.P
-        push!(N[i+1][1], i+c.Kp+1)
-        push!(N[i+1][2], true)
-        push!(N[i+1][1], c.W+a+1)
-        push!(N[i+1][2], true)
-        push!(N[i+1][1], c.W+b+1)
-        push!(N[i+1][2], true)
+        if c.W+a == i+c.Kp
+            push!(N[i+1][1], c.W+b+1)
+            push!(N[i+1][2], true)
+        elseif c.W+b == i+c.Kp
+            push!(N[i+1][1], c.W+a+1)
+            push!(N[i+1][2], true)
+        else
+            push!(N[i+1][1], i+c.Kp+1)
+            push!(N[i+1][2], true)
+            push!(N[i+1][1], c.W+a+1)
+            push!(N[i+1][2], true)
+            push!(N[i+1][1], c.W+b+1)
+            push!(N[i+1][2], true)
+        end
     end
     return N
 end
@@ -247,7 +255,8 @@ function RQ_hdpc_constraints!(N::Vector, c::RQ)
     end
     i0 = c.S+1
     for i in i0:c.S+c.H
-        N[i] = (collect(1:c.Kp+c.S+1), zeros(GF256, c.Kp+c.S+1))
+        # N[i] = (collect(1:c.Kp+c.S+1), zeros(GF256, c.Kp+c.S+1))
+        N[i] = (Vector{Int}(), Vector{GF256}())
     end
     MT = zeros(GF256, c.H, c.Kp+c.S)
     GAMMA = zeros(GF256, c.Kp+c.S, c.Kp+c.S)
@@ -269,10 +278,16 @@ function RQ_hdpc_constraints!(N::Vector, c::RQ)
     A::Matrix{GF256} = MT*GAMMA
     for i in 1:c.H
         for j in 1:c.Kp+c.S
-            N[i0+i-1][2][j] = A[i,j]
+            if !iszero(A[i,j])
+                push!(N[i0+i-1][1], j)
+                push!(N[i0+i-1][2], A[i,j])
+                # N[i0+i-1][2][j] = A[i,j]
+            end
         end
-        N[i0+i-1][1][end] = c.Kp+c.S+i
-        N[i0+i-1][2][end] = one(GF256)
+        push!(N[i0+i-1][1], c.Kp+c.S+i)
+        push!(N[i0+i-1][2], one(GF256))
+        # N[i0+i-1][1][end] = c.Kp+c.S+i
+        # N[i0+i-1][2][end] = one(GF256)
     end
 
     # TODO: more efficient implementation. exploits the structure of the matrix.
