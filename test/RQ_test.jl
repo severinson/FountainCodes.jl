@@ -58,7 +58,20 @@ function test_precode_relations()
     ri = 1
     correct = [1, 6, 7, 8, 11, 18, 19]
     indices = N[ri][1]
-    # indices = sort!(collect(keys(N[ri])))
+    if indices != correct
+        error("incorrect RQ LDPC constraint. row $ri is $indices but should be $correct")
+    end
+
+    ri = 2
+    correct = [1, 2, 7, 9, 12, 19, 20]
+    indices = N[ri][1]
+    if indices != correct
+        error("incorrect RQ LDPC constraint. row $ri is $indices but should be $correct")
+    end
+
+    ri = 3
+    correct = [1, 2, 3, 8, 10, 13, 20, 21]
+    indices = N[ri][1]
     if indices != correct
         error("incorrect RQ LDPC constraint. row $ri is $indices but should be $correct")
     end
@@ -175,3 +188,21 @@ function test_decoder_1(K=1000, r=500)
     return true
 end
 @test test_decoder_1()
+
+function test_decoder_2(K=56, r=2)
+    for n in 1:100
+        c, d, C = init(K)
+        for j in 1:c.K+r
+            s = RaptorCodes.ltgenerate(C, (n-1)*(c.K)+j, c)
+            RaptorCodes.add!(d, s)
+        end
+        output = RaptorCodes.decode!(d)
+        for i in 1:c.K
+            if output[i] != C[i]
+                error("decoding failure. source[$i] is $(output[i]). should be $(C[i]).")
+            end
+        end
+    end
+    return true
+end
+@test test_decoder_2()
