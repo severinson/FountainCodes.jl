@@ -1,3 +1,4 @@
+using RaptorCodes, Base.Test
 function logfactorial_exact_test_1(low=1, high=20)
     for n in low:high
         r = RaptorCodes.logfactorial_exact(n)
@@ -54,6 +55,24 @@ function logfactorial_approx_test_2(low=20, high=100)
 end
 @test logfactorial_approx_test_2()
 
+function logfactorial_approx_test_3(n=134000, k=div(134000,2))
+    r = RaptorCodes.logfactorial_approx(n, k)
+    if isnan(r) || isinf(r)
+        error("logfactorial_approx($n,$k) = $r")
+    end
+    return true
+end
+@test logfactorial_approx_test_3()
+
+function logfactorial_approx_test_3(n=133999, k=2927)
+    r = RaptorCodes.logfactorial_approx(n, k)
+    if isnan(r) || isinf(r)
+        error("logfactorial_approx($n,$k) = $r")
+    end
+    return true
+end
+@test logfactorial_approx_test_3()
+
 function logfactorial_test_1(low=1, high=200)
     for n in low:high
         for k in low:n
@@ -69,7 +88,7 @@ function logfactorial_test_1(low=1, high=200)
 end
 @test logfactorial_test_1()
 
-function logbinomial_test(low=1, high=20)
+function logbinomial_test_1(low=1, high=20)
     for n in low:high
         for k in 1:n
             r = RaptorCodes.logbinomial(n, k)
@@ -82,7 +101,16 @@ function logbinomial_test(low=1, high=20)
     end
     return true
 end
-@test logbinomial_test()
+@test logbinomial_test_1()
+
+function logbinomial_test_2(n=133999, k=2927)
+    r = RaptorCodes.logbinomial(n, k)
+    if isnan(r) || isinf(r)
+        error("logbinomial($n,$k) = $r")
+    end
+    return true
+end
+@test logbinomial_test_2()
 
 # k = 10000, M = 142, delta = 0.0317
 
