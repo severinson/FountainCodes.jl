@@ -75,16 +75,20 @@ TOOD: consider renaming to push!
 """
 function add!{CT,VT}(d::Decoder{CT,VT}, nzind::Vector{Int}, nzval::Vector{CT}, v::VT)
     @assert length(nzind) == length(nzval)
+    @assert countnz(nzval) == length(nzval) "countnz($nzval) = $(countnz(nzval))"
+    @assert length(unique(nzind)) == length(nzind)
     if d.status != ""
         error("cannot add more symbols after decoding has failed")
     end
     push!(d.values, v)
     p = sortperm(nzind)
-    push!(d.sparse, sparsevec(nzind[p], nzval[p]))
+    nzind = copy(nzind)[p]
+    nzval = copy(nzval)[p]
+    push!(d.sparse, sparsevec(nzind, nzval))
     i = length(d.rowperm) + 1
     push!(d.rowperm, i)
     push!(d.rowperminv, i)
-    push!(d.selector, d, i, length(nzind), vdegree(d, i))
+    push!(d.selector, d, i, length(nzind))
     for cpi in nzind
         push!(d.columns[cpi], i)
     end
@@ -393,7 +397,6 @@ L-u columns into diagonal form. Referred to as the first phase in rfc6330.
 function diagonalize!(d::Decoder)
     expand_dense!(d)
     while d.num_decoded + d.num_inactivated < d.num_symbols
-
         ri = select_row(d)
         peel_row!(d, d.rowperm[ri])
         swap_rows!(d, ri, d.num_decoded+1)
@@ -591,18 +594,6 @@ function solve_dense!(d::Decoder)
             end
         end
         d.num_decoded += 1
-        ## debug printouts ##
-        # ri = d.num_decoded
-        # rpi = d.rowperm[ri]
-        # cpi = d.colperm[ri]
-        # coef = getdense(d, rpi, cpi)
-        # v1 = UInt8(cpi % 256)
-        # v2 = d.values[rpi]
-        # if coef != one(coef)
-        #     v2 /= coef
-        # end
-        # println("$(countnz(d.dense, rpi)) symbol $cpi $(Vector{UInt8}([v1])) = $(v2)")
-        # @assert !iszero(getdense(d, rpi, cpi)) "[$ri, $ri] is zero. row=$(d.sparse[rpi])"
     end
     return d
 end
