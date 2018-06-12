@@ -205,7 +205,7 @@ function subtract!{T}(M::QMatrix{T}, c1::Int, c2::Int)
         kd1, ld1 = get_chunks_id(sub2ind((M.m,M.n), M.m, c1))
         offset = (c2-c1)*div(M.m,64)
         for i in kd0:kd1
-            @inbounds M.binary.chunks[i] = xor(M.binary.chunks[i], M.binary.chunks[i+offset])
+            M.binary.chunks[i] = xor(M.binary.chunks[i], M.binary.chunks[i+offset])
         end
     end
     return
