@@ -39,7 +39,28 @@ function logfactorial_approx(n::Int, k::Int=1)
     end
     r = 1/2 * log(2pi)
     r += n * log(n) - n
-    r += 1/2 * log(n+1/6+1/(72n) - 31/(6480n^2) - 139/(155520n^3) + 9871 / (6531840n^4))
+
+    # compute last term one step at a time. watch for overflow etc.
+    # r += 1/2 * log(n+1/6+1/(72n) - 31/(6480n^2) - 139/(155520n^3) + 9871 / (6531840n^4))    
+    r2 = n + 1/6
+    tmp = 1/(72n)
+    if !isnan(tmp) && !isinf(tmp) && tmp > 0
+        r2 += tmp
+    end
+    tmp = 31/(6480n^2)
+    if !isnan(tmp) && !isinf(tmp) && tmp > 0
+        r2 -= tmp
+    end
+    tmp = 139/(155520n^3)
+    if !isnan(tmp) && !isinf(tmp) && tmp > 0
+        r2 -= tmp
+    end    
+    tmp = 9871 / (6531840n^4)
+    if !isnan(tmp) && !isinf(tmp) && tmp > 0
+        r2 += tmp
+    end
+    r += 1/2 * log(r2)
+    
     if k != one(k)
         r -= logfactorial_approx(k)
     end
@@ -54,11 +75,14 @@ function logbinomial(n::Int, k::Int) :: Float64
     if k == n
         return 0.0
     end
+    r = 0.0
     if k > (n - k)
-        return logfactorial(n, n-k) - logfactorial(k)
+        r = logfactorial(n, n-k) - logfactorial(k)
     else
-        return logfactorial(n, k) - logfactorial(n-k)
+        r = logfactorial(n, k) - logfactorial(n-k)
     end
+    @assert !isnan(r) && !isinf(r) "logbinomial($n,$k)=$r"
+    return r
 end
 
 doc"inner term of ltfailure_lower_reference."
@@ -86,7 +110,18 @@ doc"inner term of ltfailure_lower."
 function ltfailure_lower_inner(i::Int, k::Int, epsilon::Number, Omega::Distribution{Univariate, Discrete}) :: Float64
     r = zero(Float64)
     for d in 1:k
+        if k-i < d || k < d
+            continue
+        end
         r += exp(log(pdf(Omega, d)) + logbinomial(k-i, d) - logbinomial(k, d))
+        if isnan(r)
+            println("r=$r")
+            println(pdf(Omega,d))
+            println(log(pdf(Omega, d)))
+            println(logbinomial(k-i, d))
+            println(logbinomial(k, d))
+            error("foo")
+        end
     end
     return log(r) * (k*(1+epsilon))
 end
@@ -110,23 +145,8 @@ function ltfailure_lower(k::Int, epsilon::Number, Omega::Distribution{Univariate
         # represented float.
         if v < tiny
             break
-        end
+        end        
         r += v
     end
     return r
 end
-
-# p79
-# ς = 0.05642 and ψ = 0.0317
-# k = 10000, M = 142, delta = 0.0317
-
-# def nchoosek_log(n, k):
-#     '''compute the logarithm of n choose k.'''
-#     if k > n:
-#         raise ValueError('k must be <= n')
-#     if k > (n - k):
-#         return factorial_log(n, k=n-k+1) - factorial_log(k)
-#     else:
-#         return factorial_log(n, k=k+1) - factorial_log(n-k)
-
-
