@@ -139,9 +139,9 @@ function test_precode_1()
     c = RQ(10)
     C = [Vector{GF256}([i]) for i in 1:c.L]
     precode!(C, c)
-    for X in 1:c.K
+    for X in 0:c.K-1
         s = ltgenerate(C, X, c)
-        correct = Vector{GF256}([X])
+        correct = Vector{GF256}([X+1])
         if s.value != correct
             error("$X-th LT symbol value should be $correct but is $(s.value)")
         end
@@ -159,11 +159,10 @@ function test_precode_2()
     for i in c.K+1:c.L
         C[i] = Vector{GF256}()
     end
-    # C = [Vector{GF256}([i % 256]) for i in 1:c.L]
     precode!(C, c)
-    for X in 1:c.K
+    for X in 0:c.K-1
         s = ltgenerate(C, X, c)
-        correct = Vector{GF256}([X % 256])
+        correct = Vector{GF256}([(X+1) % 256])
         if s.value != correct
             error("$X-th LT symbol value should be $correct but is $(s.value)")
         end
@@ -171,6 +170,27 @@ function test_precode_2()
     return true
 end
 @test test_precode_2()
+
+function test_precode_3(K=1161)
+    c = RQ(K)
+    C = Vector{Vector{GF256}}(c.L)
+    for i in 1:c.K
+        C[i] = Vector{GF256}([i % 256])
+    end
+    for i in c.K+1:c.L
+        C[i] = Vector{GF256}()
+    end
+    precode!(C, c)
+    for X in 0:c.K-1
+        s = ltgenerate(C, X, c)
+        correct = Vector{GF256}([(X+1) % 256])
+        if s.value != correct
+            error("$X-th LT symbol value should be $correct but is $(s.value)")
+        end
+    end
+    return true
+end
+@test test_precode_3()
 
 function test_decoder_1(K=1000, r=500)
     c, d, C = init(K)
@@ -206,3 +226,20 @@ function test_decoder_2(K=56, r=2)
     return true
 end
 @test test_decoder_2()
+
+function test_decoder_3(K=1162, r=2)
+    c, d, C = init(K)
+    n = 38
+    for j in 1:c.K+r
+        s = RaptorCodes.ltgenerate(C, (n-1)*(c.K)+j, c)
+        RaptorCodes.add!(d, s)
+    end
+    output = RaptorCodes.decode!(d)
+    for i in 1:c.K
+        if output[i] != C[i]
+            error("decoding failure. source[$i] is $(output[i]). should be $(C[i]).")
+        end
+    end
+    return true
+end
+@test test_decoder_3()

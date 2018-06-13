@@ -184,9 +184,9 @@ function precode!(C::Vector, c::RQ)
     for i in c.K+1:c.L # TODO: remove?
         C[i] = zero(C[1])
     end
-    for X in 1:c.K
+    for X in 0:c.K-1
         s = ltgenerate(C, X, c)
-        add!(d, s.neighbours, C[X])
+        add!(d, s.neighbours, C[X+1])
     end
     decode!(d)
     get_source!(C, d)
