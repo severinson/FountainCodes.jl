@@ -146,6 +146,22 @@ function getcolumn{T}(M::QMatrix{T}, c::Int)
 end
 
 """
+    getcolumn!{T}(v::Vector{T}, M::QMatrix{T}, c::Int)
+
+Return the c-th column of the matrix in-place.
+
+"""
+function getcolumn!{T}(v::Vector{T}, M::QMatrix{T}, c::Int)
+    @boundscheck checkbounds(M.binary, 1, c)
+    if haskey(M.qary, c)
+        @views v[:] = M.qary[c]
+        return v
+    end
+    @views v[:] = M.binary[:,c]
+    return v
+end
+
+"""
     countnz(M::QMatrix, c::Int)
 
 Return the number of non-zero entries in the c-th column of M.

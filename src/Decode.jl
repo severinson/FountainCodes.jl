@@ -294,6 +294,7 @@ end
 
 """track performance metrics"""
 function update_metrics!(d::Decoder, rpi::Int, coef)
+    return
     if iszero(coef)
         return
     end
@@ -604,14 +605,17 @@ end
 Subtract the symbols decoded in solve_dense from the above rows of the
 constraint matrix.
 
-TODO: use some sort of in-place processing. this method allocates
-memory when calling getcolumn.
+TODO: consider restarting decoding with the known symbols instead.
+
+TODO: consider the table lookup approach.
 
 """
-function backsolve!(d::Decoder)
+function backsolve!{CT}(d::Decoder{CT})
+    densecol = zeros(CT, rows(d.dense))
     for ri in 1:d.num_symbols-d.num_inactivated
         rpi = d.rowperm[ri]
-        for (upi, coef) in enumerate(IndexLinear(), getcolumn(d.dense, rpi))
+        getcolumn!(densecol, d.dense, rpi)
+        for (upi, coef) in enumerate(IndexLinear(), densecol)
             if iszero(coef)
                 continue
             end
