@@ -284,7 +284,7 @@ function subtract!{CT,VT}(d::Decoder{CT,VT}, rpi::Int, rpj::Int, coefi::CT, coef
     @assert !iszero(coefj) "coefj must be non-zero, but is $coefj and type $(typeof(coefj))"
     coef = coefi
     if coefj != one(coefj)
-        coef /= coefj
+        coef = (coef / coefj)::CT
     end
     subtract!(d.dense, coef, rpj, rpi)
     d.values[rpj] = d.values[rpj] - d.values[rpi] * coef
@@ -294,7 +294,7 @@ end
 
 """track performance metrics"""
 function update_metrics!(d::Decoder, rpi::Int, coef)
-    return
+    return # remove to log metrics
     if iszero(coef)
         return
     end
