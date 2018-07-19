@@ -243,7 +243,7 @@ Return a decoder for Raptor10 codes.
 
 """
 function Decoder(c::R10)
-    selector = HeapSelect(41)
+    selector = HeapSelect(41, c.L)
     d = Decoder{Bool,Vector{GF256},R10,HeapSelect}(
         c,
         selector,
@@ -265,7 +265,7 @@ Return a decoder for Raptor10-256 codes.
 
 """
 function Decoder(c::R10_256)
-    selector = HeapSelect(41)
+    selector = HeapSelect(41, c.L)
     d = Decoder{GF256,Vector{GF256},R10_256,HeapSelect}(
         c,
         selector,

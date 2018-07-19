@@ -2,12 +2,14 @@ struct HeapSelect <: Selector
     buckets::Vector{PriorityQueue{Int,Int,Base.Order.ForwardOrdering}}
     lastsorted::Vector{Int} # number of decoded/inactivated symbols when a bucket was last sorted
     vdegree_from_rpi::Vector{Int}
-    function HeapSelect(num_buckets::Int)
+    st::IntDisjointSetsTracked # tracks components
+    function HeapSelect(num_buckets::Int, num_symbols::Int)
         @assert num_buckets > 2 "num_buckets must be > 2"
         new(
             [PriorityQueue{Int,Int}() for _ in 1:num_buckets],
             zeros(Int, num_buckets),
             Vector{Int}(),
+            IntDisjointSetsTracked(num_symbols),
         )
     end
 end
@@ -112,16 +114,12 @@ end
 Return an edge part of the maximum size component from the graph where the
 vertices are the columns and the rows with non-zero entries in V are the edges.
 
-TODO: create permanent data structures that are reset and re-used each
-time. includes IntDisjointSets, DefaultDict.
-
 """
 function component_select(sel::HeapSelect, d::Decoder)
     bucket = sel.buckets[2]
 
-    # setup union-find to quickly find the largest component
-    vertices = Set{Int}()
-    a = IntDisjointSets(d.num_symbols)
+    # find component
+    crpi = -1
     n = Vector{Int}(2)
     for (rpi, deg) in bucket.xs
         vdeg = sel.vdegree_from_rpi[rpi]
@@ -137,42 +135,30 @@ function component_select(sel::HeapSelect, d::Decoder)
                 i += 1
             end
         end
-        union!(a, n[1], n[2])
-        push!(vertices, n[1])
-        push!(vertices, n[2])
-    end
+        root = union!(sel.st, n[1], n[2])
+        v, e = vertices(sel.st, root), edges(sel.st, root)
+        if v == cvertices(sel.st) # edge is part of the maximum component
+            crpi = rpi
+        end
 
-    # find the largest component
-    components = DefaultDict{Int,Int}(1)
-    largest_component_root = 0
-    largest_component_size = 0
-    for vertex in vertices
-        root = find_root(a, vertex)
-        components[root] += 1
-        size = components[root]
-        if size > largest_component_size
-            largest_component_root = root
-            largest_component_size = size
+        # It's likely that a component with positive excess will
+        # evolve into the largest connected component (under some
+        # assumptions on the process generating the graph), i.e.,
+        # once we find a component with positive excess we can
+        # stop. See "The Birth of the Giant Component" for
+        # details.
+        excess = e - v
+        if excess > 0
+            crpi = rpi
+            break
         end
     end
 
-    # return any edge (row) part of the largest component
-    for (rpi, _) in bucket.xs
-        if !isbinary(d.dense, rpi) # don't consider non-binary rows
-            continue
-        end
-        for cpi in d.sparse[rpi].nzind
-            ci = d.colperminv[cpi]
-            if (d.num_decoded < ci <= d.num_symbols-d.num_inactivated)
-                if find_root(a, cpi) == largest_component_root
-                    return dequeue!(bucket, rpi)
-                end
-            end
-        end
+    reset!(sel.st) # reset the union find structure for the next run
+    if crpi == -1 # there are only non-binary rows
+        return dequeue!(bucket)
     end
-
-    # there are only non-binary rows of vdegree 2
-    return dequeue!(bucket)
+    return dequeue!(bucket, crpi)
 end
 
 """

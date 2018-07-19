@@ -324,7 +324,7 @@ Create a RaptorQ decoder and add the relevant constraint symbols.
 
 """
 function Decoder(c::RQ)
-    selector = HeapSelect(31) # one more than the highest LT symbol degree
+    selector = HeapSelect(31, c.L) # one more than the highest LT symbol degree
     d = Decoder{GF256,Vector{GF256},RQ,HeapSelect}(
         c,
         selector,
