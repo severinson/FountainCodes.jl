@@ -80,13 +80,11 @@ function Base.pop!(sel::HeapSelect, d::Decoder) :: Int
         end
         min_vdegree_in_bucket = i - (d.num_decoded + d.num_inactivated - sel.lastsorted[i])
         if min_vdegree_in_bucket > min_bucket
-            # push!(d.metrics, "skip1", 1)
             continue
         end
         if min_bucket == 1
             _, deg = peek(bucket)
             if deg >= min_deg
-                # push!(d.metrics, "skip2", 1)
                 continue
             end
         end
