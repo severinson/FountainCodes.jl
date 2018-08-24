@@ -1,7 +1,7 @@
-* DONE 
+* DONE
   CLOSED: [2018-01-30 Tue 17:03]
 Gaussian elimination of a system of equations over F_2.
-* DONE 
+* DONE
   CLOSED: [2018-03-06 Tue 09:58]
 Separate value type, i.e., allow the value of a coded symbol have arbitrary
 type. Define the subtract operator for different value types.
@@ -35,7 +35,8 @@ which its coefficients are defined. For example, binary, q* TODO ary, real.
 - Is there a point? These are not touched anyway. Only releases some memory a
   bit earlier.
 - No point in doing this I think.
-* TODO Fast priority updates
+* DONE Fast priority updates
+  CLOSED: [2018-07-25 on. 09:56]
 - Current row priority systems requires updating the priority of a number of
   rows proportional to the total number of rows. This is slow.
 - Idea: sort the column lists according to priority and store the smallest
@@ -43,7 +44,8 @@ which its coefficients are defined. For example, binary, q* TODO ary, real.
   column in inactivated/decoded.
 - This system is more complicated. Need to think about how to implement this
   well. Interface is essentially just get_row.
-* TODO inactivate setdense every row
+* DONE inactivate setdense every row
+  CLOSED: [2018-07-25 on. 09:56]
 - Inactivate_isymbol sets the inactivated element for every neighboring row.
   It'd be more efficient to do this only when the row is selected.
 - Could be done by keeping a record of all inactivated symbols and checking for
@@ -72,11 +74,13 @@ which its coefficients are defined. For example, binary, q* TODO ary, real.
 - Subtracting a q-ary dense part from a binary part has to be defined.
 - It's confusing to have both a binary and q-ary dense part. You can't have both
   a q-ary and binary element in the same column of a row.
-* TODO Grow dense binary part
+* DONE Grow dense binary part
+  CLOSED: [2018-07-25 on. 09:56]
 - Dense binary part is currently fixed size.
 - The decoder will fail if there's more than 64 inactivations.
 * TODO Test LT symbols against ground truth
-* TODO RBitVector constructor
+* DONE RBitVector constructor
+  CLOSED: [2018-07-25 on. 09:56]
 - variable names
 - use sort instead of sort! + copy
 * DONE Revisit complexity measurement
@@ -92,7 +96,8 @@ which its coefficients are defined. For example, binary, q* TODO ary, real.
 - The decoder constructors default to Vector{GF256. It would be better to allow
   an arbitrary value type and let the user worry about defining addition etc.
 
-* TODO Could use reinterpret rather than Union in RqRow
+* DONE Could use reinterpret rather than Union in RqRow
+  CLOSED: [2018-07-25 on. 09:56]
 - Avoids having to use a union. May be faster.
 - Addition is carried out as regular.
 - For multiplication we first reinterpret as a byte array and then do the
@@ -113,17 +118,21 @@ which its coefficients are defined. For example, binary, q* TODO ary, real.
   coefficients. Generalizes to any coefficient type and we don't have to deal
   with sampleable objects.
 - R10Row, RqRow
-* TODO getdense type instability
+* DONE getdense type instability
+  CLOSED: [2018-07-25 on. 09:57]
 - Could be addressed by using one(CT) instead of true for binary coefficients
 - Always promote binary elements into the larger field?
 - Need to use iszero instead of plain boolean comparison in decoder
 - Currently returns false if index is higher than num_inactivated. This should
   probably be an error instead.
-* TODO Decoder tests in one file
-- Now some tests are among the LT code tests
-* TODO qary_from_binary
+* TODO Decoder tests organization
+- Some tests are in their own file and some in files corresponding to
+  the different codes.
+* DONE qary_from_binary
+  CLOSED: [2018-08-24 fr. 16:43]
 - This method only works for GF256
-* TODO Subtract BitVector * coef
+* DONE Subtract BitVector * coef
+  CLOSED: [2018-08-24 fr. 16:44]
 - RqRow subtract doesn't account for the coefficient when a.dense is a
   BitVector. Need to promote to Vector{CT} is the coefficient isn't one.
 * DONE Benchmark uses ISymbol
@@ -143,16 +152,19 @@ which its coefficients are defined. For example, binary, q* TODO ary, real.
   CLOSED: [2018-03-25 Sun 17:58]
 - Problem with the Q-ary ltegenrate function.
 - Returns a value of type any if an empty vector has been given as value.
-* TODO Rename LT to LT10
+* DONE Rename LT to LT10
+  CLOSED: [2018-07-25 on. 09:55]
 * TODO GF256 subtract method
 - Seems inefficient. Does not use the new addeq functions
-* TODO Remove divrq et al. in favor for diveq
+* DONE Remove divrq et al. in favor for diveq
+  CLOSED: [2018-08-24 fr. 16:44]
 - In Symbols.jl
 * TODO Test corner cases
 ** TODO Attempt to decode before adding symbols
 ** TODO Attempt to decode twice
 ** TODO Attempt to decode after failing and having added symbols in between
-* TODO Row type instability
+* DONE Row type instability
+  CLOSED: [2018-07-25 on. 09:55]
 - Row type is determined by its index. This is a performance issue since
   dispatch works on types and not values.
 - We would want to get the types once and then call methods based on their
@@ -175,3 +187,31 @@ which its coefficients are defined. For example, binary, q* TODO ary, real.
 * TODO RQ metrics
 - Store the number of GF256 operations in a separate column.
 - Store Kp as the number of source symbols.
+* TODO Efficient dense symbols
+- I don't think the dense constraints need to be stored explicitly.
+  It's possible to compute the product between dense matrix and an
+  arbitrary vector efficiently by exploiting its structure. Doing this
+  we can compute the right-hand-side of the equation. We know the left
+  side of the result a priori so we don't need to compute it
+  explicitly. This effectively makes the dense part sparse.
+- Probably still need to compute the coefficients in the dense part
+  for the inactivated columns. Because we can't know the structure a priori.
+- Multiplication procedure:
+  - Multiply the first l coded symbols (taking their values after Li
+    has been computed) with the dense vector B, taking the
+    permutations into account.
+  - Use the optimized iterative algorithm to compute the resulting
+    vector. This requires generating the indices with non-zero values
+    and adding values to the corresponding slots in a pre-allocated
+    vector.
+  - Compute the coefficients of the dense matrix corresponding to the
+    inactivated columns explicitly. Add these as new rows to the
+    matrix with values equal to the vector computed in the previous
+    step. This requires the decoder being able to handle adding rows
+    after decoding has started.
+** TODO Tests
+- Comparing the coefficients computed in an optimized manner.
+- Comparing computed values for matrix multiplication and optimized
+  method.
+* TODO Simple selector is broken
+* TODO Add random selector for reference
