@@ -1,13 +1,16 @@
-* DONE 
+* DONE
   CLOSED: [2018-01-30 Tue 17:03]
 Gaussian elimination of a system of equations over F_2.
-* TODO  
+* DONE
+  CLOSED: [2018-03-06 Tue 09:58]
 Separate value type, i.e., allow the value of a coded symbol have arbitrary
 type. Define the subtract operator for different value types.
-* TODO  
+* DONE Allow different types of coded symbols
+  CLOSED: [2018-03-18 Sun 22:31]
 Allow different types of coded symbols, where the difference is the field over
 which its coefficients are defined. For example, binary, q* TODO ary, real.
-* TODO Standard row selection
+* DONE Standard row selection
+  CLOSED: [2018-03-06 Tue 09:58]
 - If there's no row of active degree 2, choose any row with minimum degree. If
   several exist, pick the row with minimum original degree. I guess this is
   because these rows will have fewer inactivated neighbours.
@@ -26,6 +29,189 @@ which its coefficients are defined. For example, binary, q* TODO ary, real.
    CLOSED: [2018-01-31 Wed 14:39]
 ** TODO Separate sets for different kinds of neighbours
 
-* TODO Discard unneeded rows
+* DONE Discard unneeded rows
+  CLOSED: [2018-03-18 Sun 22:31]
 - After the GE step we can discard all only-zero rows.
+- Is there a point? These are not touched anyway. Only releases some memory a
+  bit earlier.
+- No point in doing this I think.
+* DONE Fast priority updates
+  CLOSED: [2018-07-25 on. 09:56]
+- Current row priority systems requires updating the priority of a number of
+  rows proportional to the total number of rows. This is slow.
+- Idea: sort the column lists according to priority and store the smallest
+  priority separately. All priorities in this list are updated at once when a
+  column in inactivated/decoded.
+- This system is more complicated. Need to think about how to implement this
+  well. Interface is essentially just get_row.
+* DONE inactivate setdense every row
+  CLOSED: [2018-07-25 on. 09:56]
+- Inactivate_isymbol sets the inactivated element for every neighboring row.
+  It'd be more efficient to do this only when the row is selected.
+- Could be done by keeping a record of all inactivated symbols and checking for
+  them when a row is selected.
+* DONE Formalized row interface
+  CLOSED: [2018-03-14 Wed 09:16]
+- Subtract one row from another.
+- Subtract a multiple of one row from another.
+- Normalize a row.
+- Get the sparse degree.
+- Get the inactive degree.
+- Neighbors/indices
+* DONE Row members names
+  CLOSED: [2018-03-06 Tue 11:32]
+- Use indices instead of active. Indices contains all indices.
+- Use dense instead of inactive?
+* DONE Dense q-ary part
+  CLOSED: [2018-03-14 Wed 09:16]
+- Add a new member to rows.
+- Initialize this part to have zero length. Only allocate it when needed.
+- Update subtract method to also process this part.
+- Need to be able to get the coefficient of the row we're subtracting with. For
+  sorted lists this takes O(log n) operations. An empty values vector could
+  indicate that all non-zero elements have value 1. There's a built-in method
+  for this.
+- Subtracting a q-ary dense part from a binary part has to be defined.
+- It's confusing to have both a binary and q-ary dense part. You can't have both
+  a q-ary and binary element in the same column of a row.
+* DONE Grow dense binary part
+  CLOSED: [2018-07-25 on. 09:56]
+- Dense binary part is currently fixed size.
+- The decoder will fail if there's more than 64 inactivations.
+* TODO Test LT symbols against ground truth
+* DONE RBitVector constructor
+  CLOSED: [2018-07-25 on. 09:56]
+- variable names
+- use sort instead of sort! + copy
+* DONE Revisit complexity measurement
+  CLOSED: [2018-03-25 Sun 17:59]
+- Current subtract method counts 1 XOR for the value.
+* DONE Parameters abstract type
+  CLOSED: [2018-03-14 Wed 09:16]
+* DONE asbytes isbits check
+  CLOSED: [2018-03-14 Wed 09:16]
+* DONE R10Symbol Vector{VT} should be VT
+  CLOSED: [2018-03-25 Sun 17:59]
+- Changed Vector{VT} should be VT
+- The decoder constructors default to Vector{GF256. It would be better to allow
+  an arbitrary value type and let the user worry about defining addition etc.
 
+* DONE Could use reinterpret rather than Union in RqRow
+  CLOSED: [2018-07-25 on. 09:56]
+- Avoids having to use a union. May be faster.
+- Addition is carried out as regular.
+- For multiplication we first reinterpret as a byte array and then do the
+  multiplication.
+* DONE Renaming
+  CLOSED: [2018-03-25 Sun 18:00]
+** DONE R10Symbol to BSymbol
+   CLOSED: [2018-03-19 Mon 17:00]
+** TODO Everything with parameters into just the name of the code.
+- QLTParameters to LTQ
+- LTParameters to LT10
+** DONE inactivate_isymbol
+   CLOSED: [2018-03-19 Mon 16:38]
+* DONE Parametric q-ary codes
+  CLOSED: [2018-03-14 Wed 11:03]
+- Should be a parametric type.
+- One of the types is the coefficient type. Then we can use rand to generate
+  coefficients. Generalizes to any coefficient type and we don't have to deal
+  with sampleable objects.
+- R10Row, RqRow
+* DONE getdense type instability
+  CLOSED: [2018-07-25 on. 09:57]
+- Could be addressed by using one(CT) instead of true for binary coefficients
+- Always promote binary elements into the larger field?
+- Need to use iszero instead of plain boolean comparison in decoder
+- Currently returns false if index is higher than num_inactivated. This should
+  probably be an error instead.
+* TODO Decoder tests organization
+- Some tests are in their own file and some in files corresponding to
+  the different codes.
+* DONE qary_from_binary
+  CLOSED: [2018-08-24 fr. 16:43]
+- This method only works for GF256
+* DONE Subtract BitVector * coef
+  CLOSED: [2018-08-24 fr. 16:44]
+- RqRow subtract doesn't account for the coefficient when a.dense is a
+  BitVector. Need to promote to Vector{CT} is the coefficient isn't one.
+* DONE Benchmark uses ISymbol
+  CLOSED: [2018-03-19 Mon 16:33]
+* DONE Unified code interface
+  CLOSED: [2018-03-25 Sun 17:58]
+- All codes should have some sort of init function that makes the setup
+  identical.
+- Create parameters, precode, ltgen, (serialize/deserialize), decode.
+* TODO xor!
+- Should use GF256, not UInt8
+- Should investigate if this method is faster than using the standard dot
+  notation xor.(a, b).
+* TODO Deterministic coefficients
+- coefficient should use the ESI to generate deterministic coefficients.
+* DONE coef multiplied by an empty vector gives any
+  CLOSED: [2018-03-25 Sun 17:58]
+- Problem with the Q-ary ltegenrate function.
+- Returns a value of type any if an empty vector has been given as value.
+* DONE Rename LT to LT10
+  CLOSED: [2018-07-25 on. 09:55]
+* TODO GF256 subtract method
+- Seems inefficient. Does not use the new addeq functions
+* DONE Remove divrq et al. in favor for diveq
+  CLOSED: [2018-08-24 fr. 16:44]
+- In Symbols.jl
+* TODO Test corner cases
+** TODO Attempt to decode before adding symbols
+** TODO Attempt to decode twice
+** TODO Attempt to decode after failing and having added symbols in between
+* DONE Row type instability
+  CLOSED: [2018-07-25 on. 09:55]
+- Row type is determined by its index. This is a performance issue since
+  dispatch works on types and not values.
+- We would want to get the types once and then call methods based on their
+  types.
+- We'd want to use a BitMatrix for the dense binary part. This gives optimal
+  data locality. We'll may have to expand the matrix during inactivations. If we
+  always put multiples of 64 columns this problem will likely be small. Could
+  even double the number of columns every time.
+- Then we can drop the row objects. Instead, we could use a sparse matrix with
+  coefficients of type CT to store the rows. Can figure out if a row is binary
+  or not by having a separate isbinary BitVector.
+- QMatrix is pretty much working. There are performance enhancements to be made
+  and some small features that need to be added but otherwise it seems fine.
+- Also need to implement upscaling the matrix. Probably by creating a new one
+  and assigning the old one to it. This will only have to be done rarely.
+- Next we need to make the decoder use it. This requires rewriting the setdense
+  and subtract calls to use it.
+- Once this is done we can remove the BRow/QRow distinction and use a vector of
+  vectors style. We could even use an stdlib sparse matrix.
+* TODO RQ metrics
+- Store the number of GF256 operations in a separate column.
+- Store Kp as the number of source symbols.
+* TODO Efficient dense symbols
+- I don't think the dense constraints need to be stored explicitly.
+  It's possible to compute the product between dense matrix and an
+  arbitrary vector efficiently by exploiting its structure. Doing this
+  we can compute the right-hand-side of the equation. We know the left
+  side of the result a priori so we don't need to compute it
+  explicitly. This effectively makes the dense part sparse.
+- Probably still need to compute the coefficients in the dense part
+  for the inactivated columns. Because we can't know the structure a priori.
+- Multiplication procedure:
+  - Multiply the first l coded symbols (taking their values after Li
+    has been computed) with the dense vector B, taking the
+    permutations into account.
+  - Use the optimized iterative algorithm to compute the resulting
+    vector. This requires generating the indices with non-zero values
+    and adding values to the corresponding slots in a pre-allocated
+    vector.
+  - Compute the coefficients of the dense matrix corresponding to the
+    inactivated columns explicitly. Add these as new rows to the
+    matrix with values equal to the vector computed in the previous
+    step. This requires the decoder being able to handle adding rows
+    after decoding has started.
+** TODO Tests
+- Comparing the coefficients computed in an optimized manner.
+- Comparing computed values for matrix multiplication and optimized
+  method.
+* TODO Simple selector is broken
+* TODO Add random selector for reference
