@@ -467,57 +467,6 @@ def main():
     prefix = "./simulations/"
     refresh = True
 
-
-    # directories = [d for d in glob.glob("./simulations/R10*") if path.isdir(d)]
-    directories = [
-        "R10(1000)",
-        "R10(1100)",
-        "R10(1200)",
-        "R10(1300)",
-        "R10(1400)",
-        "R10(1500)",
-        "R10(1600)",
-        "R10(1700)",
-        "R10(1800)",
-        "R10(1900)",
-        "R10(2000)",
-        "R10(2100)",
-        "R10(2200)",
-        "R10(2300)",
-        "R10(2400)",
-        "R10(2500)",
-        "R10(2600)",
-        "R10(2700)",
-        "R10(2800)",
-        "R10(2900)",
-        "R10(3000)",
-        "R10(3100)",
-        "R10(3200)",
-        "R10(3300)",
-        "R10(3400)",
-        "R10(3500)",
-        "R10(3600)",
-        "R10(3700)",
-        "R10(3800)",
-        "R10(3900)",
-        "R10(4000)",
-        "R10(5000)",
-        "R10(6000)",
-        "R10(7000)",
-        "R10(8000)",
-    ]
-    # directories = [
-    #     "R10(1000)",
-    #     "R10(2000)",
-    #     "R10(3000)",
-    #     "R10(4000)",
-    #     "R10(6000)",
-    #     "R10(7000)",
-    #     "R10(8000)",
-    #     "LTParameters(4000, Soliton(4000, 3998, 0.999))",
-    # ]
-
-
     directories = [
         "LTQ{Float64,DT}(1000, Soliton(1000, 998, 0.999))",
         "LTQ{Float64,DT}(2000, Soliton(2000, 1998, 0.999))",
@@ -532,50 +481,10 @@ def main():
         "RQ(4000)",
         "RQ(8000)",
     ]
-
-    # directories = [
-    #     "LDPC10(612, 1224, 6810298610506088827)",
-    #     "LDPC10(2400, 4800, 16104329366021199122)",
-    # ]
-
-    # directories = ['R10(1000)', 'RQ(1000)', 'R10(2000)', 'RQ(2000)', 'R10(4000)', 'RQ(4000)']
-
     directories = [prefix + d for d in directories]
     descriptors = [d.strip(prefix) for d in directories]
     print(directories)
     print(descriptors)
-
-    # directories = [
-    #     "R10Parameters(1000)",
-    #     "R10(2000)",
-    #     "R10(3000)",
-    #     "R10Parameters(4000)",
-    #     "R10(6000)",
-    #     "R10(8000)",
-    #     # "LTParameters(4000, Soliton(4000, 3998, 0.9999999701976676))",
-    #     # "QLTParameters{DT,UInt8}(4000, Soliton(4000, 3998, 0.9999999701976676))",
-    #     # "LTParameters(1000, Soliton(1000, 998, 0.9999999701976676))",
-    #     # "QLTParameters{DT,UInt8}(1000, Soliton(1000, 998, 0.9999999701976676))",
-    #     # "LTQ{Float64,DT}(4000, Soliton(4000, 3998, 0.9999999701976676))",
-    #     # "LTQ{Float64,DT}(4000, Soliton(4000, 3998, 0.9999999701976676))-1",
-    #     # "LTParameters(4000, Soliton(4000, 3998, 0.999))",
-    #     # "QLTParameters{DT,UInt8}(4000, Soliton(4000, 3998, 0.999))",
-    # ]
-    # directories = [prefix + directory for directory in directories]
-    # descriptors = [
-    #     "R10(1000)",
-    #     "R10(2000)",
-    #     "R10(3000)",
-    #     "R10(4000)",
-    #     "R10(6000)",
-    #     "R10(8000)",
-    #     # "LT(4000, 3998, 0.9999...)",
-    #     # "LT256(4000, 3998, 0.9999...)",
-    #     # "LT(1000, 998, 0.9999...)",
-    #     # "LT256(1000, 998, 0.9999...)",
-    #     # "LT-Float64(4000, 3998, 0.9999...)",
-    #     # "LT-Float64-1e10(4000, 3998, 0.9999...)",
-    # ]
 
     # aggregate dataframes
     # dfs_success = (load(f, index='overhead', only_success=True, refresh=refresh) for f in directories)
