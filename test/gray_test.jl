@@ -1,4 +1,4 @@
-using RaptorCodes
+using FountainCodes
 
 function test_encode_decode()
     for n in 1:100

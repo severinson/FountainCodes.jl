@@ -10,7 +10,7 @@ const GF256 = UInt8
 #     end
 # end
 
-doc"convert an object to a vector of bytes"
+"convert an object to a vector of bytes"
 function asbytes(x) :: Vector{GF256}
     if !isbits(x)
         error("$x is not a plain data type and cannot be converted to bytes")
@@ -22,12 +22,12 @@ function asbytes(x) :: Vector{GF256}
     return dst
 end
 
-doc"addition over GF256 according to rfc6330.."
+"addition over GF256 according to rfc6330.."
 function Base.:+(a::GF256, b::GF256)
     return xor(a, b)
 end
 
-doc"subtraction over GF256 according to rfc6330.."
+"subtraction over GF256 according to rfc6330.."
 function Base.:-(a::GF256, b::GF256)
     return a + b
 end
@@ -40,12 +40,12 @@ function exprq(a::Int) :: GF256
     return RQ_OCT_EXP[a+1]
 end
 
-doc"multiplication over GF256 according to rfc6330."
+"multiplication over GF256 according to rfc6330."
 function Base.:*(a::GF256, b::GF256)
     return iszero(a) || iszero(b) ? zero(a) : RQ_OCT_EXP[RQ_OCT_LOG[a] + RQ_OCT_LOG[b] + 1]
 end
 
-doc"vector-scalar multiplication over GF256"
+"vector-scalar multiplication over GF256"
 function Base.:*(a::AbstractArray{GF256}, b::GF256)
     if iszero(b)
         return zeros(GF256, length(a))
@@ -53,14 +53,14 @@ function Base.:*(a::AbstractArray{GF256}, b::GF256)
     return map(x -> iszero(x) ? zero(x) : exprq(logrq(b)+logrq(x)), a)
 end
 
-doc"division over GF256 according to rfc6330."
+"division over GF256 according to rfc6330."
 function Base.:/(a::AbstractArray{GF256}, b::GF256)
     if iszero(a)
         return zero(a)
     elseif iszero(b)
         error("division by zero")
     end
-    return exprq.(logrq.(a) - logrq(b) + 255)
+    return exprq.(logrq.(a) .- logrq(b) .+ 255)
 end
 
 """
@@ -115,7 +115,7 @@ function diveq!(a, b)
     return a
 end
 
-doc"division over GF256 according to rfc6330."
+"division over GF256 according to rfc6330."
 function Base.:/(a::GF256, b::GF256)
     if iszero(a)
         return zero(a)
@@ -126,19 +126,19 @@ function Base.:/(a::GF256, b::GF256)
     end
 end
 
-doc"outer code symbol with binary coefficients."
+"outer code symbol with binary coefficients."
 struct BSymbol{VT} <: CodeSymbol
     esi::Int # encoded symbol id
     value::VT # value of the symbol
     neighbours::Vector{Int}
 end
 
-doc"number of neighbouring intermediate symbols."
+"number of neighbouring intermediate symbols."
 function degree(cs::CodeSymbol)
     return length(cs.neighbours)
 end
 
-doc"outer code symbol with arbitrary coefficient type."
+"outer code symbol with arbitrary coefficient type."
 struct QSymbol{VT,CT} <: CodeSymbol
     esi::Int # encoded symbol id
     value::VT # value of the symbol

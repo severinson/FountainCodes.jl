@@ -1,17 +1,17 @@
-using Base.Test, Distributions, RaptorCodes
+using FountainCodes, Test, Distributions
 
 function init(k=10)
-    dd = RaptorCodes.Soliton(k, Int(round(k*2/3)), 0.01)
-    p = RaptorCodes.LT(k, dd)
-    d = RaptorCodes.Decoder(p)
+    dd = FountainCodes.Soliton(k, Int(round(k*2/3)), 0.01)
+    p = FountainCodes.LT(k, dd)
+    d = FountainCodes.Decoder(p)
     C = [Vector{GF256}([i % 256]) for i in 1:p.L]
     return p, d, C
 end
 
 function init_gf256(k=10)
-    dd = RaptorCodes.Soliton(k, Int(round(k*2/3)), 0.01)
-    p = RaptorCodes.LTQ{GF256}(k, dd)
-    d = RaptorCodes.Decoder(p)
+    dd = FountainCodes.Soliton(k, Int(round(k*2/3)), 0.01)
+    p = FountainCodes.LTQ{GF256}(k, dd)
+    d = FountainCodes.Decoder(p)
     C = [Vector{GF256}([i % 256]) for i in 1:p.L]
     return p, d, C
 end
@@ -23,7 +23,7 @@ function test_encode()
             error("intermediate symbol at index $i not assigned.")
         end
     end
-    s = RaptorCodes.ltgenerate(C, 1, p)
+    s = FountainCodes.ltgenerate(C, 1, p)
     return true
 end
 @test test_encode()
@@ -33,8 +33,8 @@ function test_ltgenerate_1()
     p_lt, _, C_lt = init(1024)
     p_ltq, _, C_ltq = init_gf256(1024)
     for i in 1:1300
-        s_lt = RaptorCodes.ltgenerate(C_lt, i, p_lt)
-        s_ltq = RaptorCodes.ltgenerate(C_ltq, i, p_ltq)
+        s_lt = FountainCodes.ltgenerate(C_lt, i, p_lt)
+        s_ltq = FountainCodes.ltgenerate(C_ltq, i, p_ltq)
         if s_lt.neighbours != s_ltq.neighbours
             error("$(s_lt.neighbours) != $(s_ltq.neighbours) for ESI $i")
         end
@@ -46,10 +46,10 @@ end
 function test_decode_1()
     p, d, C = init()
     for i in 1:13
-        s = RaptorCodes.ltgenerate(C, i, p)
-        RaptorCodes.add!(d, s)
+        s = FountainCodes.ltgenerate(C, i, p)
+        FountainCodes.add!(d, s)
     end
-    output = RaptorCodes.decode!(d)
+    output = FountainCodes.decode!(d)
     for i in 1:p.K
         if output[i] != C[i]
             error("decoding failure. source[$i] is $(output[i]). should be $(C[i]).")
@@ -62,10 +62,10 @@ end
 function test_decode_2()
     p, d, C = init(100)
     for i in 1:120
-        s = RaptorCodes.ltgenerate(C, i, p)
-        RaptorCodes.add!(d, s)
+        s = FountainCodes.ltgenerate(C, i, p)
+        FountainCodes.add!(d, s)
     end
-    output = RaptorCodes.decode!(d)
+    output = FountainCodes.decode!(d)
     for i in 1:p.K
         if output[i] != C[i]
             error("decoding failure. source[$i] is $(output[i]). should be $(C[i]).")
@@ -78,17 +78,17 @@ end
 function test_diagonalize_1()
     p, d, C = init(1024)
     for i in 1:1300
-        s = RaptorCodes.ltgenerate(C, i, p)
-        RaptorCodes.add!(d, s)
+        s = FountainCodes.ltgenerate(C, i, p)
+        FountainCodes.add!(d, s)
     end
-    RaptorCodes.diagonalize!(d)
+    FountainCodes.diagonalize!(d)
     for i in 1:d.num_decoded
         rpi = d.rowperm[i]
         cpi = d.colperm[i]
         correct = C[cpi]
         for ci in 1:d.p.L
             cpj = d.colperm[ci]
-            if !iszero(RaptorCodes.getdense(d, rpi, cpj))
+            if !iszero(FountainCodes.getdense(d, rpi, cpj))
                 correct = correct + C[cpj]
             end
         end
@@ -103,11 +103,11 @@ end
 function test_ge_1()
     p, d, C = init(1024)
     for i in 1:1400
-        s = RaptorCodes.ltgenerate(C, i, p)
-        RaptorCodes.add!(d, s)
+        s = FountainCodes.ltgenerate(C, i, p)
+        FountainCodes.add!(d, s)
     end
-    RaptorCodes.diagonalize!(d)
-    RaptorCodes.solve_dense!(d)
+    FountainCodes.diagonalize!(d)
+    FountainCodes.solve_dense!(d)
     for i in d.p.L-d.num_inactivated+1:d.p.L
         rpi = d.rowperm[i]
         cpi = d.colperm[i]
@@ -126,11 +126,11 @@ end
 function test_ge_2()
     p, d, C = init(100)
     for i in 1:130
-        s = RaptorCodes.ltgenerate(C, i, p)
-        RaptorCodes.add!(d, s)
+        s = FountainCodes.ltgenerate(C, i, p)
+        FountainCodes.add!(d, s)
     end
-    RaptorCodes.diagonalize!(d)
-    RaptorCodes.solve_dense!(d)
+    FountainCodes.diagonalize!(d)
+    FountainCodes.solve_dense!(d)
     for i in d.p.L-d.num_inactivated+1:d.p.L
         rpi = d.rowperm[i]
         cpi = d.colperm[i]
@@ -149,10 +149,10 @@ end
 function test_decoder_3()
     p, d, C = init(1024)
     for i in 1:1400
-        s = RaptorCodes.ltgenerate(C, i, p)
-        RaptorCodes.add!(d, s)
+        s = FountainCodes.ltgenerate(C, i, p)
+        FountainCodes.add!(d, s)
     end
-    output = RaptorCodes.decode!(d)
+    output = FountainCodes.decode!(d)
     for i in 1:p.K
         if output[i] != C[i]
             error("decoding failure. source[$i] is $(output[i]). should be $(C[i]).")
@@ -165,10 +165,10 @@ end
 function test_decode_gf256_1()
     p, d, C = init_gf256(1024)
     for i in 1:1400
-        s = RaptorCodes.ltgenerate(C, i, p)
-        RaptorCodes.add!(d, s)
+        s = FountainCodes.ltgenerate(C, i, p)
+        FountainCodes.add!(d, s)
     end
-    output = RaptorCodes.decode!(d)
+    output = FountainCodes.decode!(d)
     for i in 1:p.K
         if output[i] != C[i]
             error("decoding failure. source[$i] is $(output[i]). should be $(C[i]).")
@@ -181,10 +181,10 @@ end
 function test_decode_gf256_2()
     p, d, C = init_gf256(100)
     for i in 1:120
-        s = RaptorCodes.ltgenerate(C, i, p)
-        RaptorCodes.add!(d, s)
+        s = FountainCodes.ltgenerate(C, i, p)
+        FountainCodes.add!(d, s)
     end
-    output = RaptorCodes.decode!(d)
+    output = FountainCodes.decode!(d)
     for i in 1:p.K
         if output[i] != C[i]
             error("decoding failure. source[$i] is $(output[i]). should be $(C[i]).")
@@ -202,7 +202,7 @@ function test_encode_gf256()
             error("intermediate symbol at index $i not assigned.")
         end
     end
-    s = RaptorCodes.ltgenerate(C, 1, p)
+    s = FountainCodes.ltgenerate(C, 1, p)
     return true
 end
 @test test_encode_gf256()

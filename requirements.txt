@@ -1,7 +1,0 @@
-scipy
-numpy
-pandas
-matplotlib
-diskcache
-https://github.com/severinson/pynumeric/archive/master.zip
-https://github.com/severinson/pyrateless/archive/master.zip

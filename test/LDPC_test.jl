@@ -1,4 +1,4 @@
-using RaptorCodes, Base.Test
+using FountainCodes, DelimitedFiles, Test
 
 function test_ldpc_decoder_1()
     H = zeros(Bool, 3, 6)
@@ -25,11 +25,11 @@ end
 @test test_ldpc_decoder_1()
 
 function test_ldpc_decoder_2()
-    H = Matrix{Bool}(readdlm("./test/H_612_1224.txt"))
+    H = Matrix{Bool}(readdlm("./H_612_1224.txt"))
     c = LDPC10{GF256}(H)
-    c.erased[1:450] = true
+    c.erased[1:450] .= true
     shuffle!(c.erased)
-    c.Y[c.erased] = 1 # make sure these get reset to 0 during decoding
+    c.Y[c.erased] .= 1 # make sure these get reset to 0 during decoding
     d = Decoder(c)
     decode!(d)
     get_source!(view(c.Y, c.erased), d)
@@ -41,11 +41,11 @@ end
 @test test_ldpc_decoder_2()
 
 function test_ldpc_decoder_3()
-    H = Matrix{Bool}(readdlm("./test/H_2400_4800.txt"))
+    H = Matrix{Bool}(readdlm("./H_2400_4800.txt"))
     c = LDPC10{GF256}(H)
-    c.erased[1:1776] = true
+    c.erased[1:1776] .= true
     shuffle!(c.erased)
-    c.Y[c.erased] = 1 # make sure these get reset to 0 during decoding
+    c.Y[c.erased] .= 1 # make sure these get reset to 0 during decoding
     d = Decoder(c)
     decode!(d)
     get_source!(view(c.Y, c.erased), d)
@@ -57,11 +57,11 @@ end
 @test test_ldpc_decoder_3()
 
 function test_ldpc_decoder_4()
-    H = Matrix{Bool}(readdlm("./test/H_612_1224.txt"))
+    H = Matrix{Bool}(readdlm("./H_612_1224.txt"))
     c = LDPC10{GF256}(H)
-    c.erased[1:590] = true
+    c.erased[1:580] .= true
     shuffle!(c.erased)
-    c.Y[c.erased] = 1 # make sure these get reset to 0 during decoding
+    c.Y[c.erased] .= 1 # make sure these get reset to 0 during decoding
     d = Decoder(c)
     decode!(d)
     get_source!(view(c.Y, c.erased), d)

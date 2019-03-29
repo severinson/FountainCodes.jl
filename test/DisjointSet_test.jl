@@ -1,4 +1,4 @@
-using RaptorCodes, Base.Test
+using FountainCodes, Test
 
 function test_1()
     st = IntDisjointSetsTracked(10)

@@ -60,12 +60,17 @@ function DataStructures.union!(st::IntDisjointSetsTracked, x::Integer, y::Intege
     root
 end
 
-# clear the data structure
+"""
+    reset!(st::IntDisjointSetsTracked)
+
+Clear the data structure.
+
+"""
 function reset!(st::IntDisjointSetsTracked)
-    @views st.s.parents[:] = 1:length(st.s.parents)
-    @views st.s.ranks[:] = 0
-    @views st.vertices[:] = 1
-    @views st.edges[:] = 0
+    st.s.parents[:] .= 1:length(st.s.parents)
+    st.s.ranks[:] .= 0
+    st.vertices[:] .= 1
+    st.edges[:] .= 0
     st.maxv, st.maxe, st.maxroot = 1, 0, 1
     return
 end

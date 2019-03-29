@@ -1,6 +1,6 @@
 # standardized tables given in RFC5053
 
-doc"table V0 of rfc5053 and rfc6330."
+"table V0 of rfc5053 and rfc6330."
 const V0 = [
     251291136, 3952231631, 3370958628, 4070167936, 123631495,
     3351110283, 3218676425, 2011642291, 774603218, 2402805061,
@@ -56,7 +56,7 @@ const V0 = [
     1358307511
 ]
 
-doc"table V1 of rfc5053 and rfc6330."
+"table V1 of rfc5053 and rfc6330."
 const V1 = [
     807385413, 2043073223, 3336749796, 1302105833, 2278607931,
     541015020, 1684564270, 372709334, 3508252125, 1768346005,
@@ -112,7 +112,7 @@ const V1 = [
     4135048896
 ]
 
-doc"systematic indices used to generate encoded symbol identifiers."
+"systematic indices used to generate encoded symbol identifiers."
 const J = [
     18, 14, 61, 46, 14, 22, 20, 40, 48, 1, 29, 40, 43, 46, 18, 8, 20, 2,
     61, 26, 13, 29, 36, 19, 58, 5, 58, 0, 54, 56, 24, 14, 5, 67, 39, 31,

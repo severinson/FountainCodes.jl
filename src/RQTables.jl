@@ -1,6 +1,6 @@
 # standardized tables given in RFC6330
 
-doc"table V2 of rfc6330."
+"table V2 of rfc6330."
 const V2 = [
     1629829892, 282540176, 2794583710, 496504798, 2990494426,
     3070701851, 2575963183, 4094823972, 2775723650, 4079480416,
@@ -56,7 +56,7 @@ const V2 = [
     3497665928
 ]
 
-doc"table V3 of rfc6330."
+"table V3 of rfc6330."
 const V3 = [
     1191369816, 744902811, 2539772235, 3213192037, 3286061266,
     1200571165, 2463281260, 754888894, 714651270, 1968220972,
@@ -593,7 +593,7 @@ const RQ_parameter_table = [
     56403 471 907 16 56951
 ]
 
-doc"GF256 exponentiation table. indexing starts at 0. table 5.7.3 of rfc6330."
+"GF256 exponentiation table. indexing starts at 0. table 5.7.3 of rfc6330."
 const RQ_OCT_EXP = Vector{GF256}([
     1, 2, 4, 8, 16, 32, 64, 128, 29, 58, 116, 232, 205, 135, 19, 38, 76,
     152, 45, 90, 180, 117, 234, 201, 143, 3, 6, 12, 24, 48, 96, 192, 157,
@@ -632,7 +632,7 @@ const RQ_OCT_EXP = Vector{GF256}([
     142
 ])
 
-doc"GF256 logarithm table. indexing starts at 1. table 5.7.4 of rfc6330."
+"GF256 logarithm table. indexing starts at 1. table 5.7.4 of rfc6330."
 const RQ_OCT_LOG = Vector{Int}([
     0, 1, 25, 2, 50, 26, 198, 3, 223, 51, 238, 27, 104, 199, 75, 4, 100,
     224, 14, 52, 141, 239, 129, 28, 193, 105, 248, 200, 8, 76, 113, 5,

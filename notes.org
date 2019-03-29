@@ -1,7 +1,6 @@
-* DONE
+* DONE Gaussian elimination of a system of equations over F_2.
   CLOSED: [2018-01-30 Tue 17:03]
-Gaussian elimination of a system of equations over F_2.
-* DONE
+* DONE Separate value type
   CLOSED: [2018-03-06 Tue 09:58]
 Separate value type, i.e., allow the value of a coded symbol have arbitrary
 type. Define the subtract operator for different value types.
@@ -215,3 +214,12 @@ which its coefficients are defined. For example, binary, q* TODO ary, real.
   method.
 * TODO Simple selector is broken
 * TODO Add random selector for reference
+* TODO Set random seed in each test
+- Only setting it in runtests means adding tests can cause other tests
+  to fail.
+* TODO QMatrix
+- Use something more standard than countnz to find the number of
+  non-zeros.
+* TODO Selector
+- Standardize API.
+- Make sure SimpleSelect works.

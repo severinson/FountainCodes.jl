@@ -9,7 +9,7 @@ Vector{T}. The module implements efficient methods to subtract one
 column from another.
 
 """
-mutable struct QMatrix{T}
+mutable struct QMatrix{T} <: AbstractMatrix{T}
     m::Int # number of rows
     n::Int # number of columns
     binary::BitMatrix # binary data
@@ -45,7 +45,7 @@ end
 Implements M[i,j]
 
 """
-function Base.getindex{T}(M::QMatrix{T}, r::Int, c::Int)
+function Base.getindex(M::QMatrix{T}, r::Int, c::Int) where T
     @boundscheck checkbounds(M.binary, r, c)
     if haskey(M.qary, c)
         return M.qary[c][r]
@@ -59,7 +59,7 @@ end
 Implements M[i,j] = d
 
 """
-function Base.setindex!{T}(M::QMatrix{T}, d::T, r::Int, c::Int)
+function Base.setindex!(M::QMatrix{T}, d::T, r::Int, c::Int) where T
     @boundscheck checkbounds(M.binary, r, c)
     if iszero(d) || d == one(T)
         if haskey(M.qary, c)
@@ -82,17 +82,17 @@ end
 Implements M[i,j] = d
 
 """
-function Base.setindex!{T}(M::QMatrix{T}, d::T, ::Colon, c::Int)
+function Base.setindex!(M::QMatrix{T}, d::T, ::Colon, c::Int) where T
     @boundscheck checkbounds(M.binary, 1, c)
     if iszero(d) || d == one(T)
         delete!(M.qary, c)
-        @views M.binary[:,c] = d
+        M.binary[:,c] .= d
         return d
     else
         if !haskey(M.qary, c)
             M.qary[c] = Vector{T}(M.binary[:,c])
         end
-        @views M.qary[c][:] = d
+        M.qary[c][:] .= d
     end
     return d
 end
@@ -104,7 +104,7 @@ Resize the matrix to have m rows and n columns. The given m and n must
 be larger than the original values.
 
 """
-function Base.resize!{T}(M::QMatrix{T}, m, n)
+function Base.resize!(M::QMatrix{T}, m, n) where T
     if m < M.m
         error("the given m must not be smaller than its original value")
     end
@@ -137,7 +137,7 @@ end
 Return the c-th column of the matrix.
 
 """
-function getcolumn{T}(M::QMatrix{T}, c::Int)
+function getcolumn(M::QMatrix{T}, c::Int) where T
     @boundscheck checkbounds(M.binary, 1, c)
     if haskey(M.qary, c)
         return M.qary[c]
@@ -151,13 +151,13 @@ end
 Return the c-th column of the matrix in-place.
 
 """
-function getcolumn!{T}(v::Vector{T}, M::QMatrix{T}, c::Int)
+function getcolumn!(v::Vector{T}, M::QMatrix{T}, c::Int) where T
     @boundscheck checkbounds(M.binary, 1, c)
     if haskey(M.qary, c)
-        @views v[:] = M.qary[c]
+        v[:] .= M.qary[c]
         return v
     end
-    @views v[:] = M.binary[:,c]
+    v[:] .= M.binary[:,c]
     return v
 end
 
@@ -166,8 +166,10 @@ end
 
 Return the number of non-zero entries in the c-th column of M.
 
+TODO: no longer part of the standard library
+
 """
-function Base.countnz(M::QMatrix, c::Int)
+function countnz(M::QMatrix, c::Int)
     if haskey(M.qary, c)
         n = 0
         for d in M.qary[c]
@@ -201,14 +203,16 @@ Subtract column c2 from column c1, i.e., M[:,c1] = M[:,c1] - M[:,c2].
 TODO: consider using a separate BitVector to store which columns are
 qary in order to speed up haskey operations.
 
+TODO: this function isn't properly tested.
+
 """
-function subtract!{T}(M::QMatrix{T}, c1::Int, c2::Int)
+function subtract!(M::QMatrix{T}, c1::Int, c2::Int) where T
     @boundscheck checkbounds(M.binary, 1, c1)
     @boundscheck checkbounds(M.binary, 1, c2)
     h1, h2 = haskey(M.qary, c1), haskey(M.qary, c2)
     if h1 && !h2
         q = M.qary[c1]
-        for i in find(M.binary[:,c2])
+        for i in findall(!iszero, M.binary[:,c2])
             q[i] = q[i] - one(T)
         end
     elseif !h1 && h2
@@ -217,8 +221,9 @@ function subtract!{T}(M::QMatrix{T}, c1::Int, c2::Int)
         q1, q2 = M.qary[c1], M.qary[c2]
         q1 .-= q2
     else
-        kd0, ld0 = get_chunks_id(sub2ind((M.m,M.n), 1, c1))
-        kd1, ld1 = get_chunks_id(sub2ind((M.m,M.n), M.m, c1))
+        s2i = LinearIndices(M)
+        kd0, ld0 = get_chunks_id(s2i[1, c1])
+        kd1, ld1 = get_chunks_id(s2i[M.m, c1])
         offset = (c2-c1)*div(M.m,64)
         for i in kd0:kd1
             M.binary.chunks[i] = xor(M.binary.chunks[i], M.binary.chunks[i+offset])
@@ -231,10 +236,10 @@ end
 """
     subtract!(M::QMatrix{T}, d::T, c1::Int, c2::Int)
 
-Subtract column d*c2 from column c1, i.e., M[:,c1] = M[:,c1] - d*M[:,c2].
+Subtract column d*c2 from column c1, i.e., M[:,c1] .-= d*M[:,c2].
 
 """
-function subtract!{T}(M::QMatrix{T}, d::T, c1::Int, c2::Int)
+function subtract!(M::QMatrix{T}, d::T, c1::Int, c2::Int) where T
     if iszero(d)
         return
     end
@@ -244,7 +249,8 @@ function subtract!{T}(M::QMatrix{T}, d::T, c1::Int, c2::Int)
     h1, h2 = haskey(M.qary, c1), haskey(M.qary, c2)
     if h1 && !h2
         q = M.qary[c1]
-        for i in find(M.binary[:,c2])
+        # TODO: use array indexing
+        for i in findall(!iszero, M.binary[:,c2])
             q[i] -= d
         end
     elseif !h1 && h2
@@ -254,7 +260,8 @@ function subtract!{T}(M::QMatrix{T}, d::T, c1::Int, c2::Int)
         subeq!(q1, q2, d)
     else
         M.qary[c1] = M.binary[:,c1]
-        for i in find(M.binary[:,c2])
+        # TODO: use array indexing
+        for i in findall(!iszero, M.binary[:,c2])
             M.qary[c1][i] += d
         end
     end

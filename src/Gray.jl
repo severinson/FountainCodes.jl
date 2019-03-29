@@ -2,12 +2,12 @@
 
 export grayencode, graydecode, hamming_weight, nextgray
 
-doc"gray-encode an integer."
+"gray-encode an integer."
 function grayencode(n::Int) :: Int
     return xor(n, n >> 1)
 end
 
-doc"decode a gray-sequence integer"
+"decode a gray-sequence integer"
 function graydecode(n::Int) :: Int
     r = n
     while (n >>= 1) != 0
@@ -16,7 +16,7 @@ function graydecode(n::Int) :: Int
     return r
 end
 
-doc"return the number of ones in the base-2 representation of n."
+"return the number of ones in the base-2 representation of n."
 function hamming_weight(n::Int) :: Int
     weight = 0
     i = one(n)
@@ -29,9 +29,9 @@ function hamming_weight(n::Int) :: Int
     return weight
 end
 
-doc"return the first number after g in the gray sequence with hamming weight hw"
+"return the first number after g in the gray sequence with hamming weight hw"
 function nextgray(g::Int, hw::Int) :: Int
-    wl = length(bits(g))
+    wl = sizeof(g) * 8 # size in bits
     n = graydecode(g)
     for i in n+1:(1 << (wl-2))
         g = grayencode(i)

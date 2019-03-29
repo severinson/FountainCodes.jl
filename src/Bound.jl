@@ -2,7 +2,7 @@
 
 export ltfailure_lower
 
-doc"compute log(n!/k!), exactly or approximately, depending on n."
+"compute log(n!/k!), exactly or approximately, depending on n."
 function logfactorial(n::Int, k::Int=1)
     if n < 100
         return logfactorial_exact(n, k)
@@ -11,7 +11,7 @@ function logfactorial(n::Int, k::Int=1)
     end
 end
 
-doc"compute log(n!/k!) exactly."
+"compute log(n!/k!) exactly."
 function logfactorial_exact(n::Int, k::Int=1)
     if n < k
         error("k must be <= n")
@@ -26,7 +26,7 @@ function logfactorial_exact(n::Int, k::Int=1)
     return r
 end
 
-doc"compute log(n!) approximately. method from [Batir2010]."
+"compute log(n!) approximately. method from [Batir2010]."
 function logfactorial_approx(n::Int, k::Int=1)
     if n < k
         error("k must be <= n")
@@ -41,7 +41,7 @@ function logfactorial_approx(n::Int, k::Int=1)
     r += n * log(n) - n
 
     # compute last term one step at a time. watch for overflow etc.
-    # r += 1/2 * log(n+1/6+1/(72n) - 31/(6480n^2) - 139/(155520n^3) + 9871 / (6531840n^4))    
+    # r += 1/2 * log(n+1/6+1/(72n) - 31/(6480n^2) - 139/(155520n^3) + 9871 / (6531840n^4))
     r2 = n + 1/6
     tmp = 1/(72n)
     if !isnan(tmp) && !isinf(tmp) && tmp > 0
@@ -54,20 +54,20 @@ function logfactorial_approx(n::Int, k::Int=1)
     tmp = 139/(155520n^3)
     if !isnan(tmp) && !isinf(tmp) && tmp > 0
         r2 -= tmp
-    end    
+    end
     tmp = 9871 / (6531840n^4)
     if !isnan(tmp) && !isinf(tmp) && tmp > 0
         r2 += tmp
     end
     r += 1/2 * log(r2)
-    
+
     if k != one(k)
         r -= logfactorial_approx(k)
     end
     return r
 end
 
-doc"compute log(binomial(n, k))"
+"compute log(binomial(n, k))"
 function logbinomial(n::Int, k::Int) :: Float64
     if n < k
         return -Inf
@@ -85,7 +85,7 @@ function logbinomial(n::Int, k::Int) :: Float64
     return r
 end
 
-doc"inner term of ltfailure_lower_reference."
+"inner term of ltfailure_lower_reference."
 function ltfailure_lower_reference_inner(i::Int, k::Int, epsilon::Number, Omega::Distribution{Univariate, Discrete})
     r = zero(k)
     for d in 1:k
@@ -95,7 +95,7 @@ function ltfailure_lower_reference_inner(i::Int, k::Int, epsilon::Number, Omega:
     return r
 end
 
-doc"reference implementation of ltfailure_lower. use only for testing ltfailure_lower."
+"reference implementation of ltfailure_lower. use only for testing ltfailure_lower."
 function ltfailure_lower_reference(k::Int, epsilon::Number, Omega::Distribution{Univariate, Discrete})
     r = zero(k)
     for i in 1:k
@@ -106,7 +106,7 @@ function ltfailure_lower_reference(k::Int, epsilon::Number, Omega::Distribution{
     return r
 end
 
-doc"inner term of ltfailure_lower."
+"inner term of ltfailure_lower."
 function ltfailure_lower_inner(i::Int, k::Int, epsilon::Number, Omega::Distribution{Univariate, Discrete}) :: Float64
     r = zero(Float64)
     for d in 1:k
@@ -135,7 +135,7 @@ degree distribution `Omega`, at a relative reception overhead `epsilon`, i.e.,
 """
 function ltfailure_lower(k::Int, epsilon::Number, Omega::Distribution{Univariate, Discrete}) :: Float64
     r = zero(Float64)
-    tiny = realmin(Float64)
+    tiny = eps(Float64)
     for i in 1:div(k, 2)
         v = zero(r)
         v += exp(logbinomial(k, 2i-1) + ltfailure_lower_inner(2i-1, k, epsilon, Omega))
@@ -145,7 +145,7 @@ function ltfailure_lower(k::Int, epsilon::Number, Omega::Distribution{Univariate
         # represented float.
         if v < tiny
             break
-        end        
+        end
         r += v
     end
     return r
