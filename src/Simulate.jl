@@ -1,108 +1,104 @@
 # simulate decoding performance
 using DataStructures, DataFrames, CSV
 
-struct Simulation{VT<:RaptorCodes.Value}
-    p::RaptorCodes.Parameters
-    overhead::Int # absolute reception overhead
-    C::Vector{RaptorCodes.ISymbol{VT}} # intermediate symbols
-    n::Int # number of samples
-end
-
-function Base.repr(r::Simulation)
-    return "Simulation($(RaptorCodes.repr(r.p)), $(r.overhead))"
-end
-
-doc"R10 code intermediate symbols"
-function intermediate(p::R10Parameters)
-    C = Vector{ISymbol{R10Value}}(p.L)
-    for i = 1:p.K
-        C[i] = ISymbol(R10Value(i), Set([i]))
-    end
-    r10_ldpc_encode!(C, p)
-    r10_hdpc_encode!(C, p)
+function init(c::Code)
+    C = [Vector{GF256}([0]) for _ in 1:c.L]
+    precode!(C, c)
     return C
 end
 
-doc"LT code intermediate symbols"
-function intermediate(p::LTParameters)
-    C = Vector{ISymbol{R10Value}}(p.L)
-    for i = 1:p.K
-        C[i] = ISymbol(R10Value(i), Set([i]))
-    end
-    return C
-end
-
-function sample(sr::Simulation)
-    d = Decoder(sr.p)
-    for _ in 1:(sr.p.K+sr.overhead)
-        X = rand(1:(2<<16))
-        s = lt_generate(sr.C, X, sr.p)
+doc"attempt to decode using all symbols in S. return decoding metrics."
+function sample(S::AbstractArray, c::Code)
+    d = Decoder(c)
+    for s in S
         add!(d, s)
     end
     decode!(d, false)
     return d.metrics
 end
 
-function simulate(p::LTParameters, overhead::Float64, samples::Int)
-    absoverhead = Int(round(overhead))
-    sr = Simulation(p, absoverhead, intermediate(p), samples)
-    filename = joinpath(
-        ".raptorcache",
-        "$(repr(sr)).csv",
-    )
-    mkpath(dirname(filename))
-    try
-        return CSV.read(filename)
-    catch
-    end
-    println("starting simulation for $(repr(sr))")
-    dct = Dict()
-    dct["num_inputs"] = p.K
-    dct["overhead"] = overhead
-    dct["mode"] = p.dd.mode
-    dct["delta"] = p.dd.delta
-    samples = DefaultDict(Vector)
-    for i in 1:sr.n
-        for v in dct
-            push!(samples[v[1]], v[2])
-        end
-        for v in sample(sr)
-            push!(samples[v[1]], v[2])
-        end
-    end
-    df = DataFrame(samples)
-    CSV.write(filename, df)
-    println("finished simulation for $(repr(sr))")
-    return df
+function sample(c::LDPC10)
+    d = Decoder(c)
+    decode!(d, false)
+    return d.metrics
 end
 
-function simulate(p::R10Parameters, overhead::Float64, samples::Int)
-    absoverhead = Int(round(overhead))
-    sr = Simulation(p, absoverhead, intermediate(p), samples)
-    filename = joinpath(
-        ".raptorcache",
-        "$(repr(sr)).csv",
-    )
-    mkpath(dirname(filename))
-    try
-        return CSV.read(filename)
-    catch
-    end
-    println("starting simulation for $(repr(sr))")
-    dct = Dict()
-    dct["num_inputs"] = p.K
-    dct["overhead"] = overhead
-    samples = DefaultDict(Vector)
-    for i in 1:sr.n
+function parameterdct(c::R10)
+    dct = Dict{String,Int}()
+    dct["num_inputs"] = c.K
+    return dct
+end
+
+function parameterdct(c::RQ)
+    dct = Dict{String,Int}()
+    dct["num_inputs"] = c.Kp
+    return dct
+end
+
+function parameterdct(c::LDPC10)
+    dct = Dict{String,Int}()
+    dct["num_inputs"] = c.K
+    dct["length"] = c.n
+    return dct
+end
+
+function parameterdct(c::Union{LT,LTQ})
+    dct = Dict{String,Float64}()
+    dct["num_inputs"] = c.K
+    dct["mode"] = c.dd.mode
+    dct["delta"] = c.dd.delta
+    return dct
+end
+
+function linearsim!(samples::DefaultDict{String, Vector{Any}}, overheads::Vector{Int}, c::Code)
+    C = init(c)
+    S = [ltgenerate(C, rand(1:(2<<16)), c) for _ in 1:(c.K+maximum(overheads))]
+    dct = parameterdct(c)::Dict
+    for overhead in overheads
+        dct["overhead"] = overhead
         for v in dct
             push!(samples[v[1]], v[2])
         end
-        for v in sample(sr)
+        for v in sample(view(S, 1:(c.K+overhead)), c)
             push!(samples[v[1]], v[2])
         end
     end
+    return samples
+end
+
+function linearsim!(samples::DefaultDict{String, Vector{Any}}, num_erasures::Vector{Int}, c::LDPC10)
+    dct = parameterdct(c)::Dict
+    for erasures in num_erasures
+        c.erased[1:erasures] = true
+        c.erased[erasures+1:end] = false
+        shuffle!(c.erased)
+        dct["erasures"] = erasures
+        for v in dct
+            push!(samples[v[1]], v[2])
+        end
+        for v in sample(c)
+            push!(samples[v[1]], v[2])
+        end
+    end
+    return samples
+end
+
+function linearsims(overheads::Vector{Int}, c::Code, n::Int, write::Bool=true)
+    println("starting simulation for $(repr(c))")
+    samples = DefaultDict{String, Vector{Any}}(Vector{Any})
+    for _ in 1:n
+        samples = linearsim!(samples, overheads, c)
+    end
     df = DataFrame(samples)
-    CSV.write(filename, df)
-    println("finished simulation for $(repr(sr))")
+    if write
+        filename = joinpath(
+            "./simulations",
+            "$(repr(c))",
+            "$(Base.Random.uuid4()).csv",
+        )
+        mkpath(dirname(filename))
+        CSV.write(filename, df)
+        println("wrote results to $filename")
+    end
     return df
 end

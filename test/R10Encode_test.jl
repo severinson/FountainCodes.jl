@@ -1,21 +1,70 @@
-function test_encode(k=10)
-    p = RaptorCodes.R10Parameters(k)
-    C = Vector{RaptorCodes.ISymbol{RaptorCodes.R10Value}}(p.L)
+function init(k=10)
+    p = RaptorCodes.R10(k)
+    C = Vector{Vector{GF256}}(p.L)
     for i = 1:p.K
-        C[i] = RaptorCodes.ISymbol(R10Value(i), Set([i]))
+        C[i] = Vector{GF256}([i % 256])
     end
-    RaptorCodes.r10_ldpc_encode!(C, p)
-    RaptorCodes.r10_hdpc_encode!(C, p)
+    N = [Dict{Int,Bool}() for _ in 1:p.L]
+    precode!(C, p, N)
+    return p, C, N
+end
+
+doc"make sure the encoder runs at all"
+function test_encode_1()
+    p, C, _ = init()
     for i in 1:length(C)
         if !isassigned(C, i)
             error("intermediate symbol at index $i not assigned.")
         end
     end
-    s = RaptorCodes.lt_generate(C, 1, p)
-    # s_correct = RaptorCodes.R10Symbol(1, 10, -1, [2, 18], Array{Int,1}())
-    # if s !== s_correct
-    #     error("incorrect LT symbol. is $s. should be $s_correct.")
-    # end
+    s = RaptorCodes.ltgenerate(C, 1, p)
+    deg = RaptorCodes.degree(s)
+    if deg != 2
+        error("LT degree is $deg bout should be 2")
+    end
     return true
 end
-@test test_encode()
+@test test_encode_1()
+
+"test that the encoder produces a correct R10 constraint matrix"
+function test_encode_2()
+    p, C, N = init(10)
+    ri = p.K+1
+    correct = [1, 6, 7, 8]
+    indices = sort!(collect(keys(N[ri])))
+    if indices != correct
+        error("R10 LDPC encoder failed. row $ri is $indices but should be $correct")
+    end
+
+    ri = p.K+7
+    correct = [5, 6, 7, 10]
+    indices = sort!(collect(keys(N[ri])))
+    if indices != correct
+        error("R10 LDPC encoder failed. row $ri is $indices but should be $correct")
+    end
+
+    ri = p.K+8
+    correct = [1, 2, 4, 5, 8, 10, 11, 15]
+    indices = sort!(collect(keys(N[ri])))
+    if indices != correct
+        error("R10 HDPC encoder failed. row $ri is $indices but should be $correct")
+    end
+
+    ri = p.K+11
+    correct = [2, 3, 4, 5, 6, 7, 14, 15, 16, 17]
+    indices = sort!(collect(keys(N[ri])))
+    if indices != correct
+        error("R10 HDPC encoder failed. row $ri is $indices but should be $correct")
+    end
+    return true
+
+    ri = p.K+13
+    correct = [11, 12, 13, 14, 15, 16, 17]
+    indices = sort!(collect(keys(N[ri])))
+    if indices != correct
+        error("R10 HDPC encoder failed. row $ri is $indices but should be $correct")
+    end
+    return true
+end
+@test test_encode_2()
+

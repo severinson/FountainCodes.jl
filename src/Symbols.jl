@@ -1,116 +1,147 @@
-export R10Value, DummyValue, R10Symbol
+export BSymbol, QSymbol, GF256
 
-doc"byte vector"
-struct R10Value <: Value
-    bytes::Vector{UInt8}
-    function R10Value(x::Vector{UInt8})
-        new(x)
+# TODO: this method overrides the default behavior of UInt8
+const GF256 = UInt8
+# primitive type F256 <: Unsigned 8 end
+# struct F256
+#     x::UInt8
+#     function F256(v)
+#         return new(UInt8(v))
+#     end
+# end
+
+doc"convert an object to a vector of bytes"
+function asbytes(x) :: Vector{GF256}
+    if !isbits(x)
+        error("$x is not a plain data type and cannot be converted to bytes")
+    end
+    sz = sizeof(x)
+    dst = Vector{GF256}(sz)
+    src = convert(Ptr{F256}, pointer_from_objref(x))
+    unsafe_copy!(pointer(dst), src, sz)
+    return dst
+end
+
+doc"addition over GF256 according to rfc6330.."
+function Base.:+(a::GF256, b::GF256)
+    return xor(a, b)
+end
+
+doc"subtraction over GF256 according to rfc6330.."
+function Base.:-(a::GF256, b::GF256)
+    return a + b
+end
+
+function logrq(a::GF256) :: Int
+    return iszero(a) ? error("logarithm of 0 undefined") : RQ_OCT_LOG[a]
+end
+
+function exprq(a::Int) :: GF256
+    return RQ_OCT_EXP[a+1]
+end
+
+doc"multiplication over GF256 according to rfc6330."
+function Base.:*(a::GF256, b::GF256)
+    return iszero(a) || iszero(b) ? zero(a) : RQ_OCT_EXP[RQ_OCT_LOG[a] + RQ_OCT_LOG[b] + 1]
+end
+
+doc"vector-scalar multiplication over GF256"
+function Base.:*(a::AbstractArray{GF256}, b::GF256)
+    if iszero(b)
+        return zeros(GF256, length(a))
+    end
+    return map(x -> iszero(x) ? zero(x) : exprq(logrq(b)+logrq(x)), a)
+end
+
+doc"division over GF256 according to rfc6330."
+function Base.:/(a::AbstractArray{GF256}, b::GF256)
+    if iszero(a)
+        return zero(a)
+    elseif iszero(b)
+        error("division by zero")
+    end
+    return exprq.(logrq.(a) - logrq(b) + 255)
+end
+
+"""
+    subeq!(a, b, c)
+
+Subtract c*b from a.
+
+"""
+function subeq!(a::Vector{GF256}, b::Vector{GF256}, c::GF256) :: Vector{GF256}
+    if iszero(c) || iszero(b)
+        return a
+    end
+    if c == one(c)
+        a .-= b
+    else
+        clog = logrq(c)
+        for i in 1:length(b)::Int
+            if !iszero(b[i])
+                a[i] -= exprq(logrq(b[i])+clog)
+            end
+        end
+    end
+    return a
+end
+
+function subeq!(a::Vector{GF256}, b::Vector{GF256}, c::Bool) :: Vector{GF256}
+    if iszero(c) || iszero(b)
+        return a
+    end
+    a .-= b
+    return a
+end
+
+## fallback in-place arithmetic functions ##
+function subeq!(a, b)
+    a .-= b
+    return a
+end
+
+function subeq!(a, b, c)
+    a .-= b.*c
+    return a
+end
+
+function muleq!(a, b)
+    a .*= b
+    return a
+end
+
+function diveq!(a, b)
+    a ./= b
+    return a
+end
+
+doc"division over GF256 according to rfc6330."
+function Base.:/(a::GF256, b::GF256)
+    if iszero(a)
+        return zero(a)
+    elseif iszero(b)
+        error("division by zero error")
+    else
+        return RQ_OCT_EXP[RQ_OCT_LOG[a] - RQ_OCT_LOG[b] + 255 + 1]
     end
 end
-function R10Value(x)
-    sz = sizeof(x)
-    dst = Vector{UInt8}(sz)
-    src = convert(Ptr{UInt8}, pointer_from_objref(x))
-    unsafe_copy!(pointer(dst), src, sz)
-    return R10Value(dst)
-end
-function R10Value(x::R10Value)
-    return R10Value(copy(x.bytes))
-end
 
-function Base.:+(a::R10Value, b::R10Value)
-    length(a.bytes) > length(b.bytes) && throw(BoundsError(b, length(a.bytes)+1))
-    length(b.bytes) > length(a.bytes) && throw(BoundsError(a, length(b.bytes)+1))
-    return R10Value(xor.(a.bytes, b.bytes))
-end
-
-function Base.:(==)(a::R10Value, b::R10Value)
-    length(a.bytes) > length(b.bytes) && return false
-    length(b.bytes) > length(a.bytes) && return false
-    return a.bytes == b.bytes
-end
-
-doc"empty value used for simulations"
-struct DummyValue <: Value
-end
-function DummyValue(x)
-    return DummyValue()
-end
-function Base.:+(a::DummyValue, b::DummyValue)
-    return DummyValue()
-end
-function Base.:(==)(a::DummyValue, b::DummyValue)
-    return true
-end
-
-doc"Intermediate code symbol."
-struct ISymbol{VT<:Value} <: CodeSymbol
-    value::VT
-    neighbours::Set{Int}
-    # function ISymbol{VT}(value::R10Value, neighbours::Set{Int}) where {VT<:Value}
-    #     new(value, neighbours)
-    # end
-end
-function ISymbol{VT<:Value}(value::VT)
-    ISymbol(value, Set{Int}())
-end
-
-doc"Outer code symbol."
-struct R10Symbol{VT<:Value} <: CodeSymbol
+doc"outer code symbol with binary coefficients."
+struct BSymbol{VT} <: CodeSymbol
     esi::Int # encoded symbol id
     value::VT # value of the symbol
-    primary_neighbour::Int
-    active_neighbours::Vector{Int}
-    inactive_neighbours::Vector{Int}
-end
-function R10Symbol{VT<:Value}(
-    esi::Int, value::VT,
-    primary_neighbour::Int,
-    active_neighbours::Vector{Int})
-    return R10Symbol(
-        esi,
-        value,
-        primary_neighbour,
-        sort!(copy(active_neighbours)),
-        sort!(copy(inactive_neighbours)),
-    )
+    neighbours::Vector{Int}
 end
 
-function R10Symbol{VT<:Value}(esi::Int, value::VT, neighbours::Vector{Int})
-    R10Symbol(esi, value, -1, neighbours, Array{Int,1}())
+doc"number of neighbouring intermediate symbols."
+function degree(cs::CodeSymbol)
+    return length(cs.neighbours)
 end
 
-doc"Number of neighbouring outer coded symbols."
-function degree(is::ISymbol)
-    return length(is.neighbours)
-end
-
-doc"Number of neighbouring intermediate symbols."
-function degree(cs::R10Symbol)
-    return length(cs.active_neighbours) + length(cs.inactive_neighbours)
-end
-
-doc"Neighbouring outer code symbols."
-function neighbours(is::ISymbol)
-    return collect(is.neighbours)
-end
-
-doc"Neighbouring intermediate symbols."
-function neighbours(cs::R10Symbol)
-    return append!(append!([], cs.active_neighbours), cs.inactive_neighbours)
-end
-
-doc"Number of non-zero entries in V."
-function active_degree(cs::R10Symbol)
-    return length(cs.active_neighbours)
-end
-
-doc"Number of non-zero entries in U."
-function inactive_degree(cs::R10Symbol)
-    return length(cs.inactive_neighbours)
-end
-
-doc"Neighbours that are not decoded or inactivated."
-function active_neighbours(cs::R10Symbol)
-    return cs.active_neighbours
+doc"outer code symbol with arbitrary coefficient type."
+struct QSymbol{VT,CT} <: CodeSymbol
+    esi::Int # encoded symbol id
+    value::VT # value of the symbol
+    neighbours::Vector{Int}
+    coefficients::Vector{CT}
 end
