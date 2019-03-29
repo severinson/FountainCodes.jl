@@ -1,5 +1,9 @@
-doc"For a monotonically increasing function f, find a value, lower <= x <=
-upper, such that f(x) == target."
+"""
+
+For a monotonically increasing function f, return a value, lower <= x
+<= upper, such that f(x) == target.
+
+"""
 function numinv(f, target::Float64, lower::Float64=0.0, upper::Float64=Inf)
     f_wrapped = x -> bounds_wrap(x, f, lower, upper)
     lower2, upper2 = find_limits(f_wrapped, target)

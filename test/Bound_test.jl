@@ -1,7 +1,8 @@
-using RaptorCodes, Base.Test
+using FountainCodes, Test
+
 function logfactorial_exact_test_1(low=1, high=20)
     for n in low:high
-        r = RaptorCodes.logfactorial_exact(n)
+        r = FountainCodes.logfactorial_exact(n)
         c = log(factorial(n))
         err = abs.(r-c)
         if err > 1e-10
@@ -15,7 +16,7 @@ end
 function logfactorial_exact_test_2(low=1, high=20)
     for n in low:high
         for k in 1:n
-            r = RaptorCodes.logfactorial_exact(n, k)
+            r = FountainCodes.logfactorial_exact(n, k)
             c = log(factorial(n)) - log(factorial(k))
             err = abs.(r-c)
             if err > 1e-10
@@ -29,8 +30,8 @@ end
 
 function logfactorial_approx_test_1(low=20, high=100)
     for i in low:high
-        r = RaptorCodes.logfactorial_approx(i)
-        c = RaptorCodes.logfactorial_exact(i)
+        r = FountainCodes.logfactorial_approx(i)
+        c = FountainCodes.logfactorial_exact(i)
         err = abs.(r-c)
         if err > 1e-10
             error("logfactorial_approx($i) = $r != $c, i.e., an error of $err")
@@ -43,8 +44,8 @@ end
 function logfactorial_approx_test_2(low=20, high=100)
     for n in low:high
         for k in low:n
-            r = RaptorCodes.logfactorial_approx(n, k)
-            c = RaptorCodes.logfactorial_exact(n, k)
+            r = FountainCodes.logfactorial_approx(n, k)
+            c = FountainCodes.logfactorial_exact(n, k)
             err = abs.(r-c)
             if err > 1e-6
                 error("logfactorial_approx($n,$k) = $r != $c, i.e., an error of $err")
@@ -56,7 +57,7 @@ end
 @test logfactorial_approx_test_2()
 
 function logfactorial_approx_test_3(n=134000, k=div(134000,2))
-    r = RaptorCodes.logfactorial_approx(n, k)
+    r = FountainCodes.logfactorial_approx(n, k)
     if isnan(r) || isinf(r)
         error("logfactorial_approx($n,$k) = $r")
     end
@@ -65,7 +66,7 @@ end
 @test logfactorial_approx_test_3()
 
 function logfactorial_approx_test_3(n=133999, k=2927)
-    r = RaptorCodes.logfactorial_approx(n, k)
+    r = FountainCodes.logfactorial_approx(n, k)
     if isnan(r) || isinf(r)
         error("logfactorial_approx($n,$k) = $r")
     end
@@ -76,8 +77,8 @@ end
 function logfactorial_test_1(low=1, high=200)
     for n in low:high
         for k in low:n
-            r = RaptorCodes.logfactorial(n, k)
-            c = RaptorCodes.logfactorial_exact(n, k)
+            r = FountainCodes.logfactorial(n, k)
+            c = FountainCodes.logfactorial_exact(n, k)
             err = abs.(r-c)
             if err > 1e-3
                 error("logfactorial($n,$k) = $r != $c, i.e., an error of $err")
@@ -91,7 +92,7 @@ end
 function logbinomial_test_1(low=1, high=20)
     for n in low:high
         for k in 1:n
-            r = RaptorCodes.logbinomial(n, k)
+            r = FountainCodes.logbinomial(n, k)
             c = log(binomial(n, k))
             err = abs.(r-c)
             if err > 1e-6
@@ -104,7 +105,7 @@ end
 @test logbinomial_test_1()
 
 function logbinomial_test_2(n=133999, k=2927)
-    r = RaptorCodes.logbinomial(n, k)
+    r = FountainCodes.logbinomial(n, k)
     if isnan(r) || isinf(r)
         error("logbinomial($n,$k) = $r")
     end
@@ -119,9 +120,9 @@ function ltfailure_lower_test_1(low=1, high=20)
         M = Int(round(2/3*k))
         delta = 0.01
         Omega = Soliton(k, M, delta)
-        for epsilon in linspace(0, 0.5, 10)
+        for epsilon in 0:0.5:10
             r = ltfailure_lower(k, epsilon, Omega)
-            c = RaptorCodes.ltfailure_lower_reference(k, epsilon, Omega)
+            c = FountainCodes.ltfailure_lower_reference(k, epsilon, Omega)
             err = abs.(r-c)
             if err > 1e-3
                 error("ltfailure_lower($k, $epsilon) = $r != $c, i.e., an error of $err")
@@ -156,7 +157,7 @@ function ltfailure_lower_test_3()
     M = 3998
     delta = 0.9999999701976676
     Omega = Soliton(K, M, delta)
-    failure = [ltfailure_lower(K, epsilon, Omega) for epsilon in linspace(0.25, 0.4, 10)]
+    failure = [ltfailure_lower(K, epsilon, Omega) for epsilon in 0.25:0.4:10]
     println(failure)
     return false
 end

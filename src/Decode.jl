@@ -64,19 +64,20 @@ mutable struct Decoder{CT,VT,CODE<:Code,SELECTOR<:Selector}
 end
 
 """
-    add!{CT,VT}(d::Decoder{CT,VT}, nzind::Vector{Int}, nzval::Vector{CT}, v::VT)
+    add!(d::Decoder{CT,VT}, nzind::Vector{Int}, nzval::Vector{CT}, v::VT)
 
 Add a row with non-zero values nzval at indices nzind to the system of
-equations . v is the corresponding value in the right-hand side of the
+equations. v is the corresponding value in the right-hand side of the
 system.
 
 TOOD: consider renaming to push!
 
 """
-function add!{CT,VT}(d::Decoder{CT,VT}, nzind::Vector{Int}, nzval::Vector{CT}, v::VT)
+function add!(d::Decoder{CT,VT}, nzind::Vector{Int},
+              nzval::Vector{CT}, v::VT) where CT where VT
     @assert length(nzind) == length(nzval)
-    @assert countnz(nzval) == length(nzval) "countnz($nzval) = $(countnz(nzval))"
-    @assert length(unique(nzind)) == length(nzind)
+    @assert count(iszero, nzval) == 0 "nzval may not contain zero values"
+    @assert length(unique(nzind)) == length(nzind) "nzind elements must be unique"
     if d.status != ""
         error("cannot add more symbols after decoding has failed")
     end
@@ -96,13 +97,13 @@ function add!{CT,VT}(d::Decoder{CT,VT}, nzind::Vector{Int}, nzval::Vector{CT}, v
 end
 
 """
-    add!{CT,VT}(d::Decoder{CT,VT}, nzind::Vector{Int}, v::VT)
+    add!(d::Decoder{CT,VT}, nzind::Vector{Int}, v::VT)
 
 Add a row to the system of equations. All non-zero coefficients are
 assumed to be one.
 
 """
-function add!{CT,VT}(d::Decoder{CT,VT}, nzind::Vector{Int}, v::VT)
+function add!(d::Decoder{CT,VT}, nzind::Vector{Int}, v::VT) where CT where VT
     add!(d, nzind, ones(CT, length(nzind)), v)
     return
 end
@@ -134,7 +135,7 @@ Set the element of the dense matrix corresponding to permuted row and column
 indices (rpi, cpi) to value v.
 
 """
-function setdense!{CT,VT}(d::Decoder{CT,VT}, rpi::Int, cpi::Int, v::CT)
+function setdense!(d::Decoder{CT,VT}, rpi::Int, cpi::Int, v::CT) where CT where VT
     expand_dense!(d)
     ci = d.colperminv[cpi]
     ui = _ci2ui(d, ci)
@@ -150,7 +151,7 @@ Set all elements of the dense matrix corresponding to permuted row
 index rpi to value v.
 
 """
-function setdense!{CT,VT}(d::Decoder{CT,VT}, rpi::Int, ::Colon, v::CT)
+function setdense!(d::Decoder{CT,VT}, rpi::Int, ::Colon, v::CT) where CT where VT
     expand_dense!(d)
     d.dense[:,rpi] = v
     return v
@@ -163,7 +164,7 @@ Return the element of the dense matrix corresponding to permuted row and column
 indices (rpi, cpi).
 
 """
-function getdense{CT}(d::Decoder{CT}, rpi::Int, cpi::Int)
+function getdense(d::Decoder{CT}, rpi::Int, cpi::Int) where CT
     ci = d.colperminv[cpi]
     ui = _ci2ui(d, ci)
     if ui > length(d.uperm)
@@ -265,22 +266,24 @@ Subtract coefi/coefj*rows[rpi] from rows[rpj] and assign the result to
 rows[rpj]. New row objects are only allocated when needed.
 
 """
-function subtract!{CT,VT<:Vector}(d::Decoder{CT,VT}, rpi::Int, rpj::Int, coefi::CT, coefj::CT)
+function subtract!(d::Decoder{CT,VT}, rpi::Int, rpj::Int,
+                   coefi::CT, coefj::CT) where CT where VT <: Vector
     @assert !iszero(coefj) "coefj must be non-zero, but is $coefj and type $(typeof(coefj))"
     coef = coefi
     if coefj != one(coefj)
         coef = (coef / coefj)::CT
     end
     subtract!(d.dense, coef, rpj, rpi)
-    if iszero(d.values[rpj])
-        d.values[rpj] = zeros(d.values[rpi])
+    if iszero(d.values[rpj]) # TODO: is this needed?
+        d.values[rpj] = zero(d.values[rpi])
     end
     d.values[rpj] = subeq!(d.values[rpj], d.values[rpi], coef)
     update_metrics!(d, rpi, coefi)
     return
 end
 
-function subtract!{CT,VT}(d::Decoder{CT,VT}, rpi::Int, rpj::Int, coefi::CT, coefj::CT)
+function subtract!(d::Decoder{CT,VT}, rpi::Int, rpj::Int,
+                   coefi::CT, coefj::CT) where CT where VT
     @assert !iszero(coefj) "coefj must be non-zero, but is $coefj and type $(typeof(coefj))"
     coef = coefi
     if coefj != one(coefj)
@@ -294,7 +297,7 @@ end
 
 """track performance metrics"""
 function update_metrics!(d::Decoder, rpi::Int, coef)
-    return # remove to log metrics
+    return # remove to log metrics. slows down decoding.
     if iszero(coef)
         return
     end
@@ -435,13 +438,13 @@ function diagonalize!(d::Decoder)
 end
 
 """
-    solve_dense!{CT<:Float64,VT}(d::Decoder{RT,VT})
+    solve_dense!(d::Decoder{Float64,VT})
 
-Solve the dense system of equations consisting of the inactivated symbols using
-least-squares. Applicable for real-number codes.
+Solve the dense system of equations consisting of the inactivated
+symbols using least-squares. Applicable for real-number codes.
 
 """
-function solve_dense!{CT<:Float64,VT}(d::Decoder{CT,VT})
+function solve_dense!(d::Decoder{Float64,VT}) where VT
     firstrow = d.num_decoded+1 # first row of the dense matrix
     lastrow = length(d.values) # last row of the dense matrix
     firstcol = d.num_symbols-d.num_inactivated+1 # first column of the dense matrix
@@ -454,12 +457,12 @@ function solve_dense!{CT<:Float64,VT}(d::Decoder{CT,VT})
 
     # copy the matrix u_lower into a separate array
     A = zeros(
-        CT,
+        Float64,
         lastrow-firstrow+1,
         d.num_inactivated,
     )
     b = zeros(
-        CT,
+        Float64,
         lastrow-firstrow+1,
         length(d.values[1]), # assuming all entries have the same length
     )
@@ -474,14 +477,15 @@ function solve_dense!{CT<:Float64,VT}(d::Decoder{CT,VT})
     end
 
     # solve for x using least squares
+    # TODO: use an iterative solver, e.g., lsmr
     x = A\b
 
     # store the resulting values and set the diagonal coefficients to 1.0
     for i in firstrow:lastcol
         rpi = d.rowperm[i]
         cpi = d.colperm[i]
-        setdense!(d, rpi, :, zero(CT))
-        setdense!(d, rpi, cpi, one(CT))
+        setdense!(d, rpi, :, zero(Float64))
+        setdense!(d, rpi, cpi, one(Float64))
         d.values[rpi] = x[i-firstrow+1,:]
     end
     d.num_decoded += d.num_inactivated
@@ -576,7 +580,7 @@ function solve_dense!(d::Decoder)
         swap_rows!(d, d.num_decoded+1, ri)
 
         # swap any non-zero entry into the i-th column of u_lower
-        upi = findfirst(getcolumn(d.dense, rpi)) # TODO: unnecessary allocation
+        upi = findfirst(!iszero, getcolumn(d.dense, rpi)) # TODO: unnecessary allocation
         @assert upi <= d.num_inactivated "$upi must be <= $(d.num_inactivated) row=$row"
         ui = d.uperminv[upi]
         cj = _ui2ci(d, ui)
@@ -610,12 +614,12 @@ TODO: consider restarting decoding with the known symbols instead.
 TODO: consider the table lookup approach.
 
 """
-function backsolve!{CT}(d::Decoder{CT})
+function backsolve!(d::Decoder{CT}) where CT
     densecol = zeros(CT, rows(d.dense))
     for ri in 1:d.num_symbols-d.num_inactivated
         rpi = d.rowperm[ri]
         getcolumn!(densecol, d.dense, rpi)
-        for (upi, coef) in enumerate(IndexLinear(), densecol)
+        for (upi, coef) in enumerate(densecol)
             if iszero(coef)
                 continue
             end
@@ -630,7 +634,7 @@ function backsolve!{CT}(d::Decoder{CT})
 end
 
 """
-    get_source{CT,VT}(d::Decoder{RT,VT})
+    get_source(d::Decoder{RT,VT})
 
 Return the decoded intermediate symbols.
 
@@ -638,18 +642,17 @@ Return the decoded intermediate symbols.
 symbols are the first K LT symbols.
 
 """
-function get_source{CT,VT}(d::Decoder{CT,VT})
-    C = Vector{VT}(d.num_symbols)
-    return get_source!(C, d)
+function get_source(d::Decoder{CT,VT}) where CT where VT
+    return get_source!(Vector{VT}(undef, d.num_symbols), d)
 end
 
 """
-    get_source!{CT,VT}(C::Vector, d::Decoder{RT,VT})
+    get_source!(C::Vector, d::Decoder{RT,VT})
 
 In-place version of get_source()
 
 """
-function get_source!{CT,VT}(C::AbstractArray{VT}, d::Decoder{CT,VT})
+function get_source!(C::AbstractVector{VT}, d::Decoder{CT,VT}) where CT where VT
     if length(C) != d.num_symbols
         error("C must have length num_symbols")
     end
@@ -677,13 +680,13 @@ function get_source!{CT,VT}(C::AbstractArray{VT}, d::Decoder{CT,VT})
 end
 
 """
-    decode!{CT,VT}(d::Decoder{CT,VT}, raise_on_error=true)
+    decode!(d::Decoder{CT,VT}, raise_on_error=true)
 
 Decode the source symbols. Raise an exception on decoding failure if
 raise_on_error is true.
 
 """
-function decode!{CT,VT}(d::Decoder{CT,VT}, raise_on_error=true)
+function decode!(d::Decoder{CT,VT}; raise_on_error=true) where CT where VT
     try
         check_cover(d)
         d.phase = "diagonalize"

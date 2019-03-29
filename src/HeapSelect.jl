@@ -120,7 +120,7 @@ function component_select(sel::HeapSelect, d::Decoder)
 
     # find component
     crpi = -1
-    n = Vector{Int}(2)
+    n = zeros(Int, 2)
     for (rpi, deg) in bucket.xs
         vdeg = sel.vdegree_from_rpi[rpi]
         @assert vdeg == 2

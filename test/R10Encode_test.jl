@@ -1,15 +1,14 @@
+using FountainCodes, Test
+
 function init(k=10)
-    p = RaptorCodes.R10(k)
-    C = Vector{Vector{GF256}}(p.L)
-    for i = 1:p.K
-        C[i] = Vector{GF256}([i % 256])
-    end
+    p = FountainCodes.R10(k)
+    C = [Vector{GF256}([i % 256]) for i in 1:p.L]
     N = [Dict{Int,Bool}() for _ in 1:p.L]
     precode!(C, p, N)
     return p, C, N
 end
 
-doc"make sure the encoder runs at all"
+"make sure the encoder runs at all"
 function test_encode_1()
     p, C, _ = init()
     for i in 1:length(C)
@@ -17,8 +16,8 @@ function test_encode_1()
             error("intermediate symbol at index $i not assigned.")
         end
     end
-    s = RaptorCodes.ltgenerate(C, 1, p)
-    deg = RaptorCodes.degree(s)
+    s = FountainCodes.ltgenerate(C, 1, p)
+    deg = FountainCodes.degree(s)
     if deg != 2
         error("LT degree is $deg bout should be 2")
     end
@@ -67,4 +66,3 @@ function test_encode_2()
     return true
 end
 @test test_encode_2()
-

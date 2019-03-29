@@ -75,22 +75,22 @@ function rho(f::Soliton, i::Int)
     end
 end
 
-function params(d::Soliton)
+function StatsBase.params(d::Soliton)
     return (d.K, d.mode, d.delta)
 end
 
 "Soliton distribution probability density function."
-function pdf(f::Soliton, i::Int)
+function Distributions.pdf(f::Soliton, i::Int)
     return (tau(f, i) + rho(f, i)) / f.beta
 end
 
 "Soliton distribution cumulative density function."
-function cdf(f::Soliton, i::Int)
+function Distributions.cdf(f::Soliton, i::Int)
     return sum(pdf(f, j) for j=1:i)
 end
 
 "Soliton distribution mean."
-function Base.mean(f::Soliton)
+function Statistics.mean(f::Soliton)
     r = 0.0
     for i in 1:f.K
         r += i * pdf(f, i)
@@ -99,7 +99,7 @@ function Base.mean(f::Soliton)
 end
 
 "Soliton distribution inverse cdf."
-function Base.quantile(f::Soliton, v::Real) :: Int64
+function Statistics.quantile(f::Soliton, v::Real) :: Int64
     return numinv(x->cdf(f, x), v, 1.0, Float64(f.K))
 end
 

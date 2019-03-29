@@ -42,7 +42,7 @@ function RQ_parameters(K::Int)
     if K > 56403
         error("there can be at most 56403 source symbols")
     end
-    i = start(searchsorted(RQ_parameter_table[:, 1], K))
+    i = searchsortedfirst(RQ_parameter_table[:, 1], K)
     Kp = RQ_parameter_table[i, 1]
     J = RQ_parameter_table[i, 2]
     S = RQ_parameter_table[i, 3]
@@ -101,9 +101,10 @@ end
 """
     RQ_tuple(Kp::Int, X::Int)
 
-RaptorQ standardized tuple function. Takes as input the number of source symbols
-Kp and a symbol identifier X and returns the tuple (d, a, b, d1, a1, b1). These
-numbers uniquely determine the LT symbol with ISI X.
+RaptorQ standardized tuple function. Takes as input the number of
+source symbols Kp and a symbol identifier X and returns the tuple (d,
+a, b, d1, a1, b1). These numbers uniquely determine the LT symbol with
+ISI X.
 
 """
 function RQ_tuple(X::Int, c::RQ)
@@ -134,7 +135,7 @@ iszero(C[x]). we should look into finding a better approach.
 """
 function ltgenerate(C::Vector, X::Int, c::RQ)
     d, a, b, d1, a1, b1 = RQ_tuple(X, c)
-    indices = Vector{Int}(d+d1)
+    indices = zeros(Int, d+d1)
     value = copy(C[b+1])
     indices[1] = b+1
     for j in 1:d-1
@@ -202,7 +203,7 @@ relations and the remaining H entries correspond to HDPC relations.
 
 """
 function precode_relations(c::RQ)
-    N = Vector{Tuple{Vector{Int},Vector{GF256}}}(c.S+c.H)
+    N = [(Vector{Int}(), Vector{GF256}()) for _ in 1:(c.S+c.H)]
     N = RQ_ldpc_constraints!(N, c)
     N = RQ_hdpc_constraints!(N, c)
     return N
@@ -211,9 +212,6 @@ end
 function RQ_ldpc_constraints!(N::Vector, c::RQ)
     if length(N) != c.S+c.H
         error("N must have length c.S+c.H")
-    end
-    for i in 1:c.S
-        N[i] = (Vector{Int}(), Vector{GF256}())
     end
     for i in 0:c.B-1
         a = 1 + Int(floor(i/c.S))
@@ -254,10 +252,6 @@ function RQ_hdpc_constraints!(N::Vector, c::RQ)
         error("N must have length c.S+c.H")
     end
     i0 = c.S+1
-    for i in i0:c.S+c.H
-        # N[i] = (collect(1:c.Kp+c.S+1), zeros(GF256, c.Kp+c.S+1))
-        N[i] = (Vector{Int}(), Vector{GF256}())
-    end
     MT = zeros(GF256, c.H, c.Kp+c.S)
     GAMMA = zeros(GF256, c.Kp+c.S, c.Kp+c.S)
     for j in 0:c.Kp+c.S-2

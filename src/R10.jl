@@ -69,7 +69,7 @@ struct R10_256 <: NonBinaryCode
 end
 Base.repr(p::R10_256) = "R10_256($(p.K))"
 
-doc"pre-code input data. C must be an array of source symbols of length L."
+"pre-code input data. C must be an array of source symbols of length L."
 function precode!(C::Vector, c::Union{R10,R10_256}, N=missing)
     C = r10_ldpc_encode!(C, c, N)
     C = r10_hdpc_encode!(C, c, N)
@@ -88,7 +88,7 @@ function ltgenerate(C::Vector, X::Int, p::Code)
     while (b >= p.L)
         b = (b + a) % p.Lp
     end
-    N = Vector{Int}(min(d, p.L))
+    N = zeros(Int, min(d, p.L))
     N[1] = b+1
     value = copy(C[b+1])
     for j in 1:min(d-1, p.L-1)
@@ -102,7 +102,7 @@ function ltgenerate(C::Vector, X::Int, p::Code)
     return BSymbol(X, value, N)
 end
 
-doc"Generate R10 precode LDPC symbols in-place at N (K+1) to (K+S)."
+"Generate R10 precode LDPC symbols in-place at N (K+1) to (K+S)."
 function r10_ldpc_encode!(C::Vector, p::Union{R10,R10_256}, N=missing)
     if length(C) != p.L
         error("C must have length p.L = $p.L")
@@ -154,7 +154,7 @@ function coefficient(X::Int, p::R10_256)
     return coef
 end
 
-doc"Generate R10 precode HDPC symbols in-place at N (K+S+1) to (K+S+H)."
+"Generate R10 precode HDPC symbols in-place at N (K+S+1) to (K+S+H)."
 function r10_hdpc_encode!(C::Vector, p::Union{R10,R10_256}, N=missing)
     if length(C) != p.L
         error("C must have length p.L = $p.L")
@@ -208,7 +208,7 @@ function r10_rand(X::Int, i::Int, m::Int) :: Int
     ) % m
 end
 
-doc"Map a uniformly distributed random number v to a degree."
+"Map a uniformly distributed random number v to a degree."
 function deg(v::Int) :: Int
     d = [1, 2, 3, 4, 10, 11, 40]
     f = [10241, 491582, 712794, 831695, 948446, 1032189, 1048576]
@@ -222,7 +222,7 @@ function deg(v::Int) :: Int
     return d[j]
 end
 
-doc"Maps an encoding symbol ID X to a triple (d, a, b)"
+"Maps an encoding symbol ID X to a triple (d, a, b)"
 function trip(X::Int, p::Union{R10,R10_256})
     Q = 65521 # the largest prime smaller than 2^16
     JK = J[p.K+1]

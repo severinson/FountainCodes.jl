@@ -1,31 +1,28 @@
-using RaptorCodes, Base.Test
+using FountainCodes, Test
 
 function init(K)
-    p = RaptorCodes.RQ(K)
-    d = RaptorCodes.Decoder(p)
-    C = Vector{Vector{GF256}}(p.L)
-    for i = 1:p.K
-        C[i] = Vector{GF256}([i % 256])
-    end
+    p = FountainCodes.RQ(K)
+    d = FountainCodes.Decoder(p)
+    C = [Vector{GF256}([i % 256]) for i in 1:p.L]
     precode!(C, p)
     return p, d, C
 end
 
 # test RQ parameter choice
-@test RaptorCodes.RQ_parameters(27) == (30, 566, 11, 10, 41)
-@test RaptorCodes.RQ_parameters(30) == (30, 566, 11, 10, 41)
-@test RaptorCodes.RQ_parameters(90) == (91, 66, 17, 10, 103)
+@test FountainCodes.RQ_parameters(27) == (30, 566, 11, 10, 41)
+@test FountainCodes.RQ_parameters(30) == (30, 566, 11, 10, 41)
+@test FountainCodes.RQ_parameters(90) == (91, 66, 17, 10, 103)
 
 # test degree distribution
-@test RaptorCodes.RQ_deg(0) == 1
-@test RaptorCodes.RQ_deg(5243) == 2
-@test RaptorCodes.RQ_deg(1048576-1) == 30
+@test FountainCodes.RQ_deg(0) == 1
+@test FountainCodes.RQ_deg(5243) == 2
+@test FountainCodes.RQ_deg(1048576-1) == 30
 
 """test tuple function"""
 function test_RQ_tuple()
     c = RQ(10)
     for X in 1:10
-        d, a, b, d1, a1, b1 = RaptorCodes.RQ_tuple(X, c)
+        d, a, b, d1, a1, b1 = FountainCodes.RQ_tuple(X, c)
         if !(0 < d)
             error("d must be positive")
         end
@@ -52,7 +49,7 @@ end
 "make sure the encoder runs at all"
 function test_precode_relations()
     c = RQ(10)
-    N = RaptorCodes.precode_relations(c)
+    N = FountainCodes.precode_relations(c)
 
     # test LDPC constraints
     ri = 1
@@ -152,13 +149,14 @@ end
 
 function test_precode_2()
     c = RQ(1000)
-    C = Vector{Vector{GF256}}(c.L)
-    for i in 1:c.K
-        C[i] = Vector{GF256}([i % 256])
-    end
-    for i in c.K+1:c.L
-        C[i] = Vector{GF256}()
-    end
+    C = [Vector{GF256}([i % 256]) for i in 1:c.L]
+    # C = Vector{Vector{GF256}}(c.L)
+    # for i in 1:c.K
+    #     C[i] = Vector{GF256}([i % 256])
+    # end
+    # for i in c.K+1:c.L
+    #     C[i] = Vector{GF256}()
+    # end
     precode!(C, c)
     for X in 0:c.K-1
         s = ltgenerate(C, X, c)
@@ -173,13 +171,14 @@ end
 
 function test_precode_3(K=1161)
     c = RQ(K)
-    C = Vector{Vector{GF256}}(c.L)
-    for i in 1:c.K
-        C[i] = Vector{GF256}([i % 256])
-    end
-    for i in c.K+1:c.L
-        C[i] = Vector{GF256}()
-    end
+    C = [Vector{GF256}([i % 256]) for i in 1:c.L]
+    # C = Vector{Vector{GF256}}(c.L)
+    # for i in 1:c.K
+    #     C[i] = Vector{GF256}([i % 256])
+    # end
+    # for i in c.K+1:c.L
+    #     C[i] = Vector{GF256}()
+    # end
     precode!(C, c)
     for X in 0:c.K-1
         s = ltgenerate(C, X, c)
@@ -196,10 +195,10 @@ function test_decoder_1(K=1000, r=500)
     c, d, C = init(K)
     n = 38
     for j in 1:c.K+r
-        s = RaptorCodes.ltgenerate(C, (n-1)*(c.K)+j, c)
-        RaptorCodes.add!(d, s)
+        s = FountainCodes.ltgenerate(C, (n-1)*(c.K)+j, c)
+        FountainCodes.add!(d, s)
     end
-    output = RaptorCodes.decode!(d)
+    output = FountainCodes.decode!(d)
     for i in 1:c.K
         if output[i] != C[i]
             error("decoding failure. source[$i] is $(output[i]). should be $(C[i]).")
@@ -213,10 +212,10 @@ function test_decoder_2(K=56, r=2)
     for n in 1:100
         c, d, C = init(K)
         for j in 1:c.K+r
-            s = RaptorCodes.ltgenerate(C, (n-1)*(c.K)+j, c)
-            RaptorCodes.add!(d, s)
+            s = FountainCodes.ltgenerate(C, (n-1)*(c.K)+j, c)
+            FountainCodes.add!(d, s)
         end
-        output = RaptorCodes.decode!(d)
+        output = FountainCodes.decode!(d)
         for i in 1:c.K
             if output[i] != C[i]
                 error("decoding failure. source[$i] is $(output[i]). should be $(C[i]).")
@@ -231,10 +230,10 @@ function test_decoder_3(K=1162, r=2)
     c, d, C = init(K)
     n = 38
     for j in 1:c.K+r
-        s = RaptorCodes.ltgenerate(C, (n-1)*(c.K)+j, c)
-        RaptorCodes.add!(d, s)
+        s = FountainCodes.ltgenerate(C, (n-1)*(c.K)+j, c)
+        FountainCodes.add!(d, s)
     end
-    output = RaptorCodes.decode!(d)
+    output = FountainCodes.decode!(d)
     for i in 1:c.K
         if output[i] != C[i]
             error("decoding failure. source[$i] is $(output[i]). should be $(C[i]).")

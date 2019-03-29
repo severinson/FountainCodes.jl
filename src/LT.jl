@@ -31,7 +31,7 @@ end
 function LTQ{CT}(K::Int, dd::DT) where {CT,DT <: Sampleable{Univariate, Discrete}}
     LTQ{CT,DT}(K, dd)
 end
-Base.repr{CT,DT}(p::LTQ{CT,DT}) = "LTQ{$CT,DT}($(p.K), $(repr(p.dd)))"
+Base.repr(p::LTQ{CT,DT}) where CT where DT = "LTQ{$CT,$DT}($(p.K), $(repr(p.dd)))"
 
 "LT codes have no pre-code, so do nothing."
 function precode!(C::Vector, p::Code)
@@ -49,14 +49,14 @@ end
 Return a randomly generated coefficient.
 
 """
-function coefficient{CT}(X::Int, j::Int, p::LTQ{CT})
+function coefficient(X::Int, j::Int, p::LTQ{CT}) where CT
     coef = rand(CT)
     while iszero(coef) coef = rand(CT) end
     return coef
 end
 
-function coefficient{CT<:Float64}(X::Int, i::Int, p::LTQ{CT})
-    return randn(CT)/1e10+1
+function coefficient(X::Int, i::Int, p::LTQ{Float64})
+    return randn()/1e10+1
 end
 
 "Maps an encoding symbol ID X to a triple (d, a, b)"
@@ -79,7 +79,7 @@ function ltgenerate(C::Vector, X::Int, p::LT)
     while (b >= p.L)
         b = (b + a) % p.Lp
     end
-    neighbours = Vector{Int}(min(d, p.L))
+    neighbours = zeros(Int, min(d, p.L))
     neighbours[1] = b+1
     value = copy(C[b+1])
     for j in 1:min(d-1, p.L-1)
@@ -120,7 +120,7 @@ end
 # end
 
 "generate an LT symbol from the intermediate symbols."
-function ltgenerate{CT}(C::Vector, X::Int, p::LTQ{CT})
+function ltgenerate(C::Vector, X::Int, p::LTQ{CT}) where CT
     d, _, _ = trip(X, p)
     d = min(d, p.L)
     set = Set{Int}()
@@ -155,7 +155,7 @@ end
 Return a decoder for non-binary LT codes.
 
 """
-function Decoder{CT,DT}(p::LTQ{CT,DT})
+function Decoder(p::LTQ{CT}) where CT
     num_buckets = max(3, Int(round(log(p.K))))
     selector = HeapSelect(num_buckets, p.L)
     return Decoder{CT,Vector{CT},LTQ,HeapSelect}(
