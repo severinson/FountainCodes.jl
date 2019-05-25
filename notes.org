@@ -223,3 +223,9 @@ which its coefficients are defined. For example, binary, q* TODO ary, real.
 * TODO Selector
 - Standardize API.
 - Make sure SimpleSelect works.
+* TODO Standard arithmetic functions
+- The finite field arithmetic functions in Symbols.jl should use the
+  standard names mul!, div!, etc.
+* TODO Finite field objects
+- We shouldn't override the UInt8 arithmetic functions. Better to
+  create a new GF256 objects that contains a UInt8 value.
