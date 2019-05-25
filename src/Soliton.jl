@@ -1,6 +1,23 @@
 export Soliton
 
-"Soliton distribution."
+"""
+
+Soliton <: Distribution{Univariate, Discrete}
+
+Robust Soliton probability distribution. Construct a distribution with
+Soliton(K, mode, delta).
+
+Arguments
+
+* K::Int: Number of symbols.
+
+* mode::Int: Location of the spike introduced by the robust
+  component. Must be in the range 1 <= mode <= K.
+
+* delta::Real: Smaller delta decreases decoder failure probability by
+  increasing the average degree. Must be in the range 0 < delta < 1.
+
+"""
 struct Soliton <: Distribution{Univariate, Discrete}
     K::Int64 # number of input symbols
     mode::Int64 # robust component spike location
@@ -8,7 +25,7 @@ struct Soliton <: Distribution{Univariate, Discrete}
     R::Float64
     c::Float64
     beta::Float64 # normalization constant
-    function Soliton(K::Int64, mode::Int, delta::Real)
+    function Soliton(K::Int, mode::Int, delta::Real)
         if !(0 < delta < 1)
             error("delta must be 0 < delta < 1")
         end

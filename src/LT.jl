@@ -1,6 +1,18 @@
 export LT, LTQ
 
-"LT code parameters."
+"""
+    LT{T <: Sampleable{Univariate, Discrete}} <: BinaryCode
+
+Binary Luby Transform erasure correction code. Create a code object
+with LT(K, dd).
+
+Arguments
+
+* K::Int: Number of source symbols.
+
+* dd::Sampleable{Univariate, Discrete}: Degree distribution.
+
+"""
 struct LT{T <: Sampleable{Univariate, Discrete}} <: BinaryCode
     K::Int # number of source symbols
     L::Int # number of intermediate symbols
@@ -14,7 +26,19 @@ end
 LT(K::Int, dd::T) where {T <: Sampleable{Univariate, Discrete}} = LT{T}(K, dd)
 Base.repr(p::LT) = "LT($(p.K), $(repr(p.dd)))"
 
-"q-ary LT code parameters."
+"""
+    LTQ{CT,DT <: Sampleable{Univariate, Discrete}} <: NonBinaryCode
+
+Non-binary Luby Transform erasure correction code with coefficients of
+type CT. Create a code object with LT{CT}(K, dd).
+
+Arguments
+
+* K::Int: Number of source symbols.
+
+* dd::Sampleable{Univariate, Discrete}: Degree distribution.
+
+"""
 struct LTQ{CT,DT <: Sampleable{Univariate, Discrete}} <: NonBinaryCode
     K::Int # number of source symbols
     L::Int # number of intermediate symbols
