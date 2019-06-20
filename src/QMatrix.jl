@@ -2,11 +2,11 @@ export QMatrix, subtract!, getcolumn
 
 """
 
-This module implements a matrix that allows mixing binary columns with
-non-binary columns of element type T. Binary data is stored using a
-BitMatrix and non-binary columns are stored in a dict of
-Vector{T}. The module implements efficient methods to subtract one
-column from another.
+    QMatrix{T} <: AbstractMatrix{T}
+
+Efficient implementation of a matrix with mixed binary and non-binary
+entries. Binary entries are stored in a dense BitMatrix whereas
+non-binary columns are stored as separate vectors.
 
 """
 mutable struct QMatrix{T} <: AbstractMatrix{T}
@@ -225,8 +225,11 @@ function subtract!(M::QMatrix{T}, c1::Int, c2::Int) where T
         kd0, ld0 = get_chunks_id(s2i[1, c1])
         kd1, ld1 = get_chunks_id(s2i[M.m, c1])
         offset = (c2-c1)*div(M.m,64)
-        for i in kd0:kd1
-            M.binary.chunks[i] = xor(M.binary.chunks[i], M.binary.chunks[i+offset])
+        @simd for i in kd0:kd1
+            @inbounds M.binary.chunks[i] = xor(
+                M.binary.chunks[i],
+                M.binary.chunks[i+offset],
+            )
         end
     end
     return
@@ -262,7 +265,8 @@ function subtract!(M::QMatrix{T}, d::T, c1::Int, c2::Int) where T
         M.qary[c1] = M.binary[:,c1]
         # TODO: use array indexing
         for i in findall(!iszero, M.binary[:,c2])
-            M.qary[c1][i] += d
+            M.qary[c1][i] -= d
         end
     end
+    return
 end
