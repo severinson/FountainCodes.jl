@@ -200,25 +200,17 @@ end
 
 Subtract column c2 from column c1, i.e., M[:,c1] = M[:,c1] - M[:,c2].
 
-TODO: consider using a separate BitVector to store which columns are
-qary in order to speed up haskey operations.
-
-TODO: this function isn't properly tested.
-
 """
 function subtract!(M::QMatrix{T}, c1::Int, c2::Int) where T
     @boundscheck checkbounds(M.binary, 1, c1)
     @boundscheck checkbounds(M.binary, 1, c2)
     h1, h2 = haskey(M.qary, c1), haskey(M.qary, c2)
     if h1 && !h2
-        q = M.qary[c1]
-        for i in findall(!iszero, M.binary[:,c2])
-            q[i] = q[i] - one(T)
-        end
+        @views M.qary[c1] .-= M.binary[:, c2]
     elseif !h1 && h2
-        M.qary[c1] = M.binary[:,c1] - M.qary[c2]
+        @views M.qary[c1] = M.binary[:,c1] .- M.qary[c2]
     elseif h1 && h2
-        q1, q2 = M.qary[c1], M.qary[c2]
+        @views q1, q2 = M.qary[c1], M.qary[c2]
         q1 .-= q2
     else
         s2i = LinearIndices(M)
@@ -251,22 +243,14 @@ function subtract!(M::QMatrix{T}, d::T, c1::Int, c2::Int) where T
     end
     h1, h2 = haskey(M.qary, c1), haskey(M.qary, c2)
     if h1 && !h2
-        q = M.qary[c1]
-        # TODO: use array indexing
-        for i in findall(!iszero, M.binary[:,c2])
-            q[i] -= d
-        end
+        @views M.qary[c1] .-= d .* M.binary[:, c2]
     elseif !h1 && h2
-        M.qary[c1] = subeq!(Vector{T}(M.binary[:,c1]), M.qary[c2], d)
+        @views M.qary[c1] = M.binary[:,c1] .- d.*M.qary[c2]
     elseif h1 && h2
-        q1, q2 = M.qary[c1], M.qary[c2]
-        subeq!(q1, q2, d)
+        @views q1, q2 = M.qary[c1], M.qary[c2]
+        q1 .-= d.*c2
     else
-        M.qary[c1] = M.binary[:,c1]
-        # TODO: use array indexing
-        for i in findall(!iszero, M.binary[:,c2])
-            M.qary[c1][i] -= d
-        end
+        @views M.qary[c1] = M.binary[:,c1] .- d.*M.binary[:,c2]
     end
     return
 end
