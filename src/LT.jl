@@ -79,8 +79,16 @@ function coefficient(X::Int, j::Int, p::LTQ{CT}) where CT
     return coef
 end
 
+"""
+    coefficient(X::Int, i::Int, p::LTQ{Float64})
+
+Return a coefficient drawn from a standard Gaussian distribution. See
+"Numerically Stable Real Number Codes Based on Random Matrices" by
+Chen et al. for a motivation.
+
+"""
 function coefficient(X::Int, i::Int, p::LTQ{Float64})
-    return randn()/1e10+1
+    return randn()
 end
 
 "Maps an encoding symbol ID X to a triple (d, a, b)"
