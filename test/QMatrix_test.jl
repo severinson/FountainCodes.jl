@@ -143,7 +143,7 @@ end
 function test_subtract_coef_5()
     m, n = 64, 10
     v1 = 1.2
-    v2 = 2.0
+    v2 = 2.1
     M = QMatrix{Float64}(m, n)
     M[:, 1] .= v1
     M[:, 2] .= v2
