@@ -248,7 +248,7 @@ function subtract!(M::QMatrix{T}, d::T, c1::Int, c2::Int) where T
         @views M.qary[c1] = M.binary[:,c1] .- d.*M.qary[c2]
     elseif h1 && h2
         @views q1, q2 = M.qary[c1], M.qary[c2]
-        q1 .-= d.*c2
+        q1 .-= d.*q2
     else
         @views M.qary[c1] = M.binary[:,c1] .- d.*M.binary[:,c2]
     end
