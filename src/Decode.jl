@@ -6,9 +6,6 @@ export Decoder, add!, decode!, get_source, get_source!
 Inactivation decoder compatible with Raptor10 (rfc5053) and RaptorQ
 (rfc6330) codes.
 
-TODO: Look into QMatrix speed for all-qary codes. If it's an issue,
-add the option of using a dense matrix of the type.
-
 """
 mutable struct Decoder{CT,VT,CODE<:Code,SELECTOR<:Selector}
     p::CODE # type of code
@@ -70,7 +67,7 @@ Add a row with non-zero values nzval at indices nzind to the system of
 equations. v is the corresponding value in the right-hand side of the
 system.
 
-TOOD: consider renaming to push!
+TODO: consider renaming to push!
 
 """
 function add!(d::Decoder{CT,VT}, nzind::Vector{Int},
@@ -263,7 +260,7 @@ end
     subtract!(d::Decoder, rpi::Int, rpj::Int, coefi, coefj)
 
 Subtract coefi/coefj*rows[rpi] from rows[rpj] and assign the result to
-rows[rpj]. New row objects are only allocated when needed.
+rows[rpj].
 
 """
 function subtract!(d::Decoder{CT,VT}, rpi::Int, rpj::Int,
@@ -274,11 +271,14 @@ function subtract!(d::Decoder{CT,VT}, rpi::Int, rpj::Int,
         coef = (coef / coefj)::CT
     end
     subtract!(d.dense, coef, rpj, rpi)
-    if iszero(d.values[rpj]) # TODO: is this needed?
+    update_metrics!(d, rpi, coefi)
+    if iszero(d.values[rpi])
+        return # nothing more to do
+    end
+    if iszero(d.values[rpj]) # allocate parity symbol values on-demand
         d.values[rpj] = zero(d.values[rpi])
     end
-    d.values[rpj] = subeq!(d.values[rpj], d.values[rpi], coef)
-    update_metrics!(d, rpi, coefi)
+    d.values[rpj] .-= coef.*d.values[rpi]
     return
 end
 
