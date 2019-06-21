@@ -63,59 +63,6 @@ function Base.:/(a::AbstractArray{GF256}, b::GF256)
     return exprq.(logrq.(a) .- logrq(b) .+ 255)
 end
 
-# """
-#     subeq!(a, b, c)
-
-# Subtract c*b from a.
-
-# """
-# function subeq!(a::Vector{GF256}, b::Vector{GF256}, c::GF256) :: Vector{GF256}
-#     @boundscheck Broadcast.check_broadcast_axes(size(a), b)
-#     if iszero(c) || iszero(b)
-#         return a
-#     end
-#     if c == one(c)
-#         a .-= b
-#         return a
-#     end
-#     clog = logrq(c)
-#     for i in 1:length(b)
-#         if !iszero(b[i])
-#             @inbounds a[i] -= exprq(logrq(b[i])+clog)
-#         end
-#     end
-#     return a
-# end
-
-# function subeq!(a::Vector{GF256}, b::Vector{GF256}, c::Bool) :: Vector{GF256}
-#     if iszero(c) || iszero(b)
-#         return a
-#     end
-#     a .-= b
-#     return a
-# end
-
-## fallback in-place arithmetic functions ##
-function subeq!(a, b)
-    a .-= b
-    return a
-end
-
-function subeq!(a, b, c)
-    a .-= b.*c
-    return a
-end
-
-function muleq!(a, b)
-    a .*= b
-    return a
-end
-
-function diveq!(a, b)
-    a ./= b
-    return a
-end
-
 "division over GF256 according to rfc6330."
 function Base.:/(a::GF256, b::GF256)
     if iszero(a)
