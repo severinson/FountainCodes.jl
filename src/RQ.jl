@@ -182,9 +182,18 @@ function precode!(C::Vector, c::RQ)
     if length(C) != c.L
         error("C must have length L")
     end
-    for i in c.K+1:c.L # TODO: remove?
+
+    # zero out the parity symbols
+    for i in c.K+1:c.L
         C[i] = zero(C[1])
     end
+
+    # check that all symbols have the same dimension
+    for i in 1:c.L
+        Broadcast.check_broadcast_axes(size(C[1]), C[i])
+    end
+
+    # decode the source symbols
     for X in 0:c.K-1
         s = ltgenerate(C, X, c)
         add!(d, s.neighbours, C[X+1])
@@ -318,13 +327,12 @@ Create a RaptorQ decoder and add the relevant constraint symbols.
 
 """
 function Decoder(c::RQ)
-    selector = HeapSelect(31, c.L) # one more than the highest LT symbol degree
+    selector = HeapSelect(31, c.L) # 31 is one more than the highest LT symbol degree
     d = Decoder{GF256,Vector{GF256},RQ,HeapSelect}(
         c,
         selector,
         c.L,
     )
-    # C = zeros(GF256, c.L)
     N = precode_relations(c)
 
     # LDPC constraints
