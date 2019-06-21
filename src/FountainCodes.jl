@@ -36,6 +36,7 @@ abstract type CodeSymbol end
 include("Bound.jl")
 include("Numinv.jl")
 include("Soliton.jl")
+include("GF256.jl")
 include("Symbols.jl")
 include("Gray.jl")
 include("QMatrix.jl")
