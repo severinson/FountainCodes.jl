@@ -20,7 +20,7 @@ mutable struct Decoder{CT,VT,CODE<:Code,SELECTOR<:Selector}
     uperm::Vector{Int} # maps ui to upi
     uperminv::Vector{Int} # maps upi to ui
     selector::SELECTOR # used to select which row to process next
-    num_symbols::Int # code length
+    num_symbols::Int # number of source symbols
     num_decoded::Int # denoted by i in the R10 spec.
     num_inactivated::Int # denoted by u in the R10 spec.
     metrics::DataStructures.Accumulator{String,Int} # stores performance metrics
@@ -34,7 +34,7 @@ mutable struct Decoder{CT,VT,CODE<:Code,SELECTOR<:Selector}
                 Vector{VT}(),
                 [Vector{Int}() for _ in 1:num_symbols],
                 Vector{SparseVector{CT,Int}}(),
-                QMatrix{CT}(64, 1), # expanded once all rows have been added
+                QMatrix{CT}(64, 1), # expanded when decoding starts
                 Vector(1:num_symbols),
                 Vector(1:num_symbols),
                 Vector{Int}(),
