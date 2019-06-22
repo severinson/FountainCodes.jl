@@ -77,7 +77,6 @@ which its coefficients are defined. For example, binary, q* TODO ary, real.
   CLOSED: [2018-07-25 on. 09:56]
 - Dense binary part is currently fixed size.
 - The decoder will fail if there's more than 64 inactivations.
-* TODO Test LT symbols against ground truth
 * DONE RBitVector constructor
   CLOSED: [2018-07-25 on. 09:56]
 - variable names
@@ -127,6 +126,7 @@ which its coefficients are defined. For example, binary, q* TODO ary, real.
 * TODO Decoder tests organization
 - Some tests are in their own file and some in files corresponding to
   the different codes.
+* TODO Test LT symbols against ground truth
 * DONE qary_from_binary
   CLOSED: [2018-08-24 fr. 16:43]
 - This method only works for GF256
@@ -153,7 +153,8 @@ which its coefficients are defined. For example, binary, q* TODO ary, real.
 - Returns a value of type any if an empty vector has been given as value.
 * DONE Rename LT to LT10
   CLOSED: [2018-07-25 on. 09:55]
-* TODO GF256 subtract method
+* DONE GF256 subtract method
+  CLOSED: [2019-06-21 Fri 13:01]
 - Seems inefficient. Does not use the new addeq functions
 * DONE Remove divrq et al. in favor for diveq
   CLOSED: [2018-08-24 fr. 16:44]
@@ -183,6 +184,13 @@ which its coefficients are defined. For example, binary, q* TODO ary, real.
   and subtract calls to use it.
 - Once this is done we can remove the BRow/QRow distinction and use a vector of
   vectors style. We could even use an stdlib sparse matrix.
+* DONE LTQ coefficient has poor rank properties
+  CLOSED: [2019-06-20 Thu 16:55]
+- Having all coefficients be close to the same value is bad since
+  subtracting a row from another will cause all other coefficients of
+  the target row to be close to zero.
+- Hence, we should have coefficients with larger variance. Using
+  standard Gaussians is probably fine.
 * TODO RQ metrics
 - Store the number of GF256 operations in a separate column.
 - Store Kp as the number of source symbols.
@@ -220,12 +228,44 @@ which its coefficients are defined. For example, binary, q* TODO ary, real.
 * TODO QMatrix
 - Use something more standard than countnz to find the number of
   non-zeros.
+- Benchmark its performance.
 * TODO Selector
 - Standardize API.
 - Make sure SimpleSelect works.
-* TODO Standard arithmetic functions
+* DONE Standard arithmetic functions
+  CLOSED: [2019-06-21 Fri 13:00]
 - The finite field arithmetic functions in Symbols.jl should use the
   standard names mul!, div!, etc.
-* TODO Finite field objects
+* TODO ltgenerate interface
+- The current interface assumes you want to create a
+* DONE subeq!
+  CLOSED: [2019-06-21 Fri 13:00]
+- Remove subeq! and use regular arithmetic instead.
+* TODO GF256 object
 - We shouldn't override the UInt8 arithmetic functions. Better to
   create a new GF256 objects that contains a UInt8 value.
+- Just define GF256 as a struct with a single value inside and then
+  define the regular arithmetic operations for it.
+* DONE zero-length parity symbols
+  CLOSED: [2019-06-22 Sat 12:40]
+- Parity symbols are initialized as zero-length vectors because we
+  don't know in advance the size of the source symbols. Because of
+  this we need to check in subtract if the target is zero-length and
+  initialize it if not.
+- We should initialize them as undefs since it allows for easily
+  checking if values are assigned or not. However, the parity symbol
+  values are added by the RQ decoder constructor.
+- Decided to instead add a check to subtract that allocates these
+  values on-demand. Because we often don't use all of them this will
+  end up saving memory and will probably be faster.
+* TODO LDPC decoder
+- The decoder constructor is a bit weird in the sense that it assumes
+  that you've set the erasure pattern and source symbol vectors
+  correctly before calling it. Wouldn't it be better to give those as
+  arguments? Alternatively, allow the user to add the parity equations
+  instead of having the constructor do it.
+- The decoder doesn't support vector values.
+* TODO show instead of repr methods
+- I've added repr methods to everything, but it seems that writing
+  show methods is more correct.
+* TODO Rename Decode.jl to Decoder.jl
