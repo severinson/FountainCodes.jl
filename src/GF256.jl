@@ -1,75 +1,73 @@
 export GF256
 
-# TODO: this method overrides the default behavior of UInt8
-const GF256 = UInt8
-# primitive type F256 <: Unsigned 8 end
-# struct F256
-#     x::UInt8
-#     function F256(v)
-#         return new(UInt8(v))
-#     end
-# end
+"""
+    struct GF256
 
-"convert an object to a vector of bytes"
-function asbytes(x) :: Vector{GF256}
-    if !isbits(x)
-        error("$x is not a plain data type and cannot be converted to bytes")
+Element of GF256 with arithmetic as defined in rfc6330.
+
+"""
+struct GF256 <: Integer
+    x::UInt8
+    function GF256(x)
+        return new(UInt8(x))
     end
-    sz = sizeof(x)
-    dst = Vector{GF256}(sz)
-    src = convert(Ptr{F256}, pointer_from_objref(x))
-    unsafe_copy!(pointer(dst), src, sz)
-    return dst
 end
 
-"addition over GF256 according to rfc6330.."
-function Base.:+(a::GF256, b::GF256)
-    return xor(a, b)
+function show(io::IO, a::GF256)
+    print(io, "GF256($(a.x))")
 end
 
-"subtraction over GF256 according to rfc6330.."
-function Base.:-(a::GF256, b::GF256)
-    return a + b
+Base.convert(::Type{Bool}, a::GF256) = Bool(a.x)
+Base.convert(::Type{GF256}, x::Int) = GF256(x)
+Base.convert(::Type{GF256}, x::UInt8) = GF256(x)
+Base.convert(::Type{GF256}, x::Bool) = x ? GF256(1) : GF256(0)
+
+Base.promote_rule(::Type{GF256}, ::Type{Bool}) = GF256
+
+Base.zero(a::GF256) = GF256(0)
+Base.zero(::Type{GF256}) = GF256(0)
+Base.one(a::GF256) = GF256(1)
+Base.one(::Type{GF256}) = GF256(1)
+Base.iszero(a::GF256) = iszero(a.x)
+
+Base.length(a::GF256) = 1
+Base.iterate(a::GF256) = (a, nothing)
+Base.iterate(a::GF256, ::Nothing) = nothing
+
+Base.rand(::Type{GF256}) = GF256(rand(UInt8))
+
+function Base.zeros(::Type{GF256}, dims::Vararg{Union{Int, AbstractUnitRange},N} where N)
+    rv = Array{GF256}(undef, dims...)
+    rv .= zero(GF256)
+    return rv
 end
 
-function logrq(a::GF256) :: Int
-    return iszero(a) ? error("logarithm of 0 undefined") : RQ_OCT_LOG[a]
+function Base.ones(::Type{GF256}, dims::Vararg{Union{Int, AbstractUnitRange},N} where N)
+    rv = Array{GF256}(undef, dims...)
+    rv .= one(GF256)
+    return rv
 end
 
-function exprq(a::Int) :: GF256
+"""logarithm as defined by rfc6330. used for multiplication and division."""
+function logrq(a::GF256)::Int
+    return iszero(a) ? throw(DomainError(0, "logrq(0) undefined")) : RQ_OCT_LOG[a.x]
+end
+
+"""exponentiation as defined by rfc6330. used for multiplication and division."""
+function exprq(a::Int)::GF256
     return RQ_OCT_EXP[a+1]
 end
 
-"multiplication over GF256 according to rfc6330."
-function Base.:*(a::GF256, b::GF256)
-    return iszero(a) || iszero(b) ? zero(a) : RQ_OCT_EXP[RQ_OCT_LOG[a] + RQ_OCT_LOG[b] + 1]
-end
-
-"vector-scalar multiplication over GF256"
-function Base.:*(a::AbstractArray{GF256}, b::GF256)
-    if iszero(b)
-        return zeros(GF256, length(a))
-    end
-    return map(x -> iszero(x) ? zero(x) : exprq(logrq(b)+logrq(x)), a)
-end
-
-"division over GF256 according to rfc6330."
-function Base.:/(a::AbstractArray{GF256}, b::GF256)
-    if iszero(a)
-        return zero(a)
-    elseif iszero(b)
-        error("division by zero")
-    end
-    return exprq.(logrq.(a) .- logrq(b) .+ 255)
-end
-
-"division over GF256 according to rfc6330."
-function Base.:/(a::GF256, b::GF256)
-    if iszero(a)
-        return zero(a)
-    elseif iszero(b)
-        error("division by zero error")
-    else
-        return RQ_OCT_EXP[RQ_OCT_LOG[a] - RQ_OCT_LOG[b] + 255 + 1]
-    end
-end
+# arithmetic
+Base.:+(a::Bool, b::GF256) = +(promote(a, b)...)
+Base.:-(a::Bool, b::GF256) = -(promote(a, b)...)
+Base.:+(a::GF256, b::Bool) = +(promote(a, b)...)
+Base.:-(a::GF256, b::Bool) = -(promote(a, b)...)
+Base.:+(a::GF256, b::GF256) = GF256(xor(a.x, b.x))
+Base.:-(a::GF256, b::GF256) = a + b
+Base.:/(a::GF256, b::Bool) = /(promote(a, b)...)
+Base.:^(a::GF256, b::Integer) = b < 0 ? throw(DomainError(b, "^$b undefined")) : exprq(b * logrq(a) % 510)
+Base.:/(a::GF256, b::GF256) = iszero(b) ? throw(DivideError()) : iszero(a) ? a : exprq(logrq(a) - logrq(b) + 255)
+Base.:*(a::GF256, b::GF256) = iszero(a) || iszero(b) ? zero(a) : exprq(logrq(a)+logrq(b))
+Base.:*(a::Bool, b::GF256) = a ? b : zero(GF256)
+Base.:*(a::GF256, b::Bool) = b*a
