@@ -224,12 +224,12 @@ function test_diagonalize_gf256_1()
         rpi = d.rowperm[i]
         cpi = d.colperm[i]
         coef = d.sparse[rpi][cpi]
-        correct = coef*C[cpi]
+        correct = coef.*C[cpi]
         for ci in 1:d.p.L
             cpj = d.colperm[ci]
             coef = FountainCodes.getdense(d, rpi, cpj)
             if !iszero(coef)
-                correct = correct + coef * C[cpj]
+                correct = correct + coef .* C[cpj]
             end
         end
         if d.values[rpi] != correct
@@ -251,12 +251,12 @@ function test_diagonalize_gf256_2()
         rpi = d.rowperm[i]
         cpi = d.colperm[i]
         coef = d.sparse[rpi][cpi]
-        correct = coef*C[cpi]
+        correct = coef.*C[cpi]
         for ci in 1:d.p.L
             cpj = d.colperm[ci]
             coef = FountainCodes.getdense(d, rpi, cpj)
             if !iszero(coef)
-                correct = correct + coef * C[cpj]
+                correct = correct + coef .* C[cpj]
             end
         end
         if d.values[rpi] != correct
@@ -278,12 +278,12 @@ function test_diagonalize_float64_1()
         rpi = d.rowperm[i]
         cpi = d.colperm[i]
         coef = d.sparse[rpi][cpi]
-        correct = coef*C[cpi]
+        correct = coef.*C[cpi]
         for ci in 1:d.p.L
             cpj = d.colperm[ci]
             coef = FountainCodes.getdense(d, rpi, cpj)
             if !iszero(coef)
-                correct = correct + coef * C[cpj]
+                correct = correct + coef .* C[cpj]
             end
         end
         if !isapprox(d.values[rpi], correct, rtol=1e-3)
@@ -353,7 +353,7 @@ function test_ge_gf256_1()
         rpi = d.rowperm[i]
         cpi = d.colperm[i]
         coef = FountainCodes.getdense(d, rpi, cpi)
-        correct = coef*C[cpi]
+        correct = coef.*C[cpi]
         if d.values[rpi] != correct
             error("GE failed. values[$rpi] is $(d.values[rpi]) but should be $correct")
         end
@@ -377,7 +377,7 @@ function test_ge_gf256_2()
         rpi = d.rowperm[i]
         cpi = d.colperm[i]
         coef = FountainCodes.getdense(d, rpi, cpi)
-        correct = coef*C[cpi]
+        correct = coef.*C[cpi]
         if d.values[rpi] != correct
             error("GE failed. values[$rpi] is $(d.values[rpi]) but should be $correct")
         end
