@@ -14,4 +14,4 @@ println("Starting tests")
 @time @testset "Inactivation decoder" begin include("decoder_test.jl") end
 @time @testset "RQ encoder" begin include("RQ_test.jl") end
 @time @testset "LT encoder" begin include("LT_test.jl") end
-@time @testset "LDPC codes" begin include("LDPC_test.jl") end
+# @time @testset "LDPC codes" begin include("LDPC_test.jl") end
