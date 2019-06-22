@@ -1,11 +1,10 @@
 name = "FountainCodes"
 uuid = "e6b5bcfc-4fad-11e9-3d13-57f3c73c621f"
 authors = ["Albin Severinson <albin@severinson.org>"]
-version = "0.7.0"
+version = "0.8.0"
 
 [deps]
 DataStructures = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"
-DelimitedFiles = "8bb1440f-4735-579b-a4ab-409b98df4dab"
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 Primes = "27ebfcd6-29c5-5fa9-bf4b-fb8fc14df3ae"
 SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
