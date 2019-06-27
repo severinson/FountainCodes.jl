@@ -61,6 +61,23 @@ mutable struct Decoder{CT,VT,CODE<:Code,SELECTOR<:Selector}
 end
 
 """
+    size(d::Decoder)
+
+Return the size of the constraint matrix as a tuple (rows, cols).
+
+"""
+Base.size(d::Decoder) = (length(d.sparse), d.num_symbols)
+function Base.size(d::Decoder, i)::Int
+    if i == 1
+        return length(d.sparse)
+    elseif i == 2
+        return d.num_symbols
+    else
+        return 1
+    end
+end
+
+"""
     add!(d::Decoder{CT,VT}, nzind::Vector{Int}, nzval::Vector{CT}, v::VT)
 
 Add a row with non-zero values nzval at indices nzind to the system of
@@ -182,7 +199,7 @@ function expand_dense!(d::Decoder)
     while m < d.num_inactivated
         m *= 2
     end
-    n = length(d.values)
+    n = size(d, 1)
     if m == rows(d.dense) && n == cols(d.dense)
         return
     end
@@ -360,9 +377,10 @@ function vdegree(d::Decoder, rpi::Int)
     i::Int = d.num_decoded
     u::Int = d.num_inactivated
     L::Int = d.num_symbols
-    for cpi in d.sparse[rpi].nzind
-        ci = d.colperminv[cpi]
-        deg += Int(i < ci <= L-u)
+    @inbounds for cpi in d.sparse[rpi].nzind
+        if i < d.colperminv[cpi] <= L-u
+            deg += 1
+        end
     end
     return deg
 end
@@ -446,7 +464,7 @@ symbols using least-squares. Applicable for real-number codes.
 """
 function solve_dense!(d::Decoder{Float64,VT}) where VT
     firstrow = d.num_decoded+1 # first row of the dense matrix
-    lastrow = length(d.values) # last row of the dense matrix
+    lastrow = size(d, 1) # last row of the dense matrix
     firstcol = d.num_symbols-d.num_inactivated+1 # first column of the dense matrix
     lastcol = d.num_symbols # last column of the dense matrix
     @assert firstrow == firstcol "firstrow=$firstrow must be equal to firstcol=$firstcol"
@@ -550,7 +568,7 @@ function solve_dense!(d::Decoder)
         cpi = d.colperm[ci]
         ri = 0
         rpi = 0
-        for rj in d.num_decoded+1:length(d.values)
+        for rj in d.num_decoded+1:size(d, 1)
             rpj = d.rowperm[rj]
             peel_row!(d, rpj)
 
