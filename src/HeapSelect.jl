@@ -124,9 +124,12 @@ function component_select(sel::HeapSelect, d::Decoder)
     for (rpi, deg) in bucket.xs
         vdeg = sel.vdegree_from_rpi[rpi]
         @assert vdeg == 2
-        if !isbinary(d.dense, rpi) # don't consider non-binary rows
+
+        # skip very heavy rows
+        if nnz(d.sparse[rpi]) > 0.45*size(d, 2)
             continue
         end
+
         i = 1
         for cpi in d.sparse[rpi].nzind
             ci = d.colperminv[cpi]
@@ -143,10 +146,9 @@ function component_select(sel::HeapSelect, d::Decoder)
 
         # It's likely that a component with positive excess will
         # evolve into the largest connected component (under some
-        # assumptions on the process generating the graph), i.e.,
-        # once we find a component with positive excess we can
-        # stop. See "The Birth of the Giant Component" for
-        # details.
+        # assumptions on the process generating the graph), i.e., once
+        # we find a component with positive excess we can stop. See
+        # "The Birth of the Giant Component" for details.
         excess = e - v
         if excess > 0
             crpi = rpi

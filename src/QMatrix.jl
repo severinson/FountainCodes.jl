@@ -27,16 +27,8 @@ end
 @inline _mod64(l) = l & 63
 @inline get_chunks_id(i::Integer) = _div64(Int(i)-1)+1, _mod64(Int(i)-1)
 
-function rows(M::QMatrix)
-    return M.m
-end
-
-function cols(M::QMatrix)
-    return M.n
-end
-
 function Base.size(M::QMatrix)
-    return rows(M), cols(M)
+    return M.m, M.n
 end
 
 """
@@ -128,7 +120,7 @@ function Base.resize!(M::QMatrix{T}, m, n) where T
     end
     M.binary = binary
     M.m, M.n = m, n
-    return
+    return M
 end
 
 """

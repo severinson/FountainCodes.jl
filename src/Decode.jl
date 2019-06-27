@@ -7,12 +7,12 @@ Inactivation decoder compatible with Raptor10 (rfc5053) and RaptorQ
 (rfc6330) codes.
 
 """
-mutable struct Decoder{CT,VT,CODE<:Code,SELECTOR<:Selector}
+mutable struct Decoder{CT,VT,CODE<:Code,SELECTOR<:Selector,DMT<:AbstractMatrix{CT}}
     p::CODE # type of code
     values::Vector{VT} # source values may be of any type, including arrays
     columns::Vector{Vector{Int}} # stores which rows neighbour each column
     sparse::Vector{SparseVector{CT,Int}} # sparse row indices
-    dense::QMatrix{CT} # dense (inactivated) symbols are stored separately
+    dense::DMT # dense (inactivated) symbols are stored separately
     colperm::Vector{Int} # maps column indices to their respective objects
     colperminv::Vector{Int} # maps column object indices to their column indices
     rowperm::Vector{Int} # maps row indices to their respective objects
@@ -26,38 +26,46 @@ mutable struct Decoder{CT,VT,CODE<:Code,SELECTOR<:Selector}
     metrics::DataStructures.Accumulator{String,Int} # stores performance metrics
     status::String # indicates success or stores the reason for decoding failure.
     phase::String # diagonalize, solve_dense, or backsolve. used for logging metrics.
-    function Decoder{CT,VT,CODE,SELECTOR}(
-        p::CODE,
-        selector::Selector,
-        num_symbols::Int) where {CT,VT,CODE<:Code,SELECTOR<:Selector}
-        d = new(p,
-                Vector{VT}(),
-                [Vector{Int}() for _ in 1:num_symbols],
-                Vector{SparseVector{CT,Int}}(),
-                QMatrix{CT}(64, 1), # expanded when decoding starts
-                Vector(1:num_symbols),
-                Vector(1:num_symbols),
-                Vector{Int}(),
-                Vector{Int}(),
-                Vector{Int}(),
-                Vector{Int}(),
-                selector,
-                num_symbols,
-                0,
-                0,
-                DataStructures.counter(String),
-                "", "")
-        d.metrics["success"] = 0
-        for phase in ["diagonalize", "solve_dense", "backsolve"]
-            d.metrics[string(phase, "_", "decoding_additions")] = 0
-            d.metrics[string(phase, "_", "decoding_multiplications")] = 0
-            d.metrics[string(phase, "_", "rowadds")] = 0
-            d.metrics[string(phase, "_", "rowmuls")] = 0
-        end
-        d.metrics["inactivations"] = 0
-        d.metrics["status"] = 0
-        return d
+end
+
+function Decoder{CT,VT}(p::Code, dense::DMT, selector::Selector, num_symbols::Integer) where {CT,VT,DMT}
+    d = Decoder{CT,VT,Code,Selector,DMT}(
+        p,
+        Vector{VT}(),
+        [Vector{Int}() for _ in 1:num_symbols],
+        Vector{SparseVector{CT,Int}}(),
+        dense,
+        Vector(1:num_symbols),
+        Vector(1:num_symbols),
+        Vector{Int}(),
+        Vector{Int}(),
+        Vector{Int}(),
+        Vector{Int}(),
+        selector,
+        num_symbols,
+        0,
+        0,
+        DataStructures.counter(String),
+        "", ""
+    )
+    d.metrics["success"] = 0
+    for phase in ["diagonalize", "solve_dense", "backsolve"]
+        d.metrics[string(phase, "_", "decoding_additions")] = 0
+        d.metrics[string(phase, "_", "decoding_multiplications")] = 0
+        d.metrics[string(phase, "_", "rowadds")] = 0
+        d.metrics[string(phase, "_", "rowmuls")] = 0
     end
+    d.metrics["inactivations"] = 0
+    d.metrics["status"] = 0
+    return d
+end
+
+function Decoder{CT,VT}(p::Code, selector::Selector, num_symbols::Integer) where {CT,VT}
+    return Decoder{CT,VT}(p, zeros(CT, 64, 1), selector, num_symbols)
+end
+
+function Decoder{CT,VT}(p::Code, selector::Selector, num_symbols::Integer) where {CT<:Union{Bool,GF256},VT}
+    return Decoder{CT,VT}(p, QMatrix{CT}(64, 1), selector, num_symbols)
 end
 
 """
@@ -167,7 +175,7 @@ index rpi to value v.
 """
 function setdense!(d::Decoder{CT,VT}, rpi::Int, ::Colon, v::CT) where CT where VT
     expand_dense!(d)
-    d.dense[:,rpi] = v
+    d.dense[:,rpi] .= v
     return v
 end
 
@@ -195,16 +203,33 @@ Expand the matrix storing inactivated symbols.
 
 """
 function expand_dense!(d::Decoder)
-    m = rows(d.dense)
+    m = size(d.dense, 1)
     while m < d.num_inactivated
         m *= 2
     end
     n = size(d, 1)
-    if m == rows(d.dense) && n == cols(d.dense)
+    if m == size(d.dense, 1) && n == size(d.dense, 2)
         return
     end
-    resize!(d.dense, m, n)
+    d.dense = expand_dense!(d.dense, m, n)
     return
+end
+
+function expand_dense!(dense::AbstractMatrix, m::Integer, n::Integer)
+    mp, np = size(dense)
+    if m < mp
+        throw(ArgumentError("can't expand a matrix with $mp rows into $m rows"))
+    end
+    if n < np
+        throw(ArgumentError("can't expand a matrix with $np columns into $n columns"))
+    end
+    rv = zeros(eltype(dense), m, n)
+    rv[1:mp, 1:np] .= dense
+    return rv
+end
+
+function expand_dense!(dense::QMatrix, m::Integer, n::Integer)
+    return resize!(dense, m, n)
 end
 
 """return the number of remaining source symbols to process in stage 1."""
@@ -260,6 +285,12 @@ function zerodiag!(d::Decoder, rpi::Int) :: Int
         end
     end
     return rpi
+end
+
+"""subtract the rpi-th dense row multiplied by coef from the rpj-th row."""
+function subtract!(dense::AbstractMatrix, coef, rpj, rpi)
+    @views dense[:, rpj:rpj] .-= coef.*dense[:, rpi:rpi]
+    return
 end
 
 """
@@ -568,12 +599,12 @@ function solve_dense!(d::Decoder)
         cpi = d.colperm[ci]
         ri = 0
         rpi = 0
+        upi = 0
         for rj in d.num_decoded+1:size(d, 1)
             rpj = d.rowperm[rj]
             peel_row!(d, rpj)
 
             # zero out the elements below the diagonal
-            # TODO: call QMatrix getcolumn instead?
             for cj in d.num_symbols-d.num_inactivated+1:d.num_decoded
                 cpj = d.colperm[cj]
                 coef = getdense(d, rpj, cpj)
@@ -585,9 +616,19 @@ function solve_dense!(d::Decoder)
                 end
             end
 
-            if countnz(d.dense, rpj) > 0
-                ri = rj
-                rpi = rpj
+            # look for a non-zero entry in this row
+            for upj in 1:size(d.dense, 1)
+                if !iszero(d.dense[upj, rpj])
+                    ri = rj
+                    rpi = rpj
+                    upi = upj
+                    break
+                end
+            end
+
+            # stop once we've found a row with a non-zero entry we
+            # haven't already decoded
+            if !iszero(ri)
                 break
             end
         end
@@ -597,8 +638,7 @@ function solve_dense!(d::Decoder)
         end
         swap_rows!(d, d.num_decoded+1, ri)
 
-        # swap any non-zero entry into the i-th column of u_lower
-        upi = findfirst(!iszero, getcolumn(d.dense, rpi)) # TODO: unnecessary allocation
+        # swap the non-zero entry we found into the i-th column of u_lower
         @assert upi <= d.num_inactivated "$upi must be <= $(d.num_inactivated) row=$row"
         ui = d.uperminv[upi]
         cj = _ui2ci(d, ui)
@@ -633,11 +673,10 @@ TODO: consider the table lookup approach.
 
 """
 function backsolve!(d::Decoder{CT}) where CT
-    densecol = zeros(CT, rows(d.dense))
     for ri in 1:d.num_symbols-d.num_inactivated
         rpi = d.rowperm[ri]
-        getcolumn!(densecol, d.dense, rpi)
-        for (upi, coef) in enumerate(densecol)
+        for upi in 1:size(d.dense, 1)
+            coef = d.dense[upi, rpi]
             if iszero(coef)
                 continue
             end
