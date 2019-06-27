@@ -349,7 +349,7 @@ function update_metrics!(d::Decoder, rpi::Int, coef)
     if iszero(coef)
         return
     end
-    weight = min(countnz(d.dense, rpi), d.num_inactivated)
+    weight = d.num_inactivated
     push!(d.metrics, string(d.phase, "_", "decoding_additions"), weight)
     push!(d.metrics, string(d.phase, "_", "rowadds"), 1)
     if coef != one(coef)
