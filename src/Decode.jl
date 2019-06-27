@@ -158,7 +158,6 @@ indices (rpi, cpi) to value v.
 
 """
 function setdense!(d::Decoder{CT,VT}, rpi::Int, cpi::Int, v::CT) where CT where VT
-    expand_dense!(d)
     ci = d.colperminv[cpi]
     ui = _ci2ui(d, ci)
     upi = d.uperm[ui]
@@ -174,7 +173,6 @@ index rpi to value v.
 
 """
 function setdense!(d::Decoder{CT,VT}, rpi::Int, ::Colon, v::CT) where CT where VT
-    expand_dense!(d)
     d.dense[:,rpi] .= v
     return v
 end
@@ -274,7 +272,7 @@ end
 end
 
 """zero out any elements of rows[rpi] below the diagonal"""
-function zerodiag!(d::Decoder, rpi::Int) :: Int
+function zerodiag!(d::Decoder, rpi::Int)::Int
     rowi = d.sparse[rpi]
     for cpi in rowi.nzind
         ci = d.colperminv[cpi]
@@ -386,14 +384,21 @@ function inactivate!(d::Decoder, cpi::Int)
     rightmost_active_col = d.num_symbols - d.num_inactivated
     ci = d.colperminv[cpi]
     if ci > rightmost_active_col
-        return
+        return # already inactivated
     end
-    push!(d.uperm, d.num_inactivated+1)
-    push!(d.uperminv, d.num_inactivated+1)
-    remove_column!(d.selector, d, cpi)
     d.num_inactivated += 1
-    push!(d.metrics, "inactivations", 1)
     swap_cols!(d, ci, rightmost_active_col)
+    push!(d.metrics, "inactivations", 1)
+
+    # need to extend the permutation arrays for each inactivation
+    push!(d.uperm, d.num_inactivated)
+    push!(d.uperminv, d.num_inactivated)
+
+    # notify the row selector that the column was inactivated
+    remove_column!(d.selector, d, cpi)
+
+    # may need to allocate more storage for inactivated columns
+    expand_dense!(d)
     return
 end
 
@@ -591,7 +596,7 @@ inactivated columns using Gaussian Elimination.
 
 """
 function solve_dense!(d::Decoder)
-
+    expand_dense!(d)
     for i in 1:d.num_inactivated
 
         # select the first row with non-zero inactive degree
