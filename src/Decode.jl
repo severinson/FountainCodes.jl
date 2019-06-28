@@ -146,7 +146,16 @@ function add!(d::Decoder, s::QSymbol)
     return
 end
 
-## for indexing into the dense matrix storing inactivated symbol values ##
+# the dense matrix stores inactivated entries and should be seen as
+# covering the num_inactivated rightmost columns of the constraint
+# matrix. whenever a column is inactivated it covers one additional
+# column. the first column of the dense matrix corresponds to the
+# first column to be inactivated, i.e., the rightmost column of the
+# constraint matrix, and the second column of the dense matrix
+# corresponds to second column to be inactivated, i.e., the
+# (num_symbols-1)-th column, and so on. the below methods convert
+# column indices of the constraint matrix (ci) to/from column indices
+# of the dense matrix (ui).
 @inline _ci2ui(d::Decoder, ci::Int) = d.num_symbols-ci+1
 @inline _ui2ci(d::Decoder, ui::Int) = d.num_symbols-ui+1
 
@@ -492,13 +501,13 @@ function diagonalize!(d::Decoder)
 end
 
 """
-    solve_dense!(d::Decoder{Float64,VT})
+    solve_dense!(d::Decoder{Float64,VT}) where VT <: Vector{Float64}
 
 Solve the dense system of equations consisting of the inactivated
-symbols using least-squares. Applicable for real-number codes.
+symbols using least-squares.
 
 """
-function solve_dense!(d::Decoder{Float64,VT}) where VT
+function solve_dense!(d::Decoder{Float64,VT}) where VT <: Vector{Float64}
     firstrow = d.num_decoded+1 # first row of the dense matrix
     lastrow = size(d, 1) # last row of the dense matrix
     firstcol = d.num_symbols-d.num_inactivated+1 # first column of the dense matrix
@@ -508,13 +517,6 @@ function solve_dense!(d::Decoder{Float64,VT}) where VT
         push!(d.metrics, "status", -4)
         error("least-squares failed. u_lower must at least as many rows as there are inactivations.")
     end
-
-    # copy the matrix u_lower into a separate array
-    A = zeros(
-        Float64,
-        lastrow-firstrow+1,
-        d.num_inactivated,
-    )
     b = zeros(
         Float64,
         lastrow-firstrow+1,
@@ -523,24 +525,74 @@ function solve_dense!(d::Decoder{Float64,VT}) where VT
     for ri in firstrow:lastrow
         rpi = d.rowperm[ri]
         peel_row!(d, rpi)
-        for ci in firstcol:lastcol
-            cpi = d.colperm[ci]
-            A[ri-firstrow+1, ci-firstcol+1] = getdense(d, rpi, cpi)
-        end
         b[ri-firstrow+1,:] = d.values[rpi]
     end
 
+    # create a view of u_lower
+    # note the following about the dense matrix:
+    # - it is mirrored relative to the ri indices since it grows from
+    # right to left as columns are inactivated.
+    # - it is transposed since Julia arrays are stored column major,
+    # meaning that it's faster to operate over columns than rows.
+    @views A = d.dense[d.num_inactivated:-1:1, d.rowperm[firstrow:lastrow]]'
+
     # solve for x using least squares
-    # TODO: use an iterative solver, e.g., lsmr
     x = A\b
 
     # store the resulting values and set the diagonal coefficients to 1.0
-    for i in firstrow:lastcol
+    for i in firstcol:lastcol
         rpi = d.rowperm[i]
         cpi = d.colperm[i]
         setdense!(d, rpi, :, zero(Float64))
         setdense!(d, rpi, cpi, one(Float64))
         d.values[rpi] = x[i-firstrow+1,:]
+    end
+    d.num_decoded += d.num_inactivated
+    return d
+end
+
+"""
+    solve_dense!(d::Decoder{Float64})
+
+Solve the dense system of equations consisting of the inactivated
+symbols using least-squares.
+
+"""
+function solve_dense!(d::Decoder{Float64})
+    firstrow = d.num_decoded+1 # first row of the dense matrix
+    lastrow = size(d, 1) # last row of the dense matrix
+    firstcol = d.num_symbols-d.num_inactivated+1 # first column of the dense matrix
+    lastcol = d.num_symbols # last column of the dense matrix
+    @assert firstrow == firstcol "firstrow=$firstrow must be equal to firstcol=$firstcol"
+    if lastrow-firstrow+1 < d.num_inactivated
+        push!(d.metrics, "status", -4)
+        error("least-squares failed. u_lower must at least as many rows as there are inactivations.")
+    end
+    for ri in firstrow:lastrow
+        rpi = d.rowperm[ri]
+        peel_row!(d, rpi)
+    end
+
+    # create a view of u_lower
+    # note the following about the dense matrix:
+    # - it is mirrored relative to the ri indices since it grows from
+    # right to left as columns are inactivated.
+    # - it is transposed since Julia arrays are stored column major,
+    # meaning that it's faster to operate over columns than rows.
+    @views A = d.dense[d.num_inactivated:-1:1, d.rowperm[firstrow:lastrow]]'
+
+    # create a view of the corresponding values
+    @views b = d.values[d.rowperm[firstrow:lastrow]]
+
+    # solve for the source values using least squares
+    @views d.values[d.rowperm[firstrow:lastcol]] .= A\b
+
+    # store the resulting values and set the diagonal coefficients to 1.0
+    for i in firstcol:lastcol
+        rpi = d.rowperm[i]
+        cpi = d.colperm[i]
+        setdense!(d, rpi, :, zero(Float64))
+        setdense!(d, rpi, cpi, one(Float64))
     end
     d.num_decoded += d.num_inactivated
     return d
@@ -680,7 +732,7 @@ TODO: consider the table lookup approach.
 function backsolve!(d::Decoder{CT}) where CT
     for ri in 1:d.num_symbols-d.num_inactivated
         rpi = d.rowperm[ri]
-        for upi in 1:size(d.dense, 1)
+        for upi in 1:d.num_inactivated
             coef = d.dense[upi, rpi]
             if iszero(coef)
                 continue
