@@ -1,20 +1,29 @@
-using FountainCodes, Test, Distributions
+using FountainCodes, Test
 
-function init(k=10)
-    dd = FountainCodes.Soliton(k, Int(round(k*2/3)), 0.01)
-    p = FountainCodes.LT(k, dd)
+function init(K=1000; M=K-1, δ=1e-6)
+    dd = FountainCodes.Soliton(K, M, δ)
+    p = FountainCodes.LT(K, dd)
     d = FountainCodes.Decoder(p)
     C = [Vector{GF256}([i % 256]) for i in 1:p.L]
     return p, d, C
 end
 
-function init_gf256(k=10)
-    dd = FountainCodes.Soliton(k, Int(round(k*2/3)), 0.01)
-    p = FountainCodes.LTQ{GF256}(k, dd)
-    d = FountainCodes.Decoder(p)
-    C = [Vector{GF256}([i % 256]) for i in 1:p.L]
-    return p, d, C
-end
+# """test decoding a binary LT code"""
+# function test_lt_1(K=1000)
+#     p, d, C = init(K)
+#     for i in 1:round(Int, K*1.5)
+#         s = FountainCodes.ltgenerate(C, i, p)
+#         FountainCodes.add!(d, s)
+#     end
+#     output = FountainCodes.decode!(d)
+#     for i in 1:p.K
+#         if output[i] != C[i]
+#             error("decoding failure. source[$i] is $(output[i]). should be $(C[i]).")
+#         end
+#     end
+#     return true
+# end
+# @test test_lt_1()
 
 function test_encode()
     p, _, C = init()
@@ -28,23 +37,8 @@ function test_encode()
 end
 @test test_encode()
 
-"""test that LT and LTQ ltgenerate choose the same indices"""
-function test_ltgenerate_1()
-    p_lt, _, C_lt = init(1024)
-    p_ltq, _, C_ltq = init_gf256(1024)
-    for i in 1:1300
-        s_lt = FountainCodes.ltgenerate(C_lt, i, p_lt)
-        s_ltq = FountainCodes.ltgenerate(C_ltq, i, p_ltq)
-        if s_lt.neighbours != s_ltq.neighbours
-            error("$(s_lt.neighbours) != $(s_ltq.neighbours) for ESI $i")
-        end
-    end
-    return true
-end
-# @test test_ltgenerate_1()
-
-function test_decode_1()
-    p, d, C = init()
+function test_decode_1(K=10)
+    p, d, C = init(K)
     for i in 1:13
         s = FountainCodes.ltgenerate(C, i, p)
         FountainCodes.add!(d, s)
@@ -115,9 +109,6 @@ function test_ge_1()
         if d.values[rpi] != correct
             error("GE failed. values[$rpi] is $(d.values[rpi]) but should be $correct")
         end
-        if countnz(d.dense, rpi) != 1
-            error("GE failed. row[$rpi]=$(getcolumn(d.dense,rpi)) does not sum to 1.")
-        end
     end
     return true
 end
@@ -137,9 +128,6 @@ function test_ge_2()
         correct = C[cpi]
         if d.values[rpi] != correct
             error("GE failed. values[$rpi] is $(d.values[rpi]) but should be $correct")
-        end
-        if countnz(d.dense, rpi) != 1
-            error("GE failed. row[$rpi]=$(getcolumn(d.dense,rpi)) does not sum to 1.")
         end
     end
     return true
@@ -161,48 +149,3 @@ function test_decoder_3()
     return true
 end
 @test test_decoder_3()
-
-function test_decode_gf256_1()
-    p, d, C = init_gf256(1024)
-    for i in 1:1400
-        s = FountainCodes.ltgenerate(C, i, p)
-        FountainCodes.add!(d, s)
-    end
-    output = FountainCodes.decode!(d)
-    for i in 1:p.K
-        if output[i] != C[i]
-            error("decoding failure. source[$i] is $(output[i]). should be $(C[i]).")
-        end
-    end
-    return true
-end
-@test test_decode_gf256_1()
-
-function test_decode_gf256_2()
-    p, d, C = init_gf256(100)
-    for i in 1:120
-        s = FountainCodes.ltgenerate(C, i, p)
-        FountainCodes.add!(d, s)
-    end
-    output = FountainCodes.decode!(d)
-    for i in 1:p.K
-        if output[i] != C[i]
-            error("decoding failure. source[$i] is $(output[i]). should be $(C[i]).")
-        end
-    end
-    return true
-end
-@test test_decode_gf256_2()
-
-"test encoder using GF256 coefficients"
-function test_encode_gf256()
-    p, _, C = init_gf256()
-    for i in 1:length(C)
-        if !isassigned(C, i)
-            error("intermediate symbol at index $i not assigned.")
-        end
-    end
-    s = FountainCodes.ltgenerate(C, 1, p)
-    return true
-end
-@test test_encode_gf256()
