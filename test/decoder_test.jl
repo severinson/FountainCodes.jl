@@ -9,7 +9,7 @@ function init(k=10)
 end
 
 function init_gf256(k=10)
-    dd = FountainCodes.Soliton(k, Int(round(k*2/3)), 0.01)
+    dd = FountainCodes.Soliton(k, round(Int, k*2/3), 0.01)
     p = FountainCodes.LTQ(k, dd)
     d = FountainCodes.Decoder(p)
     C = [Vector{GF256}([i % 256]) for i in 1:p.L]
@@ -17,10 +17,18 @@ function init_gf256(k=10)
 end
 
 function init_float64(k=10)
-    dd = FountainCodes.Soliton(k, Int(round(k*2/3)), 0.01)
+    dd = FountainCodes.Soliton(k, round(Int, k*2/3), 0.01)
     p = FountainCodes.LTQ{Float64}(k, dd)
     d = FountainCodes.Decoder(p)
     C = [Vector{Float64}([i]) for i in 1:p.L]
+    return p, d, C
+end
+
+function init_float64_scalar(k=10)
+    dd = FountainCodes.Soliton(k, round(Int, k*2/3), 0.01)
+    p = FountainCodes.LTQ{Float64}(k, dd)
+    d = FountainCodes.Decoder{Float64}(p)
+    C = randn(p.L)
     return p, d, C
 end
 
@@ -609,6 +617,40 @@ function test_dense_float64()
     return true
 end
 @test test_dense_float64()
+
+function test_decoder_float64_scalar_1()
+    p, d, C = init_float64_scalar()
+    for i in 1:15
+        s = FountainCodes.ltgenerate(C, i, p)
+        FountainCodes.add!(d, s)
+    end
+    output = FountainCodes.decode!(d)
+    for i in 1:p.K
+        if !isapprox(output[i], C[i], rtol=1e-3)
+            err = abs.(output[i] - C[i])
+            error("decoding failure. source[$i] is $(output[i]). should be $(C[i]). error is $err.")
+        end
+    end
+    return true
+end
+@test test_decoder_float64_scalar_1()
+
+function test_decoder_float64_scalar_2()
+    p, d, C = init_float64_scalar(100)
+    for i in 1:130
+        s = FountainCodes.ltgenerate(C, i, p)
+        FountainCodes.add!(d, s)
+    end
+    output = FountainCodes.decode!(d)
+    for i in 1:p.K
+        if !isapprox(output[i], C[i], rtol=1e-3)
+            err = abs.(output[i] - C[i])
+            error("decoding failure. source[$i] is $(output[i]). should be $(C[i]). error is $err.")
+        end
+    end
+    return true
+end
+@test test_decoder_float64_scalar_2()
 
 function test_decoder_float64_1()
     p, d, C = init_float64()
