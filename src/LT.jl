@@ -178,13 +178,26 @@ function Decoder(p::LT)
 end
 
 """
-    Decoder{CT,DT}(p::LTQ{CT,DT})
+    Decoder(p::LTQ{CT}) where CT
 
-Return a decoder for non-binary LT codes.
+Return a decoder for non-binary LT codes with coefficient type CT and
+value type Vector{CT}.
 
 """
 function Decoder(p::LTQ{CT}) where CT
+    return Decoder{Vector{CT}}(p)
+end
+
+"""
+    Decoder{VT}(p::LTQ{CT}) where {CT,VT}
+
+Return a decoder for non-binary LT codes with coefficient type CT and
+value type VT. Note that it must be possible to multiply instances of
+VT by instances of CT.
+
+"""
+function Decoder{VT}(p::LTQ{CT}) where {CT,VT}
     num_buckets = max(3, Int(round(log(p.K))))
     selector = HeapSelect(num_buckets, p.L)
-    return Decoder{CT,Vector{CT}}(p, selector, p.K)
+    return Decoder{CT,VT}(p, selector, p.K)
 end
