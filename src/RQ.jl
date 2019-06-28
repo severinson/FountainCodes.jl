@@ -341,9 +341,10 @@ function Decoder(c::RQ)
         add!(d, [i], Vector{GF256}())
     end
 
-    # permanent inactivations
+    # permanent inactivations. the corresponding coefficients are set
+    # correctly later by setinactive! in the decoder.
     for i in c.L-c.P+1:c.L
-        inactivate!(d, i)
+        mark_inactive!(d, i)
     end
 
     # only count dynamic inactivations

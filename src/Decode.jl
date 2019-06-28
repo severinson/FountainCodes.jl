@@ -383,13 +383,33 @@ function setinactive!(d::Decoder, rpi::Int)
 end
 
 """
-    inactivate!(d::Decoder, cpi::Int)
+    mark_decoded!(d::Decoder, cpi::Int)
 
-Inactivate the column with permuted index cpi and update the priority
-of all adjacent rows.
+Mark the column with permuted index cpi as decoded. Permutes the
+columns such that the decoded column is the rightmost column in I.
 
 """
-function inactivate!(d::Decoder, cpi::Int)
+function mark_decoded!(d::Decoder, cpi::Int)
+    d.num_decoded += 1
+    ci = d.colperminv[cpi]
+    swap_cols!(d, ci, d.num_decoded)
+
+    # notify the row selector that the column was removed from V
+    remove_column!(d.selector, d, cpi)
+    return
+end
+
+"""
+    mark_inactive!(d::Decoder, cpi::Int)
+
+Mark the column with permuted index cpi as inactivated. Permutes the
+columns such that the inactivated column is the leftmost column of
+u. Expands the dense submatrix and permutation vectors as needed.
+Before calling this method d.num_decoded must point to the final row
+of I.
+
+"""
+function mark_inactive!(d::Decoder, cpi::Int)
     rightmost_active_col = d.num_symbols - d.num_inactivated
     ci = d.colperminv[cpi]
     if ci > rightmost_active_col
@@ -403,11 +423,19 @@ function inactivate!(d::Decoder, cpi::Int)
     push!(d.uperm, d.num_inactivated)
     push!(d.uperminv, d.num_inactivated)
 
-    # notify the row selector that the column was inactivated
+    # notify the row selector that the column was removed from V
     remove_column!(d.selector, d, cpi)
 
-    # may need to allocate more storage for inactivated columns
-    expand_dense!(d)
+    # store the inactivated coefficient in the dense submatrix. note
+    # that this requires that d.num_decoded is the final row of I. for
+    # columns marked as inactive before decoding starts, i.e., if this
+    # method is called when num_decoded is zero, these values will
+    # instead be set correctly by setinactive! later.
+    if d.num_decoded > 0
+        expand_dense!(d)
+        rpi = d.rowperm[d.num_decoded]
+        setdense!(d, rpi, cpi, d.sparse[rpi][cpi])
+    end
     return
 end
 
@@ -450,6 +478,7 @@ a row is selected.
 
 """
 function peel_row!(d::Decoder, rpi::Int)
+    expand_dense!(d)
     setinactive!(d, rpi)
     zerodiag!(d, rpi)
 end
@@ -462,7 +491,6 @@ L-u columns into diagonal form. Referred to as the first phase in rfc6330.
 
 """
 function diagonalize!(d::Decoder)
-    expand_dense!(d)
     while d.num_decoded + d.num_inactivated < d.num_symbols
         ri = select_row(d)
         peel_row!(d, d.rowperm[ri])
@@ -482,20 +510,16 @@ function diagonalize!(d::Decoder)
             push!(d.metrics, "status", -3)
             error("incorrectly selected a row with no neighbours in V.")
         end
-        swap_cols!(d, ci, d.num_decoded+1)
-        remove_column!(d.selector, d, cpi)
+        mark_decoded!(d, cpi)
 
-        # inactivate the remaining neighboring symbols
-        rpi = d.rowperm[d.num_decoded+1]
+        # inactivate the remaining neighbouring symbols
         for j in i+1:length(row.nzind)
             cpi = row.nzind[j]
             ci = d.colperminv[cpi]
-            if (d.num_decoded+1 < ci <= d.num_symbols-d.num_inactivated)
-                inactivate!(d, cpi)
-                setdense!(d, rpi, cpi, row[cpi])
+            if (d.num_decoded < ci <= d.num_symbols-d.num_inactivated)
+                mark_inactive!(d, cpi)
             end
         end
-        d.num_decoded += 1
     end
     return d
 end
