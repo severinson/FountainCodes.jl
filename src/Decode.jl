@@ -1,4 +1,4 @@
-export Decoder, add!, decode!, get_source, get_source!
+export Decoder, add!, decode, decode!, get_source, get_source!
 
 """
     Decoder{CT,VT,CODE<:Code}
@@ -846,4 +846,23 @@ function decode!(d::Decoder{CT,VT}; raise_on_error=true) where CT where VT
         end
     end
     Vector{VT}(d.p.K)
+end
+
+"""
+    decode(code, Xs, Vs)
+
+* code Code object.
+
+* Xs Encoded symbol identifiers of received symbols.
+
+* Vs Received values.
+
+"""
+function decode(code, Xs, Vs)
+    d = Decoder(code)
+    for (X, v) in zip(Xs, Vs)
+        constraint = get_constraint(code, X)
+        add!(d, constraint.nzind, constraint.nzval, v)
+    end
+    return decode!(d)
 end
