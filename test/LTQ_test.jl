@@ -87,12 +87,11 @@ end
 """test diagonalization"""
 function test_diagonalize(VT, K=10, r=round(Int, K*1.3))
     lt, d, src = init(VT, K)
+    Vs = [get_value(lt, X, src) for X in 1:r]
     for X in 1:r
-        constraint = get_constraint(lt, X)
-        v = get_value(constraint, src)
-        FountainCodes.add!(d, constraint.nzind, constraint.nzval, v)
+        FountainCodes.add!(d, get_constraint(lt, X))
     end
-    FountainCodes.diagonalize!(d)
+    FountainCodes.diagonalize!(d, Vs)
     for i in 1:d.num_decoded
         rpi = d.rowperm[i]
         cpi = d.colperm[i]
@@ -105,8 +104,7 @@ function test_diagonalize(VT, K=10, r=round(Int, K*1.3))
                 correct = correct .+ coef.*src[cpj]
             end
         end
-        if !compare(d.values[rpi], correct)
-            # if !isapprox(d.values[rpi], correct, rtol=1e-3)
+        if !compare(Vs[rpi], correct)
             error("expected values[$rpi] to be $correct, but got $(d.values[rpi])")
         end
     end
@@ -125,19 +123,18 @@ end
 """test solving the dense subsystem u_lower"""
 function test_solve_dense(VT, K=10, r=round(Int, K*1.3))
     lt, d, src = init(VT, K)
+    Vs = [get_value(lt, X, src) for X in 1:r]
     for X in 1:r
-        constraint = get_constraint(lt, X)
-        v = get_value(constraint, src)
-        FountainCodes.add!(d, constraint.nzind, constraint.nzval, v)
+        FountainCodes.add!(d, get_constraint(lt, X))
     end
-    FountainCodes.diagonalize!(d)
-    FountainCodes.solve_dense!(d)
+    FountainCodes.diagonalize!(d, Vs)
+    FountainCodes.solve_dense!(d, Vs)
     for i in d.p.L-d.num_inactivated+1:d.p.L
         rpi = d.rowperm[i]
         cpi = d.colperm[i]
         coef = FountainCodes.getdense(d, rpi, cpi)
         correct = coef.*src[cpi]
-        if !compare(d.values[rpi], correct)
+        if !compare(Vs[rpi], correct)
             error("expected values[$rpi] to be $correct, but got $(d.values[rpi])")
         end
     end
@@ -156,14 +153,13 @@ end
 """test that backsolve zeroes out the dense matrix correctly"""
 function test_backsolve(VT, K=10, r=round(Int, K*1.3))
     lt, d, src = init(VT, K)
+    Vs = [get_value(lt, X, src) for X in 1:r]
     for X in 1:r
-        constraint = get_constraint(lt, X)
-        v = get_value(constraint, src)
-        FountainCodes.add!(d, constraint.nzind, constraint.nzval, v)
+        FountainCodes.add!(d, get_constraint(lt, X))
     end
-    FountainCodes.diagonalize!(d)
-    FountainCodes.solve_dense!(d)
-    FountainCodes.backsolve!(d)
+    FountainCodes.diagonalize!(d, Vs)
+    FountainCodes.solve_dense!(d, Vs)
+    FountainCodes.backsolve!(d, Vs)
     for ri in 1:d.p.L-d.num_inactivated
         rpi = d.rowperm[ri]
         for ci in d.p.L-d.num_inactivated+1:d.p.L
@@ -189,10 +185,11 @@ end
 """test that decoding succeeds"""
 function test_decode(VT, K=10, r=round(Int, K*1.3))
     lt, _, src = init(VT, K)
-    dec = decode(lt, 1:r, [get_value(lt, X, src) for X in 1:r])
+    Vs = [get_value(lt, X, src) for X in 1:r]
+    dec = decode(lt, 1:r, Vs)
     for i in 1:lt.K
         if !compare(dec[i], src[i])
-            error("expected $(src[i]), but got $(dec[i])")
+            error("expected dec[$i] to be $(src[i]), but got $(dec[i])")
         end
     end
     return true
@@ -205,4 +202,4 @@ end
 @test test_decode(Float64, 1000)
 @test test_decode(Vector{Float64}, 10)
 @test test_decode(Vector{Float64}, 100)
-@test test_decode(Vector{Float64}, 1000)
+@test test_decode(Vector{Float64}, 700)

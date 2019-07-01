@@ -47,13 +47,12 @@ end
 """test diagonalization"""
 function test_diagonalize(K=10, r=round(Int, K*1.3))
     lt, src = init(K)
+    Vs = [get_value(lt, X, src) for X in 1:r]
     d = Decoder(lt)
     for X in 1:r
-        constraint = get_constraint(lt, X)
-        v = get_value(constraint, src)
-        FountainCodes.add!(d, constraint.nzind, constraint.nzval, v)
+        FountainCodes.add!(d, get_constraint(lt, X))
     end
-    FountainCodes.diagonalize!(d)
+    FountainCodes.diagonalize!(d, Vs)
     for i in 1:d.num_decoded
         rpi = d.rowperm[i]
         cpi = d.colperm[i]
@@ -64,7 +63,7 @@ function test_diagonalize(K=10, r=round(Int, K*1.3))
                 correct = correct + src[cpj]
             end
         end
-        if d.values[rpi] != correct
+        if Vs[rpi] != correct
             error("expected values[$rpi] to be $correct, but got $(d.values[rpi])")
         end
     end
@@ -77,19 +76,18 @@ end
 """test solving the dense subsystem u_lower"""
 function test_solve_dense(K=10, r=round(Int, K*1.3))
     lt, src = init(K)
+    Vs = [get_value(lt, X, src) for X in 1:r]
     d = Decoder(lt)
     for X in 1:r
-        constraint = get_constraint(lt, X)
-        v = get_value(constraint, src)
-        FountainCodes.add!(d, constraint.nzind, constraint.nzval, v)
+        FountainCodes.add!(d, get_constraint(lt, X))
     end
-    FountainCodes.diagonalize!(d)
-    FountainCodes.solve_dense!(d)
+    FountainCodes.diagonalize!(d, Vs)
+    FountainCodes.solve_dense!(d, Vs)
     for i in d.p.L-d.num_inactivated+1:d.p.L
         rpi = d.rowperm[i]
         cpi = d.colperm[i]
         correct = src[cpi]
-        if d.values[rpi] != correct
+        if Vs[rpi] != correct
             error("expected values[$rpi] to be $correct, but got $(d.values[rpi])")
         end
     end
@@ -102,7 +100,8 @@ end
 """test that decoding succeeds"""
 function test_decode(K=10, r=round(Int, K*1.3))
     lt, src = init(K)
-    dec = decode(lt, 1:r, [get_value(lt, X, src) for X in 1:r])
+    Vs = [get_value(lt, X, src) for X in 1:r]
+    dec = decode(lt, 1:r, Vs)
     for i in 1:lt.K
         if dec[i] != src[i]
             error("expected $(src[i]), but got $(dec[i])")
