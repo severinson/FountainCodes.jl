@@ -14,7 +14,7 @@
 
 module FountainCodes
 
-using StatsBase, Statistics, Distributions
+using StatsBase, Statistics, Distributions, Random
 using Primes, DataStructures, SparseArrays
 export CoefficientType, Binary, NonBinary, Code
 
