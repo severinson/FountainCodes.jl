@@ -1,4 +1,4 @@
-export LT, LTQ
+export LT, LTQ, get_constraint, get_value
 
 """
     LT{T <: Sampleable{Univariate, Discrete}} <: BinaryCode
@@ -105,24 +105,74 @@ function trip(X::Int, p::Union{LT,LTQ})
     return d, a, b
 end
 
-"generate an LT symbol from the intermediate symbols."
-function ltgenerate(C::Vector, X::Int, p::LT)
-    d, a, b = trip(X, p)
-    while (b >= p.L)
-        b = (b + a) % p.Lp
+"""
+    get_constraint(lt::LT, X::Integer)
+
+Return the SparseVector corresponding to the X-th LT code constraint.
+
+"""
+function get_constraint(lt::LT, X::Integer)
+    d, a, b = trip(X, lt)
+    while (b >= lt.L)
+        b = (b + a) % lt.Lp
     end
-    neighbours = zeros(Int, min(d, p.L))
-    neighbours[1] = b+1
-    value = copy(C[b+1])
-    for j in 1:min(d-1, p.L-1)
-        b = (b + a) % p.Lp
-        while (b >= p.L)
-            b = (b + a) % p.Lp
+    Is = zeros(Int, min(d, lt.L))
+    Is[1] = b+1
+    for j in 1:min(d-1, lt.L-1)
+        b = (b + a) % lt.Lp
+        while (b >= lt.L)
+            b = (b + a) % lt.Lp
         end
-        neighbours[j+1] = b+1
-        value += C[b+1]
+        Is[j+1] = b+1
     end
-    return BSymbol(X, value, neighbours)
+    Vs = ones(Bool, d)
+    return sparsevec(Is, Vs, lt.L)
+end
+
+"""
+    get_constraint(code::LTQ, X::Integer)
+
+Return the SparseVector corresponding to the X-th LT code constraint.
+
+"""
+function get_constraint(ltq::LTQ, X::Integer)
+    Random.seed!(X)
+    d, _, _ = trip(X, ltq)
+    d = min(d, ltq.L)
+    set = Set{Int}()
+    while length(set) < d
+        push!(set, rand(1:ltq.L))
+    end
+    Is = sort!(collect(set))
+    Vs = [coefficient(X, i, ltq) for i in 1:d]
+    return sparsevec(Is, Vs, ltq.L)
+end
+
+"""
+    get_value(code, X, src)
+
+Return the value of the X-th constraint.
+
+"""
+function get_value(code, X::Integer, src)
+    @assert X >= 0
+    return get_value(get_constraint(code, X), src)
+end
+
+"""
+    get_value(constraint, src)
+
+Return the value of the X-th constraint.
+
+"""
+function get_value(constraint::SparseVector, src)
+    @assert length(constraint) == length(src)
+    @assert length(src) > 0
+    rv = zero(src[1])
+    for (i, v) in zip(constraint.nzind, constraint.nzval)
+        rv += v.*src[i]
+    end
+    return rv
 end
 
 # Using this method results in significantly higher
@@ -151,20 +201,6 @@ end
 #     return QSymbol(X, value, indices, coefficients)
 # end
 
-"generate an LT symbol from the intermediate symbols."
-function ltgenerate(C::Vector, X::Int, p::LTQ{CT}) where CT
-    d, _, _ = trip(X, p)
-    d = min(d, p.L)
-    set = Set{Int}()
-    while length(set) < d
-        push!(set, rand(1:p.L))
-    end
-    indices = sort!(collect(set))
-    coefficients = [coefficient(X, i, p) for i in 1:d]
-    value = sum(C[indices[i]]*coefficients[i] for i in 1:d)
-    return QSymbol(X, value, indices, coefficients)
-end
-
 """
     Decoder(p::LT)
 
@@ -172,9 +208,19 @@ Return a decoder for binary LT codes.
 
 """
 function Decoder(p::LT)
+    return Decoder{Vector{GF256}}(p)
+end
+
+"""
+    Decoder{VT}(p::LT)
+
+Return a decoder for binary LT codes with value type VT.
+
+"""
+function Decoder{VT}(p::LT) where VT
     num_buckets = max(3, Int(round(log(p.K))))
     selector = HeapSelect(num_buckets, p.L)
-    return Decoder{GF256,Vector{GF256}}(p, selector, p.K)
+    return Decoder{Bool,VT}(p, selector, p.K)
 end
 
 """
