@@ -1,41 +1,67 @@
 using FountainCodes, Test, Distributions
 
-function init_gf256(k=10)
-    dd = FountainCodes.Soliton(k, round(Int, k*2/3), 0.01)
-    p = FountainCodes.LTQ(k, dd)
-    d = FountainCodes.Decoder(p)
-    C = [Vector{GF256}([i % 256]) for i in 1:p.L]
-    return p, d, C
+function init(::Type{GF256}, K; M=K-1, δ=1e-6)
+    dd = FountainCodes.Soliton(K, M, δ)
+    lt = FountainCodes.LTQ(K, dd)
+    d = FountainCodes.Decoder(lt)
+    src = [Vector{GF256}([i % 256]) for i in 1:lt.L]
+    return lt, d, src
 end
 
-function init_float64(k=10)
-    dd = FountainCodes.Soliton(k, round(Int, k*2/3), 0.01)
-    p = FountainCodes.LTQ{Float64}(k, dd)
-    d = FountainCodes.Decoder(p)
-    C = [Vector{Float64}([i]) for i in 1:p.L]
-    return p, d, C
+function init(::Type{Float64}, K; M=K-1, δ=1e-6)
+    dd = FountainCodes.Soliton(K, M, δ)
+    lt = FountainCodes.LTQ{Float64}(K, dd)
+    d = FountainCodes.Decoder{Float64}(lt)
+    src = randn(lt.L)
+    return lt, d, src
 end
 
-function init_float64_scalar(k=10)
-    dd = FountainCodes.Soliton(k, round(Int, k*2/3), 0.01)
-    p = FountainCodes.LTQ{Float64}(k, dd)
-    d = FountainCodes.Decoder{Float64}(p)
-    C = randn(p.L)
-    return p, d, C
+function init(::Type{Vector{Float64}}, K; M=K-1, δ=1e-6)
+    dd = FountainCodes.Soliton(K, M, δ)
+    lt = FountainCodes.LTQ{Float64}(K, dd)
+    d = FountainCodes.Decoder(lt)
+    src = [Vector{Float64}([i]) for i in 1:lt.L]
+    return lt, d, src
 end
 
-"test encoder using GF256 coefficients"
-function test_encode_gf256()
-    p, _, C = init_gf256()
-    for i in 1:length(C)
-        if !isassigned(C, i)
-            error("intermediate symbol at index $i not assigned.")
+compare(a, b) = a == b
+compare(a::Float64, b::Float64) = isapprox(a, b, rtol=1e-3)
+compare(a::Vector{Float64}, b::Vector{Float64}) = isapprox(a, b, rtol=1e-3)
+
+"""test that get_constraint returns the same constraint at each call"""
+function test_constraint(VT, K=10, r=K)
+    lt, _, src = init(VT, K)
+    constraints = [get_constraint(lt, X) for X in 1:r]
+    for X in 1:r
+        correct = constraints[X]
+        constraint = get_constraint(lt, X)
+        if constraint != correct
+            error("expected the $X-th constraint to be $correct, but got $constraint")
         end
     end
-    s = FountainCodes.ltgenerate(C, 1, p)
     return true
 end
-@test test_encode_gf256()
+@test test_constraint(GF256, 10)
+@test test_constraint(GF256, 100)
+@test test_constraint(GF256, 1000)
+
+function test_encode(VT, K=10)
+    lt, _, src = init(VT, K)
+    covered = zeros(Int, K)
+    for X in 1:K
+        constraint = get_constraint(lt, X)
+        covered[constraint.nzind] .+= 1
+    end
+    for (i, v) in enumerate(covered)
+        if iszero(v)
+            error("$i-th source symbol not covered")
+        end
+    end
+    return true
+end
+@test test_encode(GF256, 10)
+@test test_encode(GF256, 100)
+@test test_encode(GF256, 1000)
 
 """test that LT and LTQ ltgenerate choose the same indices"""
 function test_ltgenerate_1(K=1024, M=K-1, δ=1e-6)
@@ -58,174 +84,51 @@ function test_ltgenerate_1(K=1024, M=K-1, δ=1e-6)
 end
 # @test test_ltgenerate_1()
 
-function test_subtract_gf256_1()
-    p, d, C = init_gf256(10)
-    s = FountainCodes.ltgenerate(C, 1, p)
-    FountainCodes.add!(d, s)
-    FountainCodes.add!(d, s)
-    FountainCodes.expand_dense!(d)
-    FountainCodes.subtract!(d, 1, 2, GF256(1))
-    if !iszero(d.values[2])
-        error("values[2]=$(d.values[2]) should be zero")
-    end
-    return true
-end
-@test test_subtract_gf256_1()
-
-function test_subtract_gf256_2()
-    p, d, C = init_gf256(10)
-    a = GF256(3)
-    FountainCodes.add!(d, QSymbol(1, [a], [1, 2], Vector{GF256}([1, 2])))
-    FountainCodes.add!(d, QSymbol(1, [GF256(2)*a], [1, 2], Vector{GF256}([2, 4])))
-    FountainCodes.expand_dense!(d)
-    FountainCodes.subtract!(d, 1, 2, GF256(2))
-    if !iszero(d.values[2])
-        error("values[2]=$(d.values[2]) should be zero")
-    end
-    return true
-end
-@test test_subtract_gf256_2()
-
-function test_subtract_float64_1()
-    p, d, C = init_float64(10)
-    s = FountainCodes.ltgenerate(C, 1, p)
-    FountainCodes.add!(d, s)
-    FountainCodes.add!(d, s)
-    FountainCodes.expand_dense!(d)
-    FountainCodes.subtract!(d, 1, 2, Float64(1))
-    if !iszero(d.values[2])
-        error("values[2]=$(d.values[2]) should be zero")
-    end
-    return true
-end
-@test test_subtract_float64_1()
-
-function test_zerodiag_gf256()
-    p, d, C = init_gf256(10)
-    FountainCodes.add!(d, QSymbol(1, [GF256(2)], [1], Vector{GF256}([2])))
-    FountainCodes.add!(d, QSymbol(1, [GF256(3)], [1], Vector{GF256}([3])))
-    d.num_decoded += 1
-    FountainCodes.expand_dense!(d)
-    FountainCodes.zerodiag!(d, 2)
-    if !iszero(d.values[2])
-        error("values[2]=$(d.values[2]) should be zero")
-    end
-    return true
-end
-@test test_zerodiag_gf256()
-
-function test_inactivate_gf256()
-    p, d, C = init_gf256(10)
-    FountainCodes.add!(d, QSymbol(1, [GF256(2)], [1], Vector{GF256}([2])))
-    FountainCodes.add!(d, QSymbol(1, [GF256(3)], [1], Vector{GF256}([3])))
-    d.num_decoded += 1 # simulate diagonalize! running for 1 iteration
-    FountainCodes.mark_inactive!(d, 1)
-    FountainCodes.setinactive!(d, 1)
-    FountainCodes.setinactive!(d, 2)
-    c = FountainCodes.getdense(d, 1, 1)
-    if c != GF256(2)
-        error("inactivated element of row 1 is $c but should be $(GF256(2))")
-    end
-    c = FountainCodes.getdense(d, 2, 1)
-    if c != GF256(3)
-        error("inactivated element of row 2 is $c but should be $(GF256(3))")
-    end
-    FountainCodes.subtract!(d, 1, 2, GF256(3)/GF256(2))
-    c = FountainCodes.getdense(d, 2, 1)
-    if !iszero(c)
-        error("inactivated element of row 2 is $c but should be zero")
-    end
-    return true
-end
-@test test_inactivate_gf256()
-
-function test_diagonalize_gf256_1()
-    p, d, C = init_gf256(10)
-    for i in 1:15
-        s = FountainCodes.ltgenerate(C, i, p)
-        FountainCodes.add!(d, s)
+"""test diagonalization"""
+function test_diagonalize(VT, K=10, r=round(Int, K*1.3))
+    lt, d, src = init(VT, K)
+    for X in 1:r
+        constraint = get_constraint(lt, X)
+        v = get_value(constraint, src)
+        FountainCodes.add!(d, constraint.nzind, constraint.nzval, v)
     end
     FountainCodes.diagonalize!(d)
     for i in 1:d.num_decoded
         rpi = d.rowperm[i]
         cpi = d.colperm[i]
         coef = d.sparse[rpi][cpi]
-        correct = coef.*C[cpi]
+        correct = coef.*src[cpi]
         for ci in 1:d.p.L
             cpj = d.colperm[ci]
             coef = FountainCodes.getdense(d, rpi, cpj)
             if !iszero(coef)
-                correct = correct + coef .* C[cpj]
+                correct = correct .+ coef.*src[cpj]
             end
         end
-        if d.values[rpi] != correct
-            error("diagonalization failed. values[$rpi] is $(d.values[rpi]) but should be $correct")
+        if !compare(d.values[rpi], correct)
+            # if !isapprox(d.values[rpi], correct, rtol=1e-3)
+            error("expected values[$rpi] to be $correct, but got $(d.values[rpi])")
         end
     end
     return true
 end
-@test test_diagonalize_gf256_1()
+@test test_diagonalize(GF256, 10)
+@test test_diagonalize(GF256, 100)
+@test test_diagonalize(GF256, 1000)
+@test test_diagonalize(Float64, 10)
+@test test_diagonalize(Float64, 100)
+@test test_diagonalize(Float64, 1000)
+@test test_diagonalize(Vector{Float64}, 10)
+@test test_diagonalize(Vector{Float64}, 100)
+@test test_diagonalize(Vector{Float64}, 1000)
 
-function test_diagonalize_gf256_2()
-    p, d, C = init_gf256(20)
-    for i in 1:22
-        s = FountainCodes.ltgenerate(C, i, p)
-        FountainCodes.add!(d, s)
-    end
-    FountainCodes.diagonalize!(d)
-    for i in 1:d.num_decoded
-        rpi = d.rowperm[i]
-        cpi = d.colperm[i]
-        coef = d.sparse[rpi][cpi]
-        correct = coef.*C[cpi]
-        for ci in 1:d.p.L
-            cpj = d.colperm[ci]
-            coef = FountainCodes.getdense(d, rpi, cpj)
-            if !iszero(coef)
-                correct = correct + coef .* C[cpj]
-            end
-        end
-        if d.values[rpi] != correct
-            error("diagonalization failed. values[$rpi] is $(d.values[rpi]) but should be $correct")
-        end
-    end
-    return true
-end
-@test test_diagonalize_gf256_2()
-
-function test_diagonalize_float64_1()
-    p, d, C = init_float64(100)
-    for i in 1:110
-        s = FountainCodes.ltgenerate(C, i, p)
-        FountainCodes.add!(d, s)
-    end
-    FountainCodes.diagonalize!(d)
-    for i in 1:d.num_decoded
-        rpi = d.rowperm[i]
-        cpi = d.colperm[i]
-        coef = d.sparse[rpi][cpi]
-        correct = coef.*C[cpi]
-        for ci in 1:d.p.L
-            cpj = d.colperm[ci]
-            coef = FountainCodes.getdense(d, rpi, cpj)
-            if !iszero(coef)
-                correct = correct + coef .* C[cpj]
-            end
-        end
-        if !isapprox(d.values[rpi], correct, rtol=1e-3)
-            err = abs(d.values[rpi] - correct)
-            error("diagonalization failed. values[$rpi]=$(d.values[rpi]) but should be $correct. error is $err")
-        end
-    end
-    return true
-end
-@test test_diagonalize_float64_1()
-
-function test_ge_gf256_1()
-    p, d, C = init_gf256()
-    for i in 1:15
-        s = FountainCodes.ltgenerate(C, i, p)
-        FountainCodes.add!(d, s)
+"""test solving the dense subsystem u_lower"""
+function test_solve_dense(VT, K=10, r=round(Int, K*1.3))
+    lt, d, src = init(VT, K)
+    for X in 1:r
+        constraint = get_constraint(lt, X)
+        v = get_value(constraint, src)
+        FountainCodes.add!(d, constraint.nzind, constraint.nzval, v)
     end
     FountainCodes.diagonalize!(d)
     FountainCodes.solve_dense!(d)
@@ -233,47 +136,30 @@ function test_ge_gf256_1()
         rpi = d.rowperm[i]
         cpi = d.colperm[i]
         coef = FountainCodes.getdense(d, rpi, cpi)
-        correct = coef.*C[cpi]
-        if d.values[rpi] != correct
-            error("GE failed. values[$rpi] is $(d.values[rpi]) but should be $correct")
-        end
-        if FountainCodes.countnz(d.dense, rpi) != 1
-            error("GE failed. row[$rpi]=$(getcolumn(d.dense,rpi)) does not sum to 1.")
+        correct = coef.*src[cpi]
+        if !compare(d.values[rpi], correct)
+            error("expected values[$rpi] to be $correct, but got $(d.values[rpi])")
         end
     end
     return true
 end
-@test test_ge_gf256_1()
+@test test_solve_dense(GF256, 10)
+@test test_solve_dense(GF256, 100)
+@test test_solve_dense(GF256, 1000)
+@test test_solve_dense(Float64, 10)
+@test test_solve_dense(Float64, 100)
+@test test_solve_dense(Float64, 1000)
+@test test_solve_dense(Vector{Float64}, 10)
+@test test_solve_dense(Vector{Float64}, 100)
+@test test_solve_dense(Vector{Float64}, 1000)
 
-function test_ge_gf256_2()
-    p, d, C = init_gf256(20)
-    for i in 1:25
-        s = FountainCodes.ltgenerate(C, i, p)
-        FountainCodes.add!(d, s)
-    end
-    FountainCodes.diagonalize!(d)
-    FountainCodes.solve_dense!(d)
-    for i in d.p.L-d.num_inactivated+1:d.p.L
-        rpi = d.rowperm[i]
-        cpi = d.colperm[i]
-        coef = FountainCodes.getdense(d, rpi, cpi)
-        correct = coef.*C[cpi]
-        if d.values[rpi] != correct
-            error("GE failed. values[$rpi] is $(d.values[rpi]) but should be $correct")
-        end
-        if FountainCodes.countnz(d.dense, rpi) != 1
-            error("GE failed. row[$rpi]=$(getcolumn(d.dense,rpi)) does not sum to 1.")
-        end
-    end
-    return true
-end
-@test test_ge_gf256_2()
-
-function test_backsolve_gf256()
-    p, d, C = init_gf256(20)
-    for i in 1:25
-        s = FountainCodes.ltgenerate(C, i, p)
-        FountainCodes.add!(d, s)
+"""test that backsolve zeroes out the dense matrix correctly"""
+function test_backsolve(VT, K=10, r=round(Int, K*1.3))
+    lt, d, src = init(VT, K)
+    for X in 1:r
+        constraint = get_constraint(lt, X)
+        v = get_value(constraint, src)
+        FountainCodes.add!(d, constraint.nzind, constraint.nzval, v)
     end
     FountainCodes.diagonalize!(d)
     FountainCodes.solve_dense!(d)
@@ -284,207 +170,39 @@ function test_backsolve_gf256()
             cpi = d.colperm[ci]
             coef = FountainCodes.getdense(d, rpi, cpi)
             if !iszero(coef)
-                error("backsolve failed. row $ri column $ci is non-zero.")
+                error("expected dense[$ri, $ci] to be zero, but got $coef")
             end
         end
     end
     return true
 end
-@test test_backsolve_gf256()
+@test test_backsolve(GF256, 10)
+@test test_backsolve(GF256, 100)
+@test test_backsolve(GF256, 1000)
+@test test_backsolve(Float64, 10)
+@test test_backsolve(Float64, 100)
+@test test_backsolve(Float64, 1000)
+@test test_backsolve(Vector{Float64}, 10)
+@test test_backsolve(Vector{Float64}, 100)
+@test test_backsolve(Vector{Float64}, 1000)
 
-function test_decoder_gf256_1()
-    p, d, C = init_gf256()
-    for i in 1:15
-        s = FountainCodes.ltgenerate(C, i, p)
-        FountainCodes.add!(d, s)
-    end
-    output = FountainCodes.decode!(d)
-    for i in 1:p.K
-        if output[i] != C[i]
-            error("decoding failure. source[$i] is $(output[i]). should be $(C[i]).")
+"""test that decoding succeeds"""
+function test_decode(VT, K=10, r=round(Int, K*1.3))
+    lt, _, src = init(VT, K)
+    dec = decode(lt, 1:r, [get_value(lt, X, src) for X in 1:r])
+    for i in 1:lt.K
+        if !compare(dec[i], src[i])
+            error("expected $(src[i]), but got $(dec[i])")
         end
     end
     return true
 end
-@test test_decoder_gf256_1()
-
-function test_decoder_gf256_2()
-    p, d, C = init_gf256(1000)
-    for i in 1:1400
-        s = FountainCodes.ltgenerate(C, i, p)
-        FountainCodes.add!(d, s)
-    end
-    output = FountainCodes.decode!(d)
-    for i in 1:p.K
-        if output[i] != C[i]
-            error("decoding failure. source[$i] is $(output[i]). should be $(C[i]).")
-        end
-    end
-    return true
-end
-@test test_decoder_gf256_2()
-
-function test_decoder_gf256_3()
-    K = 4000
-    mode = 3998
-    delta = 0.9999999701976676
-    dd = FountainCodes.Soliton(K, mode, delta)
-    p = LTQ(K, dd)
-    d = FountainCodes.Decoder(p)
-    C = [Vector{GF256}([i % 256]) for i in 1:p.L]
-    for i in 1:6000
-        s = FountainCodes.ltgenerate(C, i, p)
-        FountainCodes.add!(d, s)
-    end
-    output = FountainCodes.decode!(d)
-    for i in 1:p.K
-        if output[i] != C[i]
-            error("decoding failure. source[$i] is $(output[i]). should be $(C[i]).")
-        end
-    end
-    return true
-end
-@test test_decoder_gf256_3()
-
-function test_decoder_gf256_4()
-    p, d, C = init_gf256(1024)
-    for i in 1:1400
-        s = FountainCodes.ltgenerate(C, i, p)
-        FountainCodes.add!(d, s)
-    end
-    output = FountainCodes.decode!(d)
-    for i in 1:p.K
-        if output[i] != C[i]
-            error("decoding failure. source[$i] is $(output[i]). should be $(C[i]).")
-        end
-    end
-    return true
-end
-@test test_decoder_gf256_4()
-
-function test_decoder_gf256_5()
-    p, d, C = init_gf256(100)
-    for i in 1:120
-        s = FountainCodes.ltgenerate(C, i, p)
-        FountainCodes.add!(d, s)
-    end
-    output = FountainCodes.decode!(d)
-    for i in 1:p.K
-        if output[i] != C[i]
-            error("decoding failure. source[$i] is $(output[i]). should be $(C[i]).")
-        end
-    end
-    return true
-end
-@test test_decoder_gf256_5()
-
-"test decoding a dense q-ary LT code"
-function test_dense_GF256()
-    K = 100
-    dd = DiscreteUniform(K/2, K)
-    p = FountainCodes.LTQ(K, dd)
-    d = FountainCodes.Decoder(p)
-    C = [Vector{GF256}([i % 256]) for i in 1:p.L]
-    for i in 1:K+10
-        s = FountainCodes.ltgenerate(C, i, p)
-        FountainCodes.add!(d, s)
-    end
-    output = FountainCodes.decode!(d)
-    for i in 1:p.K
-        if output[i] != C[i]
-            error("decoding failure. source[$i] is $(output[i]). should be $(C[i]).")
-        end
-    end
-    return true
-end
-@test test_dense_GF256()
-
-"test decoding a dense LT code over the reals"
-function test_dense_float64()
-    K = 100
-    dd = DiscreteUniform(K/2, K)
-    p = FountainCodes.LTQ{Float64}(K, dd)
-    d = FountainCodes.Decoder(p)
-    C = [Vector{Float64}([i]) for i in 1:p.L]
-    for i in 1:K+10
-        s = FountainCodes.ltgenerate(C, i, p)
-        FountainCodes.add!(d, s)
-    end
-    output = FountainCodes.decode!(d)
-    for i in 1:p.K
-        if !isapprox(output[i], C[i], rtol=1e-3)
-            err = abs.(output[i] - C[i])
-            error("decoding failure. source[$i] is $(output[i]). should be $(C[i]). error is $err.")
-        end
-    end
-    return true
-end
-@test test_dense_float64()
-
-function test_decoder_float64_scalar_1()
-    p, d, C = init_float64_scalar()
-    for i in 1:15
-        s = FountainCodes.ltgenerate(C, i, p)
-        FountainCodes.add!(d, s)
-    end
-    output = FountainCodes.decode!(d)
-    for i in 1:p.K
-        if !isapprox(output[i], C[i], rtol=1e-3)
-            err = abs.(output[i] - C[i])
-            error("decoding failure. source[$i] is $(output[i]). should be $(C[i]). error is $err.")
-        end
-    end
-    return true
-end
-@test test_decoder_float64_scalar_1()
-
-function test_decoder_float64_scalar_2()
-    p, d, C = init_float64_scalar(100)
-    for i in 1:130
-        s = FountainCodes.ltgenerate(C, i, p)
-        FountainCodes.add!(d, s)
-    end
-    output = FountainCodes.decode!(d)
-    for i in 1:p.K
-        if !isapprox(output[i], C[i], rtol=1e-3)
-            err = abs.(output[i] - C[i])
-            error("decoding failure. source[$i] is $(output[i]). should be $(C[i]). error is $err.")
-        end
-    end
-    return true
-end
-@test test_decoder_float64_scalar_2()
-
-function test_decoder_float64_1()
-    p, d, C = init_float64()
-    for i in 1:15
-        s = FountainCodes.ltgenerate(C, i, p)
-        FountainCodes.add!(d, s)
-    end
-    output = FountainCodes.decode!(d)
-    for i in 1:p.K
-        if !isapprox(output[i], C[i], rtol=1e-3)
-            err = abs.(output[i] - C[i])
-            error("decoding failure. source[$i] is $(output[i]). should be $(C[i]). error is $err.")
-        end
-    end
-    return true
-end
-@test test_decoder_float64_1()
-
-function test_decoder_float64_2()
-    p, d, C = init_float64(100)
-    for i in 1:130
-        s = FountainCodes.ltgenerate(C, i, p)
-        FountainCodes.add!(d, s)
-    end
-    output = FountainCodes.decode!(d)
-    for i in 1:p.K
-        if !isapprox(output[i], C[i], rtol=1e-3)
-            err = abs.(output[i] - C[i])
-            error("decoding failure. source[$i] is $(output[i]). should be $(C[i]). error is $err.")
-        end
-    end
-    return true
-end
-@test test_decoder_float64_2()
+@test test_decode(GF256, 10, 13)
+@test test_decode(GF256, 100, 120)
+@test test_decode(GF256, 1000, 1300)
+@test test_decode(Float64, 10)
+@test test_decode(Float64, 100)
+@test test_decode(Float64, 1000)
+@test test_decode(Vector{Float64}, 10)
+@test test_decode(Vector{Float64}, 100)
+@test test_decode(Vector{Float64}, 1000)

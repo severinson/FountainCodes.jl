@@ -1,151 +1,115 @@
 using FountainCodes, Test
 
-function init(K=1000; M=K-1, δ=1e-6)
+"""return an LT code object and a vector of source symbols"""
+function init(K; M=K-1, δ=1e-6)
     dd = FountainCodes.Soliton(K, M, δ)
-    p = FountainCodes.LT(K, dd)
-    d = FountainCodes.Decoder(p)
-    C = [Vector{GF256}([i % 256]) for i in 1:p.L]
-    return p, d, C
+    lt = FountainCodes.LT(K, dd)
+    src = [Vector{GF256}([i % 256]) for i in 1:lt.L]
+    return lt, src
 end
 
-# """test decoding a binary LT code"""
-# function test_lt_1(K=1000)
-#     p, d, C = init(K)
-#     for i in 1:round(Int, K*1.5)
-#         s = FountainCodes.ltgenerate(C, i, p)
-#         FountainCodes.add!(d, s)
-#     end
-#     output = FountainCodes.decode!(d)
-#     for i in 1:p.K
-#         if output[i] != C[i]
-#             error("decoding failure. source[$i] is $(output[i]). should be $(C[i]).")
-#         end
-#     end
-#     return true
-# end
-# @test test_lt_1()
-
-function test_encode()
-    p, _, C = init()
-    for i in 1:length(C)
-        if !isassigned(C, i)
-            error("intermediate symbol at index $i not assigned.")
-        end
-    end
-    s = FountainCodes.ltgenerate(C, 1, p)
-    return true
-end
-@test test_encode()
-
-function test_decode_1(K=10)
-    p, d, C = init(K)
-    for i in 1:13
-        s = FountainCodes.ltgenerate(C, i, p)
-        FountainCodes.add!(d, s)
-    end
-    output = FountainCodes.decode!(d)
-    for i in 1:p.K
-        if output[i] != C[i]
-            error("decoding failure. source[$i] is $(output[i]). should be $(C[i]).")
+"""test that get_constraint returns the same constraint at each call"""
+function test_constraint(K=10, r=K)
+    lt, src = init(K)
+    constraints = [get_constraint(lt, X) for X in 1:r]
+    for X in 1:r
+        correct = constraints[X]
+        constraint = get_constraint(lt, X)
+        if constraint != correct
+            error("expected the $X-th constraint to be $correct, but got $constraint")
         end
     end
     return true
 end
-@test test_decode_1()
+@test test_constraint(10)
+@test test_constraint(100)
+@test test_constraint(1000)
 
-function test_decode_2()
-    p, d, C = init(100)
-    for i in 1:120
-        s = FountainCodes.ltgenerate(C, i, p)
-        FountainCodes.add!(d, s)
+"""test that the encoder covers all source symbols"""
+function test_encode(K=10)
+    lt, src = init(K)
+    covered = zeros(Int, K)
+    for X in 1:K
+        constraint = get_constraint(lt, X)
+        covered[constraint.nzind] .+= 1
     end
-    output = FountainCodes.decode!(d)
-    for i in 1:p.K
-        if output[i] != C[i]
-            error("decoding failure. source[$i] is $(output[i]). should be $(C[i]).")
+    for (i, v) in enumerate(covered)
+        if iszero(v)
+            error("$i-th source symbol not covered")
         end
     end
     return true
 end
-@test test_decode_2()
+@test test_encode(10)
+@test test_encode(100)
+@test test_encode(1000)
 
-function test_diagonalize_1()
-    p, d, C = init(1024)
-    for i in 1:1300
-        s = FountainCodes.ltgenerate(C, i, p)
-        FountainCodes.add!(d, s)
+"""test diagonalization"""
+function test_diagonalize(K=10, r=round(Int, K*1.3))
+    lt, src = init(K)
+    d = Decoder(lt)
+    for X in 1:r
+        constraint = get_constraint(lt, X)
+        v = get_value(constraint, src)
+        FountainCodes.add!(d, constraint.nzind, constraint.nzval, v)
     end
     FountainCodes.diagonalize!(d)
     for i in 1:d.num_decoded
         rpi = d.rowperm[i]
         cpi = d.colperm[i]
-        correct = C[cpi]
+        correct = src[cpi]
         for ci in 1:d.p.L
             cpj = d.colperm[ci]
             if !iszero(FountainCodes.getdense(d, rpi, cpj))
-                correct = correct + C[cpj]
+                correct = correct + src[cpj]
             end
         end
         if d.values[rpi] != correct
-            error("diagonalization failed. values[$rpi] is $(d.values[rpi]) but should be $correct")
+            error("expected values[$rpi] to be $correct, but got $(d.values[rpi])")
         end
     end
     return true
 end
-@test test_diagonalize_1()
+@test test_diagonalize(10)
+@test test_diagonalize(100)
+@test test_diagonalize(1000)
 
-function test_ge_1()
-    p, d, C = init(1024)
-    for i in 1:1400
-        s = FountainCodes.ltgenerate(C, i, p)
-        FountainCodes.add!(d, s)
+"""test solving the dense subsystem u_lower"""
+function test_solve_dense(K=10, r=round(Int, K*1.3))
+    lt, src = init(K)
+    d = Decoder(lt)
+    for X in 1:r
+        constraint = get_constraint(lt, X)
+        v = get_value(constraint, src)
+        FountainCodes.add!(d, constraint.nzind, constraint.nzval, v)
     end
     FountainCodes.diagonalize!(d)
     FountainCodes.solve_dense!(d)
     for i in d.p.L-d.num_inactivated+1:d.p.L
         rpi = d.rowperm[i]
         cpi = d.colperm[i]
-        correct = C[cpi]
+        correct = src[cpi]
         if d.values[rpi] != correct
-            error("GE failed. values[$rpi] is $(d.values[rpi]) but should be $correct")
+            error("expected values[$rpi] to be $correct, but got $(d.values[rpi])")
         end
     end
     return true
 end
-@test test_ge_1()
+@test test_solve_dense(10)
+@test test_solve_dense(100)
+@test test_solve_dense(1000)
 
-function test_ge_2()
-    p, d, C = init(100)
-    for i in 1:130
-        s = FountainCodes.ltgenerate(C, i, p)
-        FountainCodes.add!(d, s)
-    end
-    FountainCodes.diagonalize!(d)
-    FountainCodes.solve_dense!(d)
-    for i in d.p.L-d.num_inactivated+1:d.p.L
-        rpi = d.rowperm[i]
-        cpi = d.colperm[i]
-        correct = C[cpi]
-        if d.values[rpi] != correct
-            error("GE failed. values[$rpi] is $(d.values[rpi]) but should be $correct")
+"""test that decoding succeeds"""
+function test_decode(K=10, r=round(Int, K*1.3))
+    lt, src = init(K)
+    dec = decode(lt, 1:r, [get_value(lt, X, src) for X in 1:r])
+    for i in 1:lt.K
+        if dec[i] != src[i]
+            error("expected $(src[i]), but got $(dec[i])")
         end
     end
     return true
 end
-@test test_ge_2()
-
-function test_decoder_3()
-    p, d, C = init(1024)
-    for i in 1:1400
-        s = FountainCodes.ltgenerate(C, i, p)
-        FountainCodes.add!(d, s)
-    end
-    output = FountainCodes.decode!(d)
-    for i in 1:p.K
-        if output[i] != C[i]
-            error("decoding failure. source[$i] is $(output[i]). should be $(C[i]).")
-        end
-    end
-    return true
-end
-@test test_decoder_3()
+@test test_decode(10, 13)
+@test test_decode(100, 120)
+@test test_decode(1000, 1300)
