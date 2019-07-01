@@ -11,7 +11,7 @@ end
 function init(::Type{Float64}, K; M=K-1, δ=1e-6)
     dd = FountainCodes.Soliton(K, M, δ)
     lt = FountainCodes.LTQ{Float64}(K, dd)
-    d = FountainCodes.Decoder{Float64}(lt)
+    d = FountainCodes.Decoder(lt)
     src = randn(lt.L)
     return lt, d, src
 end

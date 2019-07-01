@@ -202,36 +202,15 @@ end
 # end
 
 """
-    Decoder(p::LT)
-
-Return a decoder for binary LT codes.
-
-"""
-function Decoder(p::LT)
-    return Decoder{Vector{GF256}}(p)
-end
-
-"""
     Decoder{VT}(p::LT)
 
 Return a decoder for binary LT codes with value type VT.
 
 """
-function Decoder{VT}(p::LT) where VT
+function Decoder(p::LT) where VT
     num_buckets = max(3, Int(round(log(p.K))))
     selector = HeapSelect(num_buckets, p.L)
-    return Decoder{Bool,VT}(p, selector, p.K)
-end
-
-"""
-    Decoder(p::LTQ{CT}) where CT
-
-Return a decoder for non-binary LT codes with coefficient type CT and
-value type Vector{CT}.
-
-"""
-function Decoder(p::LTQ{CT}) where CT
-    return Decoder{Vector{CT}}(p)
+    return Decoder{Bool}(p, selector, p.K)
 end
 
 """
@@ -242,8 +221,8 @@ value type VT. Note that it must be possible to multiply instances of
 VT by instances of CT.
 
 """
-function Decoder{VT}(p::LTQ{CT}) where {CT,VT}
+function Decoder(p::LTQ{CT}) where CT
     num_buckets = max(3, Int(round(log(p.K))))
     selector = HeapSelect(num_buckets, p.L)
-    return Decoder{CT,VT}(p, selector, p.K)
+    return Decoder{CT}(p, selector, p.K)
 end

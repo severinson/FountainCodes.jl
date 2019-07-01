@@ -7,9 +7,8 @@ Inactivation decoder compatible with Raptor10 (rfc5053) and RaptorQ
 (rfc6330) codes.
 
 """
-mutable struct Decoder{CT,VT,CODE<:Code,SELECTOR<:Selector,DMT<:AbstractMatrix{CT}}
+mutable struct Decoder{CT,CODE<:Code,SELECTOR<:Selector,DMT<:AbstractMatrix{CT}}
     p::CODE # type of code
-    values::Vector{VT} # source values may be of any type, including arrays
     columns::Vector{Vector{Int}} # stores which rows neighbour each column
     sparse::Vector{SparseVector{CT,Int}} # sparse row indices
     dense::DMT # dense (inactivated) symbols are stored separately
@@ -28,10 +27,9 @@ mutable struct Decoder{CT,VT,CODE<:Code,SELECTOR<:Selector,DMT<:AbstractMatrix{C
     phase::String # diagonalize, solve_dense, or backsolve. used for logging metrics.
 end
 
-function Decoder{CT,VT}(p::Code, dense::DMT, selector::Selector, num_symbols::Integer) where {CT,VT,DMT}
-    d = Decoder{CT,VT,Code,Selector,DMT}(
+function Decoder{CT}(p::Code, dense::DMT, selector::Selector, num_symbols::Integer) where {CT,DMT}
+    d = Decoder{CT,Code,Selector,DMT}(
         p,
-        Vector{VT}(),
         [Vector{Int}() for _ in 1:num_symbols],
         Vector{SparseVector{CT,Int}}(),
         dense,
@@ -60,12 +58,12 @@ function Decoder{CT,VT}(p::Code, dense::DMT, selector::Selector, num_symbols::In
     return d
 end
 
-function Decoder{CT,VT}(p::Code, selector::Selector, num_symbols::Integer) where {CT,VT}
-    return Decoder{CT,VT}(p, zeros(CT, 64, 1), selector, num_symbols)
+function Decoder{CT}(p::Code, selector::Selector, num_symbols::Integer) where CT
+    return Decoder{CT}(p, zeros(CT, 64, 1), selector, num_symbols)
 end
 
-function Decoder{CT,VT}(p::Code, selector::Selector, num_symbols::Integer) where {CT<:Union{Bool,GF256},VT}
-    return Decoder{CT,VT}(p, QMatrix{CT}(64, 1), selector, num_symbols)
+function Decoder{CT}(p::Code, selector::Selector, num_symbols::Integer) where {CT<:Union{Bool,GF256}}
+    return Decoder{CT}(p, QMatrix{CT}(64, 1), selector, num_symbols)
 end
 
 """
@@ -123,7 +121,7 @@ Set the element of the dense matrix corresponding to permuted row and column
 indices (rpi, cpi) to value v.
 
 """
-function setdense!(d::Decoder{CT,VT}, rpi::Int, cpi::Int, v::CT) where CT where VT
+function setdense!(d::Decoder{CT}, rpi::Int, cpi::Int, v::CT) where CT
     ci = d.colperminv[cpi]
     ui = _ci2ui(d, ci)
     upi = d.uperm[ui]
@@ -138,7 +136,7 @@ Set all elements of the dense matrix corresponding to permuted row
 index rpi to value v.
 
 """
-function setdense!(d::Decoder{CT,VT}, rpi::Int, ::Colon, v::CT) where CT where VT
+function setdense!(d::Decoder{CT}, rpi::Int, ::Colon, v::CT) where CT
     d.dense[:,rpi] .= v
     return v
 end
@@ -509,7 +507,7 @@ Solve the dense system of equations consisting of the inactivated
 symbols using least-squares.
 
 """
-function solve_dense!(d::Decoder{Float64,VT}, Vs) where VT <: Vector{Float64}
+function solve_dense!(d::Decoder{Float64}, Vs::AbstractVector{VT}) where VT<:AbstractVector{Float64}
     firstrow = d.num_decoded+1 # first row of the dense matrix
     lastrow = size(d, 1) # last row of the dense matrix
     firstcol = d.num_symbols-d.num_inactivated+1 # first column of the dense matrix
@@ -713,7 +711,7 @@ Return the decoded intermediate symbols.
 symbols are the first K LT symbols.
 
 """
-function get_source(d::Decoder{CT,VT}, Vs) where {CT,VT}
+function get_source(d::Decoder{CT}, Vs::AbstractVector{VT}) where {CT,VT}
     return get_source!(Vector{VT}(undef, d.num_symbols), d, Vs)
 end
 
@@ -750,36 +748,36 @@ function get_source!(dec::AbstractVector, d::Decoder, Vs)
     return dec
 end
 
-"""
-    decode!(d::Decoder{CT,VT}, raise_on_error=true)
+# """
+#     decode!(d::Decoder{CT,VT}, raise_on_error=true)
 
-Decode the source symbols. Raise an exception on decoding failure if
-raise_on_error is true.
+# Decode the source symbols. Raise an exception on decoding failure if
+# raise_on_error is true.
 
-"""
-function decode!(d::Decoder{CT,VT}; raise_on_error=true) where {CT,VT}
-    try
-        check_cover(d)
-        d.phase = "diagonalize"
-        diagonalize!(d)
-        d.phase = "solve_dense"
-        solve_dense!(d)
-        d.phase = "backsolve"
-        backsolve!(d)
-        d.metrics["success"] = 1
-        return get_source(d)
-    catch err
-        if isa(err, ErrorException)
-            d.status = err.msg
-            if raise_on_error
-                rethrow(err)
-            end
-        else
-            rethrow(err)
-        end
-    end
-    Vector{VT}(d.p.K)
-end
+# """
+# function decode!(d::Decoder{CT,VT}; raise_on_error=true) where {CT,VT}
+#     try
+#         check_cover(d)
+#         d.phase = "diagonalize"
+#         diagonalize!(d)
+#         d.phase = "solve_dense"
+#         solve_dense!(d)
+#         d.phase = "backsolve"
+#         backsolve!(d)
+#         d.metrics["success"] = 1
+#         return get_source(d)
+#     catch err
+#         if isa(err, ErrorException)
+#             d.status = err.msg
+#             if raise_on_error
+#                 rethrow(err)
+#             end
+#         else
+#             rethrow(err)
+#         end
+#     end
+#     Vector{VT}(d.p.K)
+# end
 
 """
     add!(d::Decoder{CT,VT}, nzind::Vector{Int}, nzval::Vector{CT}, v::VT)
@@ -816,7 +814,7 @@ end
 
 """
 function decode(code, Xs, Vs)
-    d = Decoder{eltype(Vs)}(code)
+    d = Decoder(code)
     for (X, v) in zip(Xs, Vs)
         add!(d, get_constraint(code, X))
     end
