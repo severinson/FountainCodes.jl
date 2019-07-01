@@ -18,11 +18,13 @@ function show(io::IO, a::GF256)
 end
 
 Base.convert(::Type{Bool}, a::GF256) = Bool(a.x)
+Base.convert(::Type{Int}, a::GF256) = Int(a.x)
 Base.convert(::Type{GF256}, x::Int) = GF256(x)
 Base.convert(::Type{GF256}, x::UInt8) = GF256(x)
 Base.convert(::Type{GF256}, x::Bool) = x ? GF256(1) : GF256(0)
 
 Base.promote_rule(::Type{GF256}, ::Type{Bool}) = GF256
+Base.promote_rule(::Type{GF256}, ::Type{Int}) = Int
 
 Base.zero(a::GF256) = GF256(0)
 Base.zero(::Type{GF256}) = GF256(0)
