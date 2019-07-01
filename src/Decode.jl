@@ -859,7 +859,7 @@ end
 
 """
 function decode(code, Xs, Vs)
-    d = Decoder(code)
+    d = Decoder{eltype(Vs)}(code)
     for (X, v) in zip(Xs, Vs)
         constraint = get_constraint(code, X)
         add!(d, constraint.nzind, constraint.nzval, v)
