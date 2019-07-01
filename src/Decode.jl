@@ -311,41 +311,45 @@ function subtract!(d::Decoder, rpi::Int, rpj::Int, coef1)
     return subtract!(d, rpi, rpj, coef1, one(coef1))
 end
 
+@inline function get_ratio(coefi::Bool, coefj::Bool)
+    if iszero(coefj) throw(DivideError()) end
+    return coefi
+end
+
+@inline function get_ratio(coefi::CT, coefj::CT) where CT
+    if iszero(coefj) throw(DivideError()) end
+    return coefi / coefj
+end
+
+function subtract_value!(vi::VT, vj::VT, coef) where VT
+    if iszero(vi)
+        return # nothing more to do
+    end
+    vj -= coef*vi
+    return vj
+end
+
+function subtract_value!(vi::VT, vj::VT, coef) where VT<:AbstractArray
+    if iszero(vi)
+        return vj # nothing more to do
+    end
+    if iszero(vj) # allocate parity symbol values on-demand
+        vj = zero(vi)
+    end
+    vj .-= coef.*vi
+    return vj
+end
+
 """
     subtract!(d::Decoder, rpi::Int, rpj::Int, coefi, coefj)
 
-Subtract coefi/coefj*rows[rpi] from rows[rpj] and assign the result to
-rows[rpj].
+Subtract row rpi multiplied by coefi/coefj from row rpj in-place.
 
 """
-function subtract!(d::Decoder{CT,VT}, rpi::Int, rpj::Int,
-                   coefi::CT, coefj::CT) where CT where VT <: Vector
-    @assert !iszero(coefj) "coefj must be non-zero, but is $coefj and type $(typeof(coefj))"
-    coef = coefi
-    if coefj != one(coefj)
-        coef = (coef / coefj)::CT
-    end
+function subtract!(d::Decoder{CT,VT}, rpi::Int, rpj::Int, coefi::CT, coefj::CT) where {CT,VT}
+    coef = get_ratio(coefi, coefj)::CT
     subtract!(d.dense, coef, rpj, rpi)
-    update_metrics!(d, rpi, coefi)
-    if iszero(d.values[rpi])
-        return # nothing more to do
-    end
-    if iszero(d.values[rpj]) # allocate parity symbol values on-demand
-        d.values[rpj] = zero(d.values[rpi])
-    end
-    d.values[rpj] .-= coef.*d.values[rpi]
-    return
-end
-
-function subtract!(d::Decoder{CT,VT}, rpi::Int, rpj::Int,
-                   coefi::CT, coefj::CT) where CT where VT
-    @assert !iszero(coefj) "coefj must be non-zero, but is $coefj and type $(typeof(coefj))"
-    coef = coefi
-    if coefj != one(coefj)
-        coef = (coef / coefj)::CT
-    end
-    subtract!(d.dense, coef, rpj, rpi)
-    d.values[rpj] = d.values[rpj] - d.values[rpi] * coef
+    d.values[rpj] = subtract_value!(d.values[rpi], d.values[rpj], coef)::VT
     update_metrics!(d, rpi, coefi)
     return
 end
@@ -747,8 +751,6 @@ end
 
 Subtract the symbols decoded in solve_dense from the above rows of the
 constraint matrix.
-
-TODO: consider restarting decoding with the known symbols instead.
 
 TODO: consider the table lookup approach.
 
