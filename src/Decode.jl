@@ -551,6 +551,8 @@ function solve_dense!(d::Decoder{Float64}, Vs::AbstractVector{VT}) where VT<:Abs
     return d
 end
 
+whiten(Vs, rpis) = I
+
 """
     solve_dense!(d::Decoder{Float64})
 
@@ -584,8 +586,14 @@ function solve_dense!(d::Decoder{Float64}, Vs)
     # create a view of the corresponding values
     @views b = Vs[d.rowperm[firstrow:lastrow]]
 
+    # optionally apply a whitening transformation to the values
+    M = whiten(Vs, d.rowperm[firstrow:lastrow])
+    # if !isapprox(M, I)
+    #     @assert isapprox(M*cov(Vs)[d.rowperm[firstrow:lastrow], d.rowperm[firstrow:lastrow]]*M', I)
+    # end
+
     # solve for the source values using least squares
-    @views Vs[d.rowperm[firstrow:lastcol]] .= A\b
+    @views Vs[d.rowperm[firstrow:lastcol]] .= (M*A)\ (M*b)
 
     # store the resulting values and set the diagonal coefficients to 1.0
     for i in firstcol:lastcol
@@ -747,37 +755,6 @@ function get_source!(dec::AbstractVector, d::Decoder, Vs)
     end
     return dec
 end
-
-# """
-#     decode!(d::Decoder{CT,VT}, raise_on_error=true)
-
-# Decode the source symbols. Raise an exception on decoding failure if
-# raise_on_error is true.
-
-# """
-# function decode!(d::Decoder{CT,VT}; raise_on_error=true) where {CT,VT}
-#     try
-#         check_cover(d)
-#         d.phase = "diagonalize"
-#         diagonalize!(d)
-#         d.phase = "solve_dense"
-#         solve_dense!(d)
-#         d.phase = "backsolve"
-#         backsolve!(d)
-#         d.metrics["success"] = 1
-#         return get_source(d)
-#     catch err
-#         if isa(err, ErrorException)
-#             d.status = err.msg
-#             if raise_on_error
-#                 rethrow(err)
-#             end
-#         else
-#             rethrow(err)
-#         end
-#     end
-#     Vector{VT}(d.p.K)
-# end
 
 """
     add!(d::Decoder{CT,VT}, nzind::Vector{Int}, nzval::Vector{CT}, v::VT)
