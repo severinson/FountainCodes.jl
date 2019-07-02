@@ -15,7 +15,7 @@
 module FountainCodes
 
 using StatsBase, Statistics, Distributions, Random
-using Primes, DataStructures, SparseArrays
+using Primes, DataStructures, LinearAlgebra, SparseArrays
 export CoefficientType, Binary, NonBinary, Code
 
 # type system
@@ -37,6 +37,7 @@ include("Bound.jl")
 include("Numinv.jl")
 include("Soliton.jl")
 include("GF256.jl")
+include("CodedMvNormal.jl")
 include("Symbols.jl")
 include("Gray.jl")
 include("QMatrix.jl")
