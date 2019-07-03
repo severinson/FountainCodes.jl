@@ -200,8 +200,10 @@ end
 """test that decoding succeeds"""
 function test_decode(VT, K=10, r=round(Int, K*1.3))
     lt, _, src = init(VT, K)
-    Vs = [get_value(lt, X, src) for X in 1:r]
-    dec = decode(lt, 1:r, Vs)
+    Random.seed!(K)
+    Xs = sample(1:100r, r, replace=false)
+    Vs = [get_value(lt, X, src) for X in Xs]
+    dec = decode(lt, Xs, Vs)
     for i in 1:lt.K
         if !compare(dec[i], src[i])
             error("expected dec[$i] to be $(src[i]), but got $(dec[i])")
@@ -214,7 +216,7 @@ end
 @test test_decode(GF256, 1000, 1300)
 @test test_decode(Float64, 10)
 @test test_decode(Float64, 100)
-@test test_decode(Float64, 1000)
+@test test_decode(Float64, 1000, 1350)
 @test test_decode(Vector{Float64}, 10)
 @test test_decode(Vector{Float64}, 100)
 @test test_decode(Vector{Float64}, 700)
