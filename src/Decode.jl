@@ -588,12 +588,9 @@ function solve_dense!(d::Decoder{Float64}, Vs)
 
     # optionally apply a whitening transformation to the values
     M = whiten(Vs, d.rowperm[firstrow:lastrow])
-    # if !isapprox(M, I)
-    #     @assert isapprox(M*cov(Vs)[d.rowperm[firstrow:lastrow], d.rowperm[firstrow:lastrow]]*M', I)
-    # end
 
     # solve for the source values using least squares
-    @views Vs[d.rowperm[firstrow:lastcol]] .= (M*A)\ (M*b)
+    @views Vs[d.rowperm[firstrow:lastcol]] .= (M*A) \ (M*b)
 
     # store the resulting values and set the diagonal coefficients to 1.0
     for i in firstcol:lastcol
@@ -656,7 +653,7 @@ function solve_dense!(d::Decoder, Vs)
         end
         if ri == 0
             push!(d.metrics, "status", -4)
-            error("GE failed due to rank deficiency.")
+            error("Decoding failed due to rank deficiency.")
         end
         swap_rows!(d, d.num_decoded+1, ri)
 
@@ -757,11 +754,9 @@ function get_source!(dec::AbstractVector, d::Decoder, Vs)
 end
 
 """
-    add!(d::Decoder{CT,VT}, nzind::Vector{Int}, nzval::Vector{CT}, v::VT)
+    add!(d::Decoder{CT}, constraint::SparseVector{CT}) where CT
 
-Add a row with non-zero values nzval at indices nzind to the system of
-equations. v is the corresponding value in the right-hand side of the
-system.
+Add a row to the constraint matrix.
 
 """
 function add!(d::Decoder{CT}, constraint::SparseVector{CT}) where CT
@@ -781,20 +776,20 @@ function add!(d::Decoder{CT}, constraint::SparseVector{CT}) where CT
 end
 
 """
-    decode(code, Xs, Vs)
+    decode(code{CT}, constraints::Vector{SparseVector{CT}}, Vs) where CT
 
 * code Code object.
 
-* Xs Encoded symbol identifiers of received symbols.
+* constraints Rows of the constraint matrix to perform Gaussian
+  Elimination over.
 
-* Vs Received values.
+* Vs Values corresponding to each constraint.
 
 """
-function decode(code, Xs, Vs)
+function decode(code, constraints::AbstractVector{T}, Vs) where T <: SparseVector
+    length(constraints) == length(Vs) || throw(DimensionMismatch("The lengths of Xs and Vs are inconsistent."))
     d = Decoder(code)
-    for (X, v) in zip(Xs, Vs)
-        add!(d, get_constraint(code, X))
-    end
+    for constraint in constraints add!(d, constraint) end
     check_cover(d)
     d.phase = "diagonalize"
     diagonalize!(d, Vs)
@@ -805,3 +800,15 @@ function decode(code, Xs, Vs)
     d.metrics["success"] = 1
     return get_source(d, Vs)
 end
+
+"""
+    decode(code, Xs::AbstractVector{Int}, Vs)
+
+* code Code object.
+
+* Xs Encoded symbol identifiers of received symbols.
+
+* Vs Received values.
+
+"""
+decode(code, Xs::AbstractVector{Int}, Vs) = decode(code, [get_constraint(code, X) for X in Xs], Vs)
