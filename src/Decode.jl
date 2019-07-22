@@ -8,7 +8,6 @@ Inactivation decoder compatible with Raptor10 (rfc5053) and RaptorQ
 
 """
 mutable struct Decoder{CT,CODE<:Code,SELECTOR<:Selector,DMT<:AbstractMatrix{CT}}
-    p::CODE # type of code
     columns::Vector{Vector{Int}} # stores which rows neighbour each column
     sparse::Vector{SparseVector{CT,Int}} # sparse row indices
     dense::DMT # dense (inactivated) symbols are stored separately
@@ -29,7 +28,6 @@ end
 
 function Decoder{CT}(p::Code, dense::DMT, selector::Selector, num_symbols::Integer) where {CT,DMT}
     d = Decoder{CT,Code,Selector,DMT}(
-        p,
         [Vector{Int}() for _ in 1:num_symbols],
         Vector{SparseVector{CT,Int}}(),
         dense,
@@ -81,22 +79,6 @@ function Base.size(d::Decoder, i)::Int
     else
         return 1
     end
-end
-
-"""
-    add!(d::Decoder{RT}, s::CodeSymbol)
-
-Add a code symbol to the decoder.
-
-"""
-function add!(d::Decoder, s::BSymbol)
-    add!(d, s.neighbours, s.value)
-    return
-end
-
-function add!(d::Decoder, s::QSymbol)
-    add!(d, s.neighbours, s.coefficients, s.value)
-    return
 end
 
 ## getting, setting, indexing for the dense submatrix ###

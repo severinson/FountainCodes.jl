@@ -1,10 +1,10 @@
-using FountainCodes, Test, Distributions
+using FountainCodes, Test, LinearAlgebra, Distributions
 
 function init(::Type{GF256}, K; M=K-1, δ=1e-6)
     dd = FountainCodes.Soliton(K, M, δ)
     lt = FountainCodes.LTQ(K, dd)
     d = FountainCodes.Decoder(lt)
-    src = [Vector{GF256}([i % 256]) for i in 1:lt.L]
+    src = [Vector{GF256}([i % 256]) for i in 1:K]
     return lt, d, src
 end
 
@@ -12,7 +12,7 @@ function init(::Type{Float64}, K; M=K-1, δ=1e-6)
     dd = FountainCodes.Soliton(K, M, δ)
     lt = FountainCodes.LTQ{Float64}(K, dd)
     d = FountainCodes.Decoder(lt)
-    src = randn(lt.L)
+    src = randn(K)
     return lt, d, src
 end
 
@@ -20,7 +20,7 @@ function init(::Type{Vector{Float64}}, K; M=K-1, δ=1e-6)
     dd = FountainCodes.Soliton(K, M, δ)
     lt = FountainCodes.LTQ{Float64}(K, dd)
     d = FountainCodes.Decoder(lt)
-    src = [Vector{Float64}([i]) for i in 1:lt.L]
+    src = [Vector{Float64}([i]) for i in 1:K]
     return lt, d, src
 end
 
@@ -34,7 +34,7 @@ function test_mvnormal(K=10, r=round(Int, K*1.3))
     Vs_Σ = diagm(0=>ones(r))
     Vs = CodedMvNormal(Vs_μ, Vs_Σ)
     dec = decode(lt, 1:r, Vs)
-    for i in 1:lt.K
+    for i in 1:K
         if !compare(dec[i], src[i])
             error("expected dec[$i] to be $(src[i]), but got $(dec[i])")
         end
@@ -112,7 +112,7 @@ function test_diagonalize(VT, K=10, r=round(Int, K*1.3))
         cpi = d.colperm[i]
         coef = d.sparse[rpi][cpi]
         correct = coef.*src[cpi]
-        for ci in 1:d.p.L
+        for ci in 1:K
             cpj = d.colperm[ci]
             coef = FountainCodes.getdense(d, rpi, cpj)
             if !iszero(coef)
@@ -144,7 +144,7 @@ function test_solve_dense(VT, K=10, r=round(Int, K*1.3))
     end
     FountainCodes.diagonalize!(d, Vs)
     FountainCodes.solve_dense!(d, Vs)
-    for i in d.p.L-d.num_inactivated+1:d.p.L
+    for i in K-d.num_inactivated+1:K
         rpi = d.rowperm[i]
         cpi = d.colperm[i]
         coef = FountainCodes.getdense(d, rpi, cpi)
@@ -175,9 +175,9 @@ function test_backsolve(VT, K=10, r=round(Int, K*1.3))
     FountainCodes.diagonalize!(d, Vs)
     FountainCodes.solve_dense!(d, Vs)
     FountainCodes.backsolve!(d, Vs)
-    for ri in 1:d.p.L-d.num_inactivated
+    for ri in 1:K-d.num_inactivated
         rpi = d.rowperm[ri]
-        for ci in d.p.L-d.num_inactivated+1:d.p.L
+        for ci in K-d.num_inactivated+1:K
             cpi = d.colperm[ci]
             coef = FountainCodes.getdense(d, rpi, cpi)
             if !iszero(coef)
@@ -204,7 +204,7 @@ function test_decode(VT, K=10, r=round(Int, K*1.3))
     Xs = sample(1:100r, r, replace=false)
     Vs = [get_value(lt, X, src) for X in Xs]
     dec = decode(lt, Xs, Vs)
-    for i in 1:lt.K
+    for i in 1:K
         if !compare(dec[i], src[i])
             error("expected dec[$i] to be $(src[i]), but got $(dec[i])")
         end

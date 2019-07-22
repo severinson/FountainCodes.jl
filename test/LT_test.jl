@@ -4,7 +4,7 @@ using FountainCodes, Test
 function init(K; M=K-1, δ=1e-6)
     dd = FountainCodes.Soliton(K, M, δ)
     lt = FountainCodes.LT(K, dd)
-    src = [Vector{GF256}([i % 256]) for i in 1:lt.L]
+    src = [Vector{GF256}([i % 256]) for i in 1:K]
     return lt, src
 end
 
@@ -57,7 +57,7 @@ function test_diagonalize(K=10, r=round(Int, K*1.3))
         rpi = d.rowperm[i]
         cpi = d.colperm[i]
         correct = src[cpi]
-        for ci in 1:d.p.L
+        for ci in 1:K
             cpj = d.colperm[ci]
             if !iszero(FountainCodes.getdense(d, rpi, cpj))
                 correct = correct + src[cpj]
@@ -83,7 +83,7 @@ function test_solve_dense(K=10, r=round(Int, K*1.3))
     end
     FountainCodes.diagonalize!(d, Vs)
     FountainCodes.solve_dense!(d, Vs)
-    for i in d.p.L-d.num_inactivated+1:d.p.L
+    for i in K-d.num_inactivated+1:K
         rpi = d.rowperm[i]
         cpi = d.colperm[i]
         correct = src[cpi]
@@ -102,7 +102,7 @@ function test_decode(K=10, r=round(Int, K*1.3))
     lt, src = init(K)
     Vs = [get_value(lt, X, src) for X in 1:r]
     dec = decode(lt, 1:r, Vs)
-    for i in 1:lt.K
+    for i in 1:K
         if dec[i] != src[i]
             error("expected $(src[i]), but got $(dec[i])")
         end

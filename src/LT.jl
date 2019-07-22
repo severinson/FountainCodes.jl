@@ -1,4 +1,4 @@
-export LT, LTQ, get_constraint, get_value
+export LT, LTQ, get_constraint, get_value, dimension
 
 """
     LT{T <: Sampleable{Univariate, Discrete}} <: BinaryCode
@@ -15,12 +15,11 @@ Arguments
 """
 struct LT{T <: Sampleable{Univariate, Discrete}} <: BinaryCode
     K::Int # number of source symbols
-    L::Int # number of intermediate symbols
     Lp::Int # smallest prime larger than K
     dd::T # degree distribution
     function LT{T}(K::Int, dd::T) where T
         Lp = Primes.nextprime(K)
-        new(K, K, Lp, dd)
+        new(K, Lp, dd)
     end
 end
 LT(K::Int, dd::T) where {T <: Sampleable{Univariate, Discrete}} = LT{T}(K, dd)
@@ -41,12 +40,11 @@ Arguments
 """
 struct LTQ{CT,DT <: Sampleable{Univariate, Discrete}} <: NonBinaryCode
     K::Int # number of source symbols
-    L::Int # number of intermediate symbols
     Lp::Int # smallest prime larger than K
     dd::DT # degree distribution
     function LTQ{CT,DT}(K::Int, dd::DT) where {CT,DT}
         Lp = Primes.nextprime(K)
-        new(K, K, Lp, dd)
+        new(K, Lp, dd)
     end
 end
 function LTQ(K::Int, dd::DT) where DT <: Sampleable{Univariate, Discrete}
@@ -61,6 +59,10 @@ Base.repr(p::LTQ{CT,DT}) where CT where DT = "LTQ{$CT,$DT}($(p.K), $(repr(p.dd))
 function precode!(C::Vector, p::Code)
     return C
 end
+
+# number of input symbols
+dimension(lt::LT) = lt.K
+dimension(lt::LTQ) = lt.K
 
 "Map a number 0 <= v <= 1 to a degree."
 function deg(v::Real, p::Code) :: Int
@@ -113,20 +115,20 @@ Return the SparseVector corresponding to the X-th LT code constraint.
 """
 function get_constraint(lt::LT, X::Integer)
     d, a, b = trip(X, lt)
-    while (b >= lt.L)
+    while (b >= lt.K)
         b = (b + a) % lt.Lp
     end
-    Is = zeros(Int, min(d, lt.L))
+    Is = zeros(Int, min(d, lt.K))
     Is[1] = b+1
-    for j in 1:min(d-1, lt.L-1)
+    for j in 1:min(d-1, lt.K-1)
         b = (b + a) % lt.Lp
-        while (b >= lt.L)
+        while (b >= lt.K)
             b = (b + a) % lt.Lp
         end
         Is[j+1] = b+1
     end
     Vs = ones(Bool, d)
-    return sparsevec(Is, Vs, lt.L)
+    return sparsevec(Is, Vs, lt.K)
 end
 
 """
@@ -138,14 +140,14 @@ Return the SparseVector corresponding to the X-th LT code constraint.
 function get_constraint(ltq::LTQ, X::Integer)
     Random.seed!(X)
     d, _, _ = trip(X, ltq)
-    d = min(d, ltq.L)
+    d = min(d, ltq.K)
     set = Set{Int}()
     while length(set) < d
-        push!(set, rand(1:ltq.L))
+        push!(set, rand(1:ltq.K))
     end
     Is = sort!(collect(set))
     Vs = [coefficient(X, i, ltq) for i in 1:d]
-    return sparsevec(Is, Vs, ltq.L)
+    return sparsevec(Is, Vs, ltq.K)
 end
 
 """
@@ -207,10 +209,10 @@ end
 Return a decoder for binary LT codes with value type VT.
 
 """
-function Decoder(p::LT) where VT
-    num_buckets = max(3, Int(round(log(p.K))))
-    selector = HeapSelect(num_buckets, p.L)
-    return Decoder{Bool}(p, selector, p.K)
+function Decoder(lt::LT) where VT
+    num_buckets = max(3, Int(round(log(lt.K))))
+    selector = HeapSelect(num_buckets, lt.K)
+    return Decoder{Bool}(lt, selector, lt.K)
 end
 
 """
@@ -221,8 +223,8 @@ value type VT. Note that it must be possible to multiply instances of
 VT by instances of CT.
 
 """
-function Decoder(p::LTQ{CT}) where CT
-    num_buckets = max(3, Int(round(log(p.K))))
-    selector = HeapSelect(num_buckets, p.L)
-    return Decoder{CT}(p, selector, p.K)
+function Decoder(lt::LTQ{CT}) where CT
+    num_buckets = max(3, Int(round(log(lt.K))))
+    selector = HeapSelect(num_buckets, lt.K)
+    return Decoder{CT}(lt, selector, lt.K)
 end
