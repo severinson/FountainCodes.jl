@@ -13,7 +13,7 @@ Arguments
 * dd::Sampleable{Univariate, Discrete}: Degree distribution.
 
 """
-struct LT{T <: Sampleable{Univariate, Discrete}} <: BinaryCode
+struct LT{T <: Sampleable{Univariate, Discrete}} <: AbstractErasureCode
     K::Int # number of source symbols
     Lp::Int # smallest prime larger than K
     dd::T # degree distribution
@@ -38,7 +38,7 @@ Arguments
 * dd::Sampleable{Univariate, Discrete}: Degree distribution.
 
 """
-struct LTQ{CT,DT <: Sampleable{Univariate, Discrete}} <: NonBinaryCode
+struct LTQ{CT,DT <: Sampleable{Univariate, Discrete}} <: AbstractErasureCode
     K::Int # number of source symbols
     Lp::Int # smallest prime larger than K
     dd::DT # degree distribution
@@ -56,7 +56,7 @@ end
 Base.repr(p::LTQ{CT,DT}) where CT where DT = "LTQ{$CT,$DT}($(p.K), $(repr(p.dd)))"
 
 "LT codes have no pre-code, so do nothing."
-function precode!(C::Vector, p::Code)
+function precode!(C::Vector, p::Union{LT,LTQ})
     return C
 end
 
@@ -65,7 +65,7 @@ dimension(lt::LT) = lt.K
 dimension(lt::LTQ) = lt.K
 
 "Map a number 0 <= v <= 1 to a degree."
-function deg(v::Real, p::Code) :: Int
+function deg(v::Real, p::Union{LT,LTQ}) :: Int
     return quantile(p.dd, v)
 end
 
@@ -212,7 +212,7 @@ Return a decoder for binary LT codes with value type VT.
 function Decoder(lt::LT) where VT
     num_buckets = max(3, Int(round(log(lt.K))))
     selector = HeapSelect(num_buckets, lt.K)
-    return Decoder{Bool}(lt, selector, lt.K)
+    return Decoder{Bool}(selector, lt.K)
 end
 
 """
@@ -226,5 +226,5 @@ VT by instances of CT.
 function Decoder(lt::LTQ{CT}) where CT
     num_buckets = max(3, Int(round(log(lt.K))))
     selector = HeapSelect(num_buckets, lt.K)
-    return Decoder{CT}(lt, selector, lt.K)
+    return Decoder{CT}(selector, lt.K)
 end
