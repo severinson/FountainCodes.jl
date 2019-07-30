@@ -7,7 +7,7 @@ Inactivation decoder compatible with Raptor10 (rfc5053) and RaptorQ
 (rfc6330) codes.
 
 """
-mutable struct Decoder{CT,CODE<:Code,SELECTOR<:Selector,DMT<:AbstractMatrix{CT}}
+mutable struct Decoder{CT,SELECTOR<:AbstractSelector,DMT<:AbstractMatrix{CT}}
     columns::Vector{Vector{Int}} # stores which rows neighbour each column
     sparse::Vector{SparseVector{CT,Int}} # sparse row indices
     dense::DMT # dense (inactivated) symbols are stored separately
@@ -26,8 +26,8 @@ mutable struct Decoder{CT,CODE<:Code,SELECTOR<:Selector,DMT<:AbstractMatrix{CT}}
     phase::String # diagonalize, solve_dense, or backsolve. used for logging metrics.
 end
 
-function Decoder{CT}(p::Code, dense::DMT, selector::Selector, num_symbols::Integer) where {CT,DMT}
-    d = Decoder{CT,Code,Selector,DMT}(
+function Decoder{CT}(dense::DMT, selector::SELECTOR, num_symbols::Integer) where {CT,DMT,SELECTOR}
+    d = Decoder{CT,SELECTOR,DMT}(
         [Vector{Int}() for _ in 1:num_symbols],
         Vector{SparseVector{CT,Int}}(),
         dense,
@@ -56,12 +56,12 @@ function Decoder{CT}(p::Code, dense::DMT, selector::Selector, num_symbols::Integ
     return d
 end
 
-function Decoder{CT}(p::Code, selector::Selector, num_symbols::Integer) where CT
-    return Decoder{CT}(p, zeros(CT, 64, 1), selector, num_symbols)
+function Decoder{CT}(selector::AbstractSelector, num_symbols::Integer) where CT
+    return Decoder{CT}(zeros(CT, 64, 1), selector, num_symbols)
 end
 
-function Decoder{CT}(p::Code, selector::Selector, num_symbols::Integer) where {CT<:Union{Bool,GF256}}
-    return Decoder{CT}(p, QMatrix{CT}(64, 1), selector, num_symbols)
+function Decoder{CT}(selector::AbstractSelector, num_symbols::Integer) where {CT<:Union{Bool,GF256}}
+    return Decoder{CT}(QMatrix{CT}(64, 1), selector, num_symbols)
 end
 
 """
@@ -253,9 +253,7 @@ Compute Vs[rpj] -= coef*Vs[rpi] in-place.
 
 """
 function subtract!(Vs::AbstractVector{VT}, rpi, rpj, coef) where VT
-    if iszero(Vs[rpi])
-        return Vs[rpj] # nothing more to do
-    end
+    if iszero(Vs[rpi]) return Vs[rpj] end # nothing more to do
     Vs[rpj] -= coef*Vs[rpi]
     return Vs[rpj]
 end
@@ -268,12 +266,8 @@ Compute Vs[rpj] .-= coef.*Vs[rpi] in-place.
 """
 function subtract!(Vs::AbstractVector{VT}, rpi, rpj, coef) where VT<:AbstractArray
     vi, vj = Vs[rpi], Vs[rpj]
-    if iszero(vi)
-        return vj # nothing more to do
-    end
-    if iszero(vj) # allocate parity symbol values on-demand
-        Vs[rpj] = zero(vi)
-    end
+    if iszero(vi) return vj end # nothing more to do
+    if iszero(vj) Vs[rpj] = zero(vi) end # allocate parity symbol values on-demand
     Vs[rpj] .-= coef.*vi
     return Vs[rpj]
 end
@@ -287,8 +281,8 @@ in-place. Mutates both the symbol values (Vs) and the dense submatrix.
 """
 function subtract!(d::Decoder, Vs, rpi::Int, rpj::Int, coefi::CT, coefj::CT) where CT
     coef = get_ratio(coefi, coefj)::CT
-    subtract!(d.dense, coef, rpj, rpi)
-    subtract!(Vs, rpi, rpj, coef)
+    subtract!(d.dense, coef, rpj, rpi) # dense submatrix is stored explicitly
+    subtract!(Vs, rpi, rpj, coef) # subtract the values
     update_metrics!(d, rpi, coefi)
     return
 end
@@ -296,13 +290,11 @@ end
 """track performance metrics"""
 function update_metrics!(d::Decoder, rpi::Int, coef)
     return # remove to log metrics. slows down decoding.
-    if iszero(coef)
-        return
-    end
+    if iszero(coef) return end # no-op
     weight = d.num_inactivated
     push!(d.metrics, string(d.phase, "_", "decoding_additions"), weight)
     push!(d.metrics, string(d.phase, "_", "rowadds"), 1)
-    if coef != one(coef)
+    if coef != one(coef) # multiplication was required
         push!(d.metrics, string(d.phase, "_", "decoding_multiplications"), weight)
         push!(d.metrics, string(d.phase, "_", "rowmuls"), 1)
     end
@@ -757,6 +749,8 @@ function add!(d::Decoder{CT}, constraint::SparseVector{CT}) where CT
     return
 end
 
+add!(d::Decoder, code::AbstractErasureCode, X::Integer) = add!(d, get_constraint(code, X))
+
 """
     decode(code{CT}, constraints::Vector{SparseVector{CT}}, Vs) where CT
 
@@ -768,7 +762,8 @@ end
 * Vs Values corresponding to each constraint.
 
 """
-function decode(code, constraints::AbstractVector{T}, Vs) where T <: SparseVector
+function decode(code::AbstractErasureCode, constraints::AbstractVector{T},
+                Vs) where T <: SparseVector
     length(constraints) == length(Vs) || throw(DimensionMismatch("The lengths of Xs and Vs are inconsistent."))
     d = Decoder(code)
     for constraint in constraints add!(d, constraint) end
