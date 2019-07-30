@@ -1,297 +1,248 @@
-function init(K=10)
-    p = FountainCodes.R10(K)
-    d = FountainCodes.Decoder(p)
-    C = [Vector{GF256}([i % 256]) for i in 1:p.L]
-    precode!(C, p)
-    return p, d, C
+using FountainCodes, Test, Distributions, LinearAlgebra, SparseArrays
+
+"""R10 code with scalar values"""
+function init(::Type{GF256}, K)
+    r10 = R10(K)
+    d = Decoder(r10)
+    src = [GF256(i % 256) for i in 1:K]
+    inter = precode(src, r10)
+    return r10, d, src, inter
 end
 
-"""make sure the encoder runs at all"""
-function test_encode_1()
-    p, _, C = init()
-    for i in 1:length(C)
-        if !isassigned(C, i)
-            error("intermediate symbol at index $i not assigned.")
+"""R10 code with vector values"""
+function init(::Type{Vector{GF256}}, K)
+    r10 = R10(K)
+    d = Decoder(r10)
+    src = [Vector{GF256}([i % 256]) for i in 1:K]
+    inter = precode(src, r10)
+    return r10, d, src, inter
+end
+
+compare(a, b) = a == b
+
+"""test the R10 degree distribution."""
+function test_r10_degree()
+
+    # test the values at which the degree increments
+    f = [0, 10241, 491582, 712794, 831695, 948446, 1032189]
+    correct = [1, 2, 3, 4, 10, 11, 40]
+    for (v, d) in zip(f, correct)
+        ans = FountainCodes.r10_degree(v)
+        if ans != d error("expected r10_degree($v) to be $d, but got $ans.") end
+    end
+
+    # test the values one before the degree increments
+    f = [10241, 491582, 712794, 831695, 948446, 1032189, 1048576]
+    correct = [1, 2, 3, 4, 10, 11, 40]
+    for (v, d) in zip(f, correct)
+        ans = FountainCodes.r10_degree(v-1)
+        if ans != d error("expected r10_degree($(v-1)) to be $d, but got $ans.") end
+    end
+    return true
+end
+@test test_r10_degree()
+
+"""test that the constraint matrix for the first K symbols is of full rank"""
+function test_systematic_indices(K=10)
+    code = R10(K)
+    Xs = -(code.S+code.H):(code.K-1)
+    constraints = [get_constraint(code, X) for X in Xs]
+    M = Matrix(hcat(constraints...))'
+    @assert size(M) == (code.L, code.L)
+    r = rank(M)
+    if r != code.L
+        error("expected constraint matrix to have rank $(code.L), but got $r.")
+    end
+    return true
+end
+for K in 4:100 @test test_systematic_indices(K) end
+@test test_systematic_indices(1000)
+@test test_systematic_indices(2500)
+# @test test_systematic_indices(7000)
+
+"""test the precode constraints"""
+function test_precode_constraints()
+    code = R10(10)
+
+    # LDPC constraints
+    X = -1
+    correct = sparsevec([1, 6, 7, 8, 11], ones(Bool, 5), dimension(code))
+    ans = get_constraint(code, X)
+    if correct != ans
+        error("expected 1st LDPC constraint to be\n$correct,\nbut got\n$ans")
+    end
+
+    X = -7
+    correct = sparsevec([5, 6, 7, 10, 17], ones(Bool, 5), dimension(code))
+    ans = get_constraint(code, X)
+    if correct != ans
+        error("expected 7th LDPC constraint to be\n$correct,\nbut got\n$ans")
+    end
+
+    # HDPC constraints
+    X = -8
+    Is = [1, 2, 4, 5, 8, 10, 11, 15, 18]
+    Vs = ones(Bool, length(Is))
+    correct = sparsevec(Is, Vs, dimension(code))
+    ans = get_constraint(code, X)
+    if correct != ans
+        error("expected 1st HDPC constraint to be\n$correct,\nbut got\n$ans")
+    end
+
+    X = -11
+    Is = [2, 3, 4, 5, 6, 7, 14, 15, 16, 17, 21]
+    Vs = ones(Bool, length(Is))
+    correct = sparsevec(Is, Vs, dimension(code))
+    ans = get_constraint(code, X)
+    if correct != ans
+        error("expected 4th HDPC constraint to be\n$correct,\nbut got\n$ans")
+    end
+
+    X = -13
+    Is = [11, 12, 13, 14, 15, 16, 17, 23]
+    Vs = ones(Bool, length(Is))
+    correct = sparsevec(Is, Vs, dimension(code))
+    ans = get_constraint(code, X)
+    if correct != ans
+        error("expected 6th HDPC constraint to be\n$correct,\nbut got\n$ans")
+    end
+    return true
+end
+@test test_precode_constraints()
+
+"""test that the precode values are computed correctly"""
+function test_precode_values(K=10)
+    code = R10(K)
+    src = [GF256(i % 256) for i in 0:K-1]
+    inter = precode(src, code)
+    for X in 0:K-1
+        correct = src[X+1]
+        ans = get_value(code, X, inter)
+        if correct != ans
+            error("expected $X-th LT symbol to be $correct, but got $ans")
         end
     end
-    s = FountainCodes.ltgenerate(C, 1, p)
-    deg = FountainCodes.degree(s)
-    if deg != 2
-        error("LT degree is $deg bout should be 2")
-    end
     return true
 end
-@test test_encode_1()
+for K in 4:100 @test test_precode_values(K) end
+@test test_precode_values(1000)
+@test test_precode_values(2500)
+# @test test_precode_values(7000)
+# @test test_precode_values(8000)
 
-"""test that the encoder produces a correct R10 constraint matrix"""
-function test_encode_2()
-    p = FountainCodes.R10(10)
-    C = [Vector{GF256}([i % 256]) for i in 1:p.L]
-    N = [Dict{Int,Bool}() for _ in 1:p.L]
-    precode!(C, p, N)
-
-    ri = p.K+1
-    correct = [1, 6, 7, 8]
-    indices = sort!(collect(keys(N[ri])))
-    if indices != correct
-        error("R10 LDPC encoder failed. row $ri is $indices but should be $correct")
+"""test diagonalization"""
+function test_diagonalize(VT, K=10, r=round(Int, K*1.3))
+    code, d, src, inter = init(VT, K)
+    Vs = [zero(inter[1]) for _ in 1:(code.S+code.H)] # parity symbol values
+    append!(Vs, [get_value(code, X, inter) for X in 0:r-1])
+    for X in -(code.S+code.H):r-1
+        FountainCodes.add!(d, get_constraint(code, X))
     end
-
-    ri = p.K+7
-    correct = [5, 6, 7, 10]
-    indices = sort!(collect(keys(N[ri])))
-    if indices != correct
-        error("R10 LDPC encoder failed. row $ri is $indices but should be $correct")
-    end
-
-    ri = p.K+8
-    correct = [1, 2, 4, 5, 8, 10, 11, 15]
-    indices = sort!(collect(keys(N[ri])))
-    if indices != correct
-        error("R10 HDPC encoder failed. row $ri is $indices but should be $correct")
-    end
-
-    ri = p.K+11
-    correct = [2, 3, 4, 5, 6, 7, 14, 15, 16, 17]
-    indices = sort!(collect(keys(N[ri])))
-    if indices != correct
-        error("R10 HDPC encoder failed. row $ri is $indices but should be $correct")
-    end
-    return true
-
-    ri = p.K+13
-    correct = [11, 12, 13, 14, 15, 16, 17]
-    indices = sort!(collect(keys(N[ri])))
-    if indices != correct
-        error("R10 HDPC encoder failed. row $ri is $indices but should be $correct")
-    end
-    return true
-end
-@test test_encode_2()
-
-function test_select_row_1()
-    p, d, C = init()
-    FountainCodes.add!(d, BSymbol(1, Vector{GF256}([1]), [1]))
-    FountainCodes.add!(d, BSymbol(2, Vector{GF256}([1]), [1, 2]))
-    FountainCodes.add!(d, BSymbol(3, Vector{GF256}([1]), [1, 2, 3, 4]))
-    ri = FountainCodes.select_row(d)
-    rpi = d.rowperm[ri]
-    row = d.sparse[rpi]
-    deg = count(!iszero, row)
-    if deg != 1
-        error("selected row $deg has degree $deg but should have degree 1")
-    end
-    return true
-end
-@test test_select_row_1()
-
-function test_select_row_2()
-    p, d, C = init()
-    FountainCodes.add!(d, BSymbol(0, Vector{GF256}([1]), [7, 8]))
-    FountainCodes.add!(d, BSymbol(0, Vector{GF256}([1]), [1, 2]))
-    FountainCodes.add!(d, BSymbol(0, Vector{GF256}([1]), [2, 3]))
-    FountainCodes.add!(d, BSymbol(0, Vector{GF256}([1]), [5, 6]))
-    FountainCodes.expand_dense!(d)
-    ri = FountainCodes.select_row(d)
-    rpi = d.rowperm[ri]
-    row = d.sparse[rpi]
-    deg = count(!iszero, row)
-    if deg != 2
-        error("selected row $i has degree $deg but should have degree 2")
-    end
-    return true
-end
-@test test_select_row_2()
-
-function test_columns_1()
-    p, d, C = init()
-    for i in 1:20
-        s = FountainCodes.ltgenerate(C, i, p)
-        FountainCodes.add!(d, s)
-    end
-    for (cpi, col) in enumerate(d.columns)
-        for rpi in col
-            if !(cpi in d.sparse[rpi].nzind)
-                error("row with indices $(d.sparse[rpi].nzind) does not neighbor $cpi")
-            end
-        end
-    end
-    return true
-end
-@test test_columns_1()
-
-function test_diagonalize_1()
-    p, d, C = init()
-    for i in 1:20
-        s = FountainCodes.ltgenerate(C, i, p)
-        FountainCodes.add!(d, s)
-    end
-    FountainCodes.diagonalize!(d)
+    FountainCodes.diagonalize!(d, Vs)
     for i in 1:d.num_decoded
         rpi = d.rowperm[i]
         cpi = d.colperm[i]
-        correct = C[cpi]
-        for ci in 1:d.p.L
+        coef = d.sparse[rpi][cpi]
+        correct = coef.*inter[cpi]
+        for ci in 1:K
             cpj = d.colperm[ci]
-            if !iszero(FountainCodes.getdense(d, rpi, cpj))
-                correct = correct + C[cpj]
+            coef = FountainCodes.getdense(d, rpi, cpj)
+            if !iszero(coef)
+                correct = correct .+ coef.*inter[cpj]
             end
         end
-        if d.values[rpi] != correct
-            error("diagonalization failed. values[$rpi] is $(d.values[rpi]) but should be $correct")
+        if !compare(Vs[rpi], correct)
+            error("expected Vs[$rpi] to be $correct, but got $(Vs[rpi])")
         end
     end
     return true
 end
-@test test_diagonalize_1()
+# @test test_diagonalize(GF256, 10)
+# @test test_diagonalize(GF256, 100)
+# @test test_diagonalize(GF256, 1000)
+# @test test_diagonalize(Float64, 10)
+# @test test_diagonalize(Float64, 100)
+# @test test_diagonalize(Float64, 1000)
+# @test test_diagonalize(Vector{Float64}, 10)
+# @test test_diagonalize(Vector{Float64}, 100)
+# @test test_diagonalize(Vector{Float64}, 1000)
 
-function test_diagonalize_2()
-    p, d, C = init(1024)
-    for i in 1:1030
-        s = FountainCodes.ltgenerate(C, i, p)
-        FountainCodes.add!(d, s)
+"""test solving the dense subsystem u_lower"""
+function test_solve_dense(VT, K=10, r=round(Int, K*1.3))
+    lt, d, src = init(VT, K)
+    Vs = [get_value(lt, X, src) for X in 1:r]
+    for X in 1:r
+        FountainCodes.add!(d, get_constraint(lt, X))
     end
-    FountainCodes.diagonalize!(d)
-    for i in 1:d.num_decoded
+    FountainCodes.diagonalize!(d, Vs)
+    FountainCodes.solve_dense!(d, Vs)
+    for i in K-d.num_inactivated+1:K
         rpi = d.rowperm[i]
         cpi = d.colperm[i]
-        correct = C[cpi]
-        for ci in 1:d.p.L
-            cpj = d.colperm[ci]
-            if !iszero(FountainCodes.getdense(d, rpi, cpj))
-                correct = correct + C[cpj]
+        coef = FountainCodes.getdense(d, rpi, cpi)
+        correct = coef.*src[cpi]
+        if !compare(Vs[rpi], correct)
+            error("expected Vs[$rpi] to be $correct, but got $(Vs[rpi])")
+        end
+    end
+    return true
+end
+# @test test_solve_dense(GF256, 10)
+# @test test_solve_dense(GF256, 100)
+# @test test_solve_dense(GF256, 1000)
+# @test test_solve_dense(Float64, 10)
+# @test test_solve_dense(Float64, 100)
+# @test test_solve_dense(Float64, 1000)
+# @test test_solve_dense(Vector{Float64}, 10)
+# @test test_solve_dense(Vector{Float64}, 100)
+# @test test_solve_dense(Vector{Float64}, 1000)
+
+"""test that backsolve zeroes out the dense matrix correctly"""
+function test_backsolve(VT, K=10, r=round(Int, K*1.3))
+    lt, d, src = init(VT, K)
+    Vs = [get_value(lt, X, src) for X in 1:r]
+    for X in 1:r
+        FountainCodes.add!(d, get_constraint(lt, X))
+    end
+    FountainCodes.diagonalize!(d, Vs)
+    FountainCodes.solve_dense!(d, Vs)
+    FountainCodes.backsolve!(d, Vs)
+    for ri in 1:K-d.num_inactivated
+        rpi = d.rowperm[ri]
+        for ci in K-d.num_inactivated+1:K
+            cpi = d.colperm[ci]
+            coef = FountainCodes.getdense(d, rpi, cpi)
+            if !iszero(coef)
+                error("expected dense[$ri, $ci] to be zero, but got $coef")
             end
         end
-        if d.values[rpi] != correct
-            error("diagonalization failed. values[$rpi] is $(d.values[rpi]) but should be $correct")
-        end
     end
     return true
 end
-@test test_diagonalize_2()
+# @test test_backsolve(GF256, 10)
+# @test test_backsolve(GF256, 100)
+# @test test_backsolve(GF256, 1000)
+# @test test_backsolve(Float64, 10)
+# @test test_backsolve(Float64, 100)
+# @test test_backsolve(Float64, 1000)
+# @test test_backsolve(Vector{Float64}, 10)
+# @test test_backsolve(Vector{Float64}, 100)
+# @test test_backsolve(Vector{Float64}, 1000)
 
-function test_ge_1()
-    p, d, C = init()
-    for i in 1:20
-        s = FountainCodes.ltgenerate(C, i, p)
-        FountainCodes.add!(d, s)
-    end
-    FountainCodes.diagonalize!(d)
-    FountainCodes.solve_dense!(d)
-    for i in d.p.L-d.num_inactivated+1:d.p.L
-        rpi = d.rowperm[i]
-        cpi = d.colperm[i]
-        correct = C[cpi]
-        if d.values[rpi] != correct
-            error("GE failed. values[$rpi] is $(d.values[rpi]) but should be $correct")
-        end
-        if FountainCodes.countnz(d.dense, rpi) != 1
-            error("GE failed. row[$rpi]=$(getcolumn(d.dense,rpi)) does not sum to 1.")
+"""test that decoding succeeds"""
+function test_decode(VT, K=10, r=round(Int, K*1.3))
+    code, d, src, inter = init(VT, K)
+    Vs = [zero(inter[1]) for _ in 1:(code.S+code.H)] # parity symbol values
+    append!(Vs, [get_value(code, X, inter) for X in 0:r-1]) # LT symbol values
+    Xs = -(code.S+code.H):r-1 # ESIs incl. parity symbols
+    dec_inter = decode(code, Xs, Vs)
+    for i in 1:code.L
+        if dec_inter[i] != inter[i]
+            error("expected $(inter[i]), but got $(dec_inter[i])")
         end
     end
     return true
 end
-@test test_ge_1()
-
-function test_ge_2()
-    p, d, C = init(20)
-    for i in 1:25
-        s = FountainCodes.ltgenerate(C, i, p)
-        FountainCodes.add!(d, s)
-    end
-    FountainCodes.diagonalize!(d)
-    FountainCodes.solve_dense!(d)
-    for i in d.p.L-d.num_inactivated+1:d.p.L
-        rpi = d.rowperm[i]
-        cpi = d.colperm[i]
-        correct = C[cpi]
-        if d.values[rpi] != correct
-            error("GE failed. values[$rpi] is $(d.values[rpi]) but should be $correct")
-        end
-        if FountainCodes.countnz(d.dense, rpi) != 1
-            error("GE failed. row[$rpi]=$(getcolumn(d.dense,rpi)) does not sum to 1.")
-        end
-    end
-    return true
-end
-@test test_ge_2()
-
-function test_decoder_1()
-    p, d, C = init()
-    for i in 1:20
-        s = FountainCodes.ltgenerate(C, i, p)
-        FountainCodes.add!(d, s)
-    end
-    output = FountainCodes.decode!(d)
-    for i in 1:p.K
-        if output[i] != C[i]
-            error("decoding failure. source[$i] is $(output[i]). should be $(C[i]).")
-        end
-    end
-    return true
-end
-@test test_decoder_1()
-
-function test_decoder_2()
-    p, d, C = init()
-    for i in 1:15
-        s = FountainCodes.ltgenerate(C, i, p)
-        FountainCodes.add!(d, s)
-    end
-    output = FountainCodes.decode!(d)
-    for i in 1:p.K
-        if output[i] != C[i]
-            error("decoding failure. source[$i] is $(output[i]). should be $(C[i]).")
-        end
-    end
-    return true
-end
-@test test_decoder_2()
-
-function test_decoder_3()
-    p, d, C = init(20)
-    for i in 1:25
-        s = FountainCodes.ltgenerate(C, i, p)
-        FountainCodes.add!(d, s)
-    end
-    output = FountainCodes.decode!(d)
-    for i in 1:p.K
-        if output[i] != C[i]
-            error("decoding failure. source[$i] is $(output[i]). should be $(C[i]).")
-        end
-    end
-    return true
-end
-@test test_decoder_3()
-
-function test_decoder_4()
-    p, d, C = init(1024)
-    for i in 1:1030
-        s = FountainCodes.ltgenerate(C, i, p)
-        FountainCodes.add!(d, s)
-    end
-    output = FountainCodes.decode!(d)
-    for i in 1:p.K
-        if output[i] != C[i]
-            error("decoding failure. source[$i] is $(output[i]). should be $(C[i]).")
-        end
-    end
-    return true
-end
-@test test_decoder_4()
-
-function test_decoder_5()
-    p, d, C = init(100)
-    for i in 300:400 # simulate high loss rate
-        s = FountainCodes.ltgenerate(C, i, p)
-        FountainCodes.add!(d, s)
-    end
-    output = FountainCodes.decode!(d)
-    for i in 1:p.K
-        if output[i] != C[i]
-            error("decoding failure. source[$i] is $(output[i]). should be $(C[i]).")
-        end
-    end
-    return true
-end
-@test test_decoder_5()
+for K in 4:100 @test test_decode(GF256, K, K) end
+@test test_decode(Vector{GF256}, 100, 100)
+# @test test_decode(GF256, 8192, 8192)
