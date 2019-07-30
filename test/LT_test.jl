@@ -64,7 +64,7 @@ function test_diagonalize(K=10, r=round(Int, K*1.3))
             end
         end
         if Vs[rpi] != correct
-            error("expected values[$rpi] to be $correct, but got $(d.values[rpi])")
+            error("expected Vs[$rpi] to be $correct, but got $(Vs[rpi])")
         end
     end
     return true
@@ -88,7 +88,7 @@ function test_solve_dense(K=10, r=round(Int, K*1.3))
         cpi = d.colperm[i]
         correct = src[cpi]
         if Vs[rpi] != correct
-            error("expected values[$rpi] to be $correct, but got $(d.values[rpi])")
+            error("expected Vs[$rpi] to be $correct, but got $(Vs[rpi])")
         end
     end
     return true
