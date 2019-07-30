@@ -1,4 +1,4 @@
-struct HeapSelect <: Selector
+struct HeapSelect <: AbstractSelector
     buckets::Vector{PriorityQueue{Int,Int,Base.Order.ForwardOrdering}}
     lastsorted::Vector{Int} # number of decoded/inactivated symbols when a bucket was last sorted
     vdegree_from_rpi::Vector{Int}
@@ -50,7 +50,7 @@ function Base.push!(sel::HeapSelect, d::Decoder, rpi::Int, degree::Int)
 end
 
 """
-    pop!(e::Selector, d::Decoder)
+    pop!(sel::HeapSelect, d::Decoder) :: Int
 
 Remove a row from the selector and return its index.
 
@@ -169,7 +169,7 @@ end
 For compatibility with previous selectors.
 
 """
-function remove_column!(sel::Selector, d::Decoder, cpi::Int)
+function remove_column!(sel::AbstractSelector, d::Decoder, cpi::Int)
     return
 end
 
