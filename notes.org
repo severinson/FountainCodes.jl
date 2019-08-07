@@ -123,46 +123,17 @@ which its coefficients are defined. For example, binary, q* TODO ary, real.
 - Need to use iszero instead of plain boolean comparison in decoder
 - Currently returns false if index is higher than num_inactivated. This should
   probably be an error instead.
-* TODO Decoder tests organization
+* DONE Standard arithmetic functions
+  CLOSED: [2019-06-21 Fri 13:00]
+- The finite field arithmetic functions in Symbols.jl should use the
+  standard names mul!, div!, etc.
+* DONE Decoder tests organization
+  CLOSED: [2019-07-01 Mon 20:15]
 - Some tests are in their own file and some in files corresponding to
   the different codes.
-* TODO Test LT symbols against ground truth
 * DONE qary_from_binary
   CLOSED: [2018-08-24 fr. 16:43]
 - This method only works for GF256
-* DONE Subtract BitVector * coef
-  CLOSED: [2018-08-24 fr. 16:44]
-- RqRow subtract doesn't account for the coefficient when a.dense is a
-  BitVector. Need to promote to Vector{CT} is the coefficient isn't one.
-* DONE Benchmark uses ISymbol
-  CLOSED: [2018-03-19 Mon 16:33]
-* DONE Unified code interface
-  CLOSED: [2018-03-25 Sun 17:58]
-- All codes should have some sort of init function that makes the setup
-  identical.
-- Create parameters, precode, ltgen, (serialize/deserialize), decode.
-* TODO xor!
-- Should use GF256, not UInt8
-- Should investigate if this method is faster than using the standard dot
-  notation xor.(a, b).
-* TODO Deterministic coefficients
-- coefficient should use the ESI to generate deterministic coefficients.
-* DONE coef multiplied by an empty vector gives any
-  CLOSED: [2018-03-25 Sun 17:58]
-- Problem with the Q-ary ltegenrate function.
-- Returns a value of type any if an empty vector has been given as value.
-* DONE Rename LT to LT10
-  CLOSED: [2018-07-25 on. 09:55]
-* DONE GF256 subtract method
-  CLOSED: [2019-06-21 Fri 13:01]
-- Seems inefficient. Does not use the new addeq functions
-* DONE Remove divrq et al. in favor for diveq
-  CLOSED: [2018-08-24 fr. 16:44]
-- In Symbols.jl
-* TODO Test corner cases
-** TODO Attempt to decode before adding symbols
-** TODO Attempt to decode twice
-** TODO Attempt to decode after failing and having added symbols in between
 * DONE Row type instability
   CLOSED: [2018-07-25 on. 09:55]
 - Row type is determined by its index. This is a performance issue since
@@ -184,6 +155,64 @@ which its coefficients are defined. For example, binary, q* TODO ary, real.
   and subtract calls to use it.
 - Once this is done we can remove the BRow/QRow distinction and use a vector of
   vectors style. We could even use an stdlib sparse matrix.
+* DONE Subtract BitVector * coef
+  CLOSED: [2018-08-24 fr. 16:44]
+- RqRow subtract doesn't account for the coefficient when a.dense is a
+  BitVector. Need to promote to Vector{CT} is the coefficient isn't one.
+* DONE Benchmark uses ISymbol
+  CLOSED: [2018-03-19 Mon 16:33]
+* DONE Unified code interface
+  CLOSED: [2018-03-25 Sun 17:58]
+- All codes should have some sort of init function that makes the setup
+  identical.
+- Create parameters, precode, ltgen, (serialize/deserialize), decode.
+* DONE xor!
+  CLOSED: [2019-06-22 Sat 13:58]
+- Should use GF256, not UInt8
+- Should investigate if this method is faster than using the standard dot
+  notation xor.(a, b).
+* DONE Deterministic LT
+  CLOSED: [2019-07-01 Mon 20:16]
+- Coefficients should use the ESI to generate deterministic
+  coefficients.
+- LT LTQ code doesn't generate deterministic constraints.
+* DONE coef multiplied by an empty vector gives any
+  CLOSED: [2018-03-25 Sun 17:58]
+- Problem with the Q-ary ltegenrate function.
+- Returns a value of type any if an empty vector has been given as value.
+* DONE Rename LT to LT10
+  CLOSED: [2018-07-25 on. 09:55]
+* DONE GF256 subtract method
+  CLOSED: [2019-06-21 Fri 13:01]
+- Seems inefficient. Does not use the new addeq functions
+* DONE Remove divrq et al. in favor for diveq
+  CLOSED: [2018-08-24 fr. 16:44]
+- In Symbols.jl
+* DONE subeq!
+  CLOSED: [2019-06-21 Fri 13:00]
+- Remove subeq! and use regular arithmetic instead.
+* DONE zero-length parity symbols
+  CLOSED: [2019-06-22 Sat 12:40]
+- Parity symbols are initialized as zero-length vectors because we
+  don't know in advance the size of the source symbols. Because of
+  this we need to check in subtract if the target is zero-length and
+  initialize it if not.
+- We should initialize them as undefs since it allows for easily
+  checking if values are assigned or not. However, the parity symbol
+  values are added by the RQ decoder constructor.
+- Decided to instead add a check to subtract that allocates these
+  values on-demand. Because we often don't use all of them this will
+  end up saving memory and will probably be faster.
+* DONE GF256 object
+  CLOSED: [2019-06-22 Sat 13:57]
+- We shouldn't override the UInt8 arithmetic functions. Better to
+  create a new GF256 objects that contains a UInt8 value.
+- Just define GF256 as a struct with a single value inside and then
+  define the regular arithmetic operations for it.
+* TODO Test corner cases
+** TODO Attempt to decode before adding symbols
+** TODO Attempt to decode twice
+** TODO Attempt to decode after failing and having added symbols in between
 * DONE LTQ coefficient has poor rank properties
   CLOSED: [2019-06-20 Thu 16:55]
 - Having all coefficients be close to the same value is bad since
@@ -222,42 +251,42 @@ which its coefficients are defined. For example, binary, q* TODO ary, real.
   method.
 * TODO Simple selector is broken
 * TODO Add random selector for reference
-* TODO Set random seed in each test
+* DONE Set random seed in each test
+  CLOSED: [2019-07-30 Tue 19:39]
 - Only setting it in runtests means adding tests can cause other tests
   to fail.
-* TODO QMatrix
+- We'll let it be until it becomes a problem.
+* DONE QMatrix
+  CLOSED: [2019-06-27 Thu 18:55]
 - Use something more standard than countnz to find the number of
   non-zeros.
 - Benchmark its performance.
+- QMatrix only makes sense for codes over a finite field where the
+  addition of two binary 1s results in 0. It works great for R10 and
+  RQ, but doesn't work so well for Float64 codes. For these it'd be
+  better to use a regular dense Matrix{Float64}.
+- Expanding a regular matrix is easy by just allocating a new empty
+  matrix and moving over the values.
+- Remove the countnz method from the tests.
 * TODO Selector
 - Standardize API.
 - Make sure SimpleSelect works.
-* DONE Standard arithmetic functions
-  CLOSED: [2019-06-21 Fri 13:00]
-- The finite field arithmetic functions in Symbols.jl should use the
-  standard names mul!, div!, etc.
-* TODO ltgenerate interface
-- The current interface assumes you want to create a
-* DONE subeq!
-  CLOSED: [2019-06-21 Fri 13:00]
-- Remove subeq! and use regular arithmetic instead.
-* TODO GF256 object
-- We shouldn't override the UInt8 arithmetic functions. Better to
-  create a new GF256 objects that contains a UInt8 value.
-- Just define GF256 as a struct with a single value inside and then
-  define the regular arithmetic operations for it.
-* DONE zero-length parity symbols
-  CLOSED: [2019-06-22 Sat 12:40]
-- Parity symbols are initialized as zero-length vectors because we
-  don't know in advance the size of the source symbols. Because of
-  this we need to check in subtract if the target is zero-length and
-  initialize it if not.
-- We should initialize them as undefs since it allows for easily
-  checking if values are assigned or not. However, the parity symbol
-  values are added by the RQ decoder constructor.
-- Decided to instead add a check to subtract that allocates these
-  values on-demand. Because we often don't use all of them this will
-  end up saving memory and will probably be faster.
+* TODO code interface
+- The current interface assumes you want to create an encoded symbol,
+  but in many cases we just want the lists of neighbours and
+  coefficients.
+- In-place ltgenerate, i.e., you give vector to populate with the
+  lists of neighbours, coefficients and symbol value.
+- Function for getting the i-th row of the generator matrix.
+- Functions for getting the code dimension and length. Or perhaps call
+  it something different since we want the size of the system to
+  operate on, which differs from the dimension and length for LDPC
+  codes.
+- API
+  - get_constraint(c, X)
+  - get_value(c, X)
+  - get_degree(c, X)
+  - Decoder
 * TODO LDPC decoder
 - The decoder constructor is a bit weird in the sense that it assumes
   that you've set the erasure pattern and source symbol vectors
@@ -269,3 +298,244 @@ which its coefficients are defined. For example, binary, q* TODO ary, real.
 - I've added repr methods to everything, but it seems that writing
   show methods is more correct.
 * TODO Rename Decode.jl to Decoder.jl
+* TODO Separate decoding from solving
+- Currently the decoder stores a lot of state.
+- We should separate the functionality more clearly between the code
+  objects and the system for solving the system of
+  equations. Currently all state is stored in the decoder.
+- Decoder state variables
+  - sparse: Vector of sparse vectors, each of which stores the
+    non-zero coefficients of a row of the generator matrix. Iterated
+    over in zerodiag. Can be removed in favour of functions that
+    return the non-zero coefficients of a requested row.
+  - dense: Stores the inactivated columns. Can be separated out.
+  - permutation vectors: Need to remain.
+  - selector: Used to get the next row to operate on. Needs to have
+    the number of non-zero entries of each row.
+  - num_symbols, num_decoded, num_inactivated: Remain.
+
+* DONE Remove values from decoder
+  CLOSED: [2019-07-01 Mon 20:15]
+- Instead of including values when adding coded symbols to the decoder
+  we can provide callback functions to the Decode! function.
+- As a first step we can give the vector of values as an argument to
+  Decode. Then that needs to be passed around between functions.
+- Can we store callback functions in a struct?
+- The least squares dense decoder operates on the values directly. For
+  lsmr we need a view of the values.
+- Using callbacks to mutate an array is just as fast as mutating the
+  array directly.
+- An alternative is to give an object that acts like an array. Then we
+  can track how the covariance changes during decoding etc.
+- The decoder essentially acts like a storage container of
+  permutations. It's a bit inconvenient to put everything into the
+  same struct since it complicates multiple dispatch. Would it be
+  better to give everything to decode and have it pass around multiple
+  objects? It'd make it much easier to change parts of the system.
+- Maybe there needs to be a distinction between subtracting rows of
+  the matrix, which is part of the internal state of the decoder, and
+  subtracting values from one another. Subtracting values could be the
+  responsibility of the caller.
+- To make it work we need to give sparse and values as arguments to
+  decode! rather than having them be stored in the Decoder. As a first
+  step, give these as arguments to all functions that need them.
+- I think what we want in the end is to let code objects implement
+  getconstraint methods that return sparse vectors. For now though,
+  let's separate operating on the dense matrix and the values by
+  giving functions to all methods calling subtract.
+- diagonalize
+  - select_row
+  - peel_row
+  - swap_rows
+  - swap_cols
+  - get the indices of the non-zero coefficients of an arbitrary row.
+  - mark_decoded
+  - mark_inactive
+- solve_dense
+  - peel_row
+  - getdense
+  - subtract
+  - swap_rows
+  - swap_cols
+  - swap_dense_cols
+- backsolve
+  - getdense
+  - subtract!
+- get_source
+  - get sparse coefficients
+  - dividing values by a coefficient
+  - getdense
+
+* TODO RQ Permanent inactivations tests
+- Permanent inactivations aren't tested. Removing the permanent
+  inactivations doesn't fail any tests.
+* TODO Remove columns from decoder
+- Turns out the vdegree of each row is cached and that whenever a
+  column is decoded or inactivated we iterate over the list of
+  neighbouring rows stored in the corresponding columns vector to
+  update the count.
+  - The vdegree is the number of non-zero entries of a row that aren't
+    either decoded or inactivated. We need an efficient way of getting
+    the vdegree of a row since the selector makes decisions based on
+    the vdegree.
+- Removing the columns vectors means we need to compute the vdegree
+  many times for each time we select a row. Hence, we can't remove
+  columns unless we figure out a fast way of computing vdegree.
+- We can move columns to the selector.
+
+* TODO Cleaner fast row selector
+- HeapSelector is currently the fastest selector the conforms to the
+  standard. However, it's very much tangled up with the decoder. We
+  should either merge it with the decoder entirely or make it entirely
+  separate.
+- The standard:
+  - Let r be the minimum integer such that at least one row of A has
+    exactly r nonzeros in V, i.e., r non-zero entries not in the
+    decoded or inactivated columns.
+  - If r!=2, choose any row with r nonzeros in V with minimal original
+    degree, except that HDPC rows should always be chosen last.
+  - If r=2, build the graph and select any row part of the maximum
+    sized component.
+- The current HeapSelector stores rows in multiple heaps ordered by
+  original degree, where the heap is selected based on the
+  vdegree. For example, the first heap stores all rows with vdegree 1
+  ordered by their original degree. This means we can get the row we
+  want by doing a pop! on the first non-empty heap. For r=2, we build
+  the graph based on the contents of the second bucket.
+- Rows are moved between heaps somewhat intelligently.
+- A selector needs to have the original and vdegree of all rows. The
+  vdegree changes whenever a column is decoded or inactivated.
+- Proposed new selector:
+  - Store a list of rows indices together with their original degree,
+    sorted by the original degree. Based on the number of decoded
+    symbols and the number of inactivations you know which rows has
+    the potential to have a given vdegree.
+  - You also keep a separate list of rows with vdegree one. In many
+    cases you can pick straight from this one.
+- Selecting rows actually also implicitly chooses which columns to
+  inactivate.
+- Decoder components
+  - Row/column sparse/dense permutations
+  - Dense submatrix
+  - Selector
+  - Sparse rows
+- The selector is only used during diagonalization. During the
+  solve_dense stage rows are chosen arbitrarily.
+- The selector should only have push and pop. Instead of using
+  remove_column the selector can indicate which column to decode and
+  which columns to inactivate.
+* DONE MvNormal decoding
+  CLOSED: [2019-07-30 Tue 19:38]
+- Want to be able to decode a vector with known covariance close to
+  optimally. First, do peeling as long as possible. Then, do a
+  whitening transform of the dense system. Finally, solve the dense
+  system using least squares and backsolve.
+- Need to give an MvNormal object as values and update the covariance
+  for each operation. This means we need to write a special subtract
+  method.
+- We also want to be able to encode an MvNormal. We can start by
+  testing that encoding and decoding works like it should.
+- Can't operate on the MvNormal object directly since it's
+  implementation is based around PDMats, i.e., positive definite
+  matrices. However, the covariance matrix of the encoded symbols is
+  by definition not full rank. It seems we need to operate on a
+  separate object and then perhaps convert to a MvNormal object.
+- The PDmats library implements whitening transform. We should make
+  use of that!
+- Let's start by implementing it for a custom type.
+- I've implemented a CodedMvNormal type that is a subtype of
+  AbstractVector. It implements a subtract method.
+- Now we need to do decoding with a CodedMvNormal as value type. I can
+  make sure it's working by encoding a CodedMvNormal with unit
+  variance and making sure at the end of each decoding stage I have
+  the correct covariance structure.
+- In the end we want to give a CodedMvNormal as values and simply
+  consider the covariance before performing solve_dense. Perhaps we
+  can start there. Just give the symbols with unit variance and do the
+  whitening transform when it comes to solve_dense.
+- The values corresponding to rows in u_lower will in general be
+  correlated with other values since u_upper will have non-zero
+  entries. We can apply a whitening transform to u_lower based on the
+  covariance matrix of only the values in u_lower. However, estimating
+  the values in u_lower based only on the rows in u_lower will not be
+  optimal since the values in u_upper may also carry information about
+  those values.
+- The performance benchmark we want is to compare MSE of least squares
+  decoding based on the full system against inactivation decoding
+  (both with and without whitening transform). If inactivation
+  decoding with whitening transform based only on u_lower has
+  performance comparable to least squares decoding we're ok.
+- We can evaluate that for a small instance. Get an LT code matrix,
+  the mean and covariance. Then apply different decoders.
+  - Generate a random covariance matrix.
+  - Draw a sample from that distribution.
+  - Encode the sample and compute the encoded covariance.
+  - Decode using the various decoding algorithms.
+  - Compare MSE.
+* TODO R10 and RQ updated interface
+- I've updated the LT codes to use the new interface, but the R10 and
+  RQ codes also need to be updated.
+- R10 is done.
+* TODO LTQ poor least squares properties
+- Poorly chosen coefficients.
+- Assigning new randn coefficients improves least squares performance.
+* DONE Type system
+  CLOSED: [2019-07-30 Tue 19:42]
+- Add a new abstract base class AbstractCode that all codes
+  subclass. Since they're parameterized by the coefficient type we
+  don't need separate abstract types for binary and non-binary codes.
+- Remove the coefficienttype types.
+- Rename the Selector type to AbstractSelector. Or leave it out
+  entirely.
+* TODO decode should be decode!
+- Since it mutates Vs. Also move Vs to be the first argument.
+* TODO Build bipartite graph iteratively
+- Query rows and build the graph iteratively since it avoids querying
+  heavy rows unless needed.
+- In the current design we query all constraints when setting up the
+  decoder. This is inefficient since we don't need a lot of them in
+  many cases.
+- A better design would be to get constraints on-demand as needed.
+- Completely remove the sparse and code fields of the decoder. Pass
+  around the code object alongside the decoder and use it to query
+  rows. This means that rowperm needs to point to ESIs instead of
+  indices.
+- We can use a cache that the code object is responsible for to avoid
+  having to re-compute constraints.
+** TODO rowperm/rowperminv point to ESIs instead of rpis
+** TODO Columns is added to iteratively.
+** TODO New row selector
+- Store bounds on the vdegree of each row.
+- Look at rows in order of their original degree.
+- Whenever a row is queried, add to the columns adjacency list.
+- Quit if you find any row with vdegree 1.
+- We should be doing something similar to what we're doing now, but
+  only querying constraints as needed.
+* TODO Remove selector from decoder
+- Pass it around as a separate argument.
+* TODO Remove dense from decoder
+- Pass it around as a separate argument.
+* TODO R10 on-demand precode constraints
+- Only add constraint symbols when queried.
+- Use negative indices for precode-symbols?
+* TODO get_value in LT.jl
+- The general function should be moved somewhere else.
+* DONE Remove R10_256
+  CLOSED: [2019-07-30 Tue 19:41]
+- It's just an inferior version of RQ codes.
+* TODO Decode entire connected component
+- Once we find the largest connected component we should decode all of
+  those values in sequence. We just need to find the neighbouring row
+  in the connected component and return it the next time a row is
+  requested.
+- This may generalise, which would mean we need to find a new row from
+  scratch less often.
+* TODO Decoder failure despite full rank constraint matrix
+- Sometimes the decoder fails despite the constraint matrix having
+  full rank, e.g., for R10(7000) (tested that it has full rank by
+  computing the rank manually using SVD).
+- Sometimes the decoder returns an incorrect results, e.g., for
+  R10(8000).
+- It could be that the selector drops rows or returns rows multiple
+  times. Let's revisit this one when we've improved the selector
+  situation.
