@@ -621,9 +621,7 @@ function solve_dense!(d::Decoder, Vs)
 
             # stop once we've found a row with a non-zero entry we
             # haven't already decoded
-            if !iszero(ri)
-                break
-            end
+            if !iszero(ri) break end
         end
         if ri == 0
             push!(d.metrics, "status", -4)
