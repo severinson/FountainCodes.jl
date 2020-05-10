@@ -22,7 +22,6 @@ export CoefficientType, Binary, NonBinary, Code
 abstract type AbstractErasureCode end
 abstract type AbstractSelector end
 
-include("Bound.jl")
 include("Numinv.jl")
 include("Soliton.jl")
 include("GF256.jl")
