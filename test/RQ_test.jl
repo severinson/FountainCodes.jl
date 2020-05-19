@@ -56,28 +56,28 @@ function test_precode_relations()
     correct = [1, 6, 7, 8, 11, 18, 19]
     indices = N[ri][1]
     if indices != correct
-        error("incorrect RQ LDPC constraint. row $ri is $indices but should be $correct")
+        error("RQ LDPC constraint error. row $ri is $indices but should be $correct")
     end
 
     ri = 2
     correct = [1, 2, 7, 9, 12, 19, 20]
     indices = N[ri][1]
     if indices != correct
-        error("incorrect RQ LDPC constraint. row $ri is $indices but should be $correct")
+        error("RQ LDPC constraint error. row $ri is $indices but should be $correct")
     end
 
     ri = 3
     correct = [1, 2, 3, 8, 10, 13, 20, 21]
     indices = N[ri][1]
     if indices != correct
-        error("incorrect RQ LDPC constraint. row $ri is $indices but should be $correct")
+        error("RQ LDPC constraint error. row $ri is $indices but should be $correct")
     end
 
     ri = 7
     correct = [5, 6, 7, 10, 17, 24, 25]
     indices = N[ri][1]
     if indices != correct
-        error("incorrect RQ LDPC constraint. row $ri is $indices but should be $correct")
+        error("RQ LDPC constraint error. row $ri is $indices but should be $correct")
     end
 
     # test HDPC constraints
@@ -87,10 +87,10 @@ function test_precode_relations()
     if indices != correct
         error("RQ HDPC constraint error. row $ri indices are\n$indices,\nbut should be\n$correct")
     end
-    correct = [
+    correct = GF256.([
         0xfa, 0xf3, 0xf7, 0xf5, 0xf4, 0xf4, 0xf4, 0x7a, 0x3d,
         0x90, 0x48, 0x24, 0x12, 0x09, 0x04, 0x02, 0x01, 0x01,
-    ]
+    ])
     coefs = N[ri][2]
     if coefs != correct
         error("RQ HDPC constraint error. row $ri coefficients are\n$coefs,\n but should be\n$correct")
@@ -102,10 +102,10 @@ function test_precode_relations()
     if indices != correct
         error("RQ HDPC constraint error. row $ri indices are\n$indices,\nbut should be\n$correct")
     end
-    correct = [
+    correct = GF256.([
         0xeb, 0x75, 0x3a, 0x1d, 0x80, 0x40, 0x20, 0x10, 0x08,
         0x04, 0x02, 0x01, 0x8e, 0xc9, 0xea, 0x75, 0x3a ,0x01,
-    ]
+    ])
     coefs = N[ri][2]
     if coefs != correct
         error("RQ HDPC constraint error. row $ri coefficients are\n$coefs,\n but should be\n$correct")

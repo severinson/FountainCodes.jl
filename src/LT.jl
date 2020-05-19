@@ -1,4 +1,4 @@
-export LT, LTQ
+export LT, LTQ, get_constraint, get_value, dimension
 
 """
     LT{T <: Sampleable{Univariate, Discrete}} <: BinaryCode
@@ -13,14 +13,13 @@ Arguments
 * dd::Sampleable{Univariate, Discrete}: Degree distribution.
 
 """
-struct LT{T <: Sampleable{Univariate, Discrete}} <: BinaryCode
+struct LT{T <: Sampleable{Univariate, Discrete}} <: AbstractErasureCode
     K::Int # number of source symbols
-    L::Int # number of intermediate symbols
     Lp::Int # smallest prime larger than K
     dd::T # degree distribution
     function LT{T}(K::Int, dd::T) where T
         Lp = Primes.nextprime(K)
-        new(K, K, Lp, dd)
+        new(K, Lp, dd)
     end
 end
 LT(K::Int, dd::T) where {T <: Sampleable{Univariate, Discrete}} = LT{T}(K, dd)
@@ -39,14 +38,13 @@ Arguments
 * dd::Sampleable{Univariate, Discrete}: Degree distribution.
 
 """
-struct LTQ{CT,DT <: Sampleable{Univariate, Discrete}} <: NonBinaryCode
+struct LTQ{CT,DT <: Sampleable{Univariate, Discrete}} <: AbstractErasureCode
     K::Int # number of source symbols
-    L::Int # number of intermediate symbols
     Lp::Int # smallest prime larger than K
     dd::DT # degree distribution
     function LTQ{CT,DT}(K::Int, dd::DT) where {CT,DT}
         Lp = Primes.nextprime(K)
-        new(K, K, Lp, dd)
+        new(K, Lp, dd)
     end
 end
 function LTQ(K::Int, dd::DT) where DT <: Sampleable{Univariate, Discrete}
@@ -58,12 +56,16 @@ end
 Base.repr(p::LTQ{CT,DT}) where CT where DT = "LTQ{$CT,$DT}($(p.K), $(repr(p.dd)))"
 
 "LT codes have no pre-code, so do nothing."
-function precode!(C::Vector, p::Code)
+function precode!(C::Vector, p::Union{LT,LTQ})
     return C
 end
 
+# number of input symbols
+dimension(lt::LT) = lt.K
+dimension(lt::LTQ) = lt.K
+
 "Map a number 0 <= v <= 1 to a degree."
-function deg(v::Real, p::Code) :: Int
+function deg(v::Real, p::Union{LT,LTQ}) :: Int
     return quantile(p.dd, v)
 end
 
@@ -79,8 +81,16 @@ function coefficient(X::Int, j::Int, p::LTQ{CT}) where CT
     return coef
 end
 
+"""
+    coefficient(X::Int, i::Int, p::LTQ{Float64})
+
+Return a coefficient drawn from a standard Gaussian distribution. See
+"Numerically Stable Real Number Codes Based on Random Matrices" by
+Chen et al. for a motivation.
+
+"""
 function coefficient(X::Int, i::Int, p::LTQ{Float64})
-    return randn()/1e10+1
+    return randn()
 end
 
 "Maps an encoding symbol ID X to a triple (d, a, b)"
@@ -97,24 +107,74 @@ function trip(X::Int, p::Union{LT,LTQ})
     return d, a, b
 end
 
-"generate an LT symbol from the intermediate symbols."
-function ltgenerate(C::Vector, X::Int, p::LT)
-    d, a, b = trip(X, p)
-    while (b >= p.L)
-        b = (b + a) % p.Lp
+"""
+    get_constraint(lt::LT, X::Integer)
+
+Return the SparseVector corresponding to the X-th LT code constraint.
+
+"""
+function get_constraint(lt::LT, X::Integer)
+    d, a, b = trip(X, lt)
+    while (b >= lt.K)
+        b = (b + a) % lt.Lp
     end
-    neighbours = zeros(Int, min(d, p.L))
-    neighbours[1] = b+1
-    value = copy(C[b+1])
-    for j in 1:min(d-1, p.L-1)
-        b = (b + a) % p.Lp
-        while (b >= p.L)
-            b = (b + a) % p.Lp
+    Is = zeros(Int, min(d, lt.K))
+    Is[1] = b+1
+    for j in 1:min(d-1, lt.K-1)
+        b = (b + a) % lt.Lp
+        while (b >= lt.K)
+            b = (b + a) % lt.Lp
         end
-        neighbours[j+1] = b+1
-        value += C[b+1]
+        Is[j+1] = b+1
     end
-    return BSymbol(X, value, neighbours)
+    Vs = ones(Bool, d)
+    return sparsevec(Is, Vs, lt.K)
+end
+
+"""
+    get_constraint(code::LTQ, X::Integer)
+
+Return the SparseVector corresponding to the X-th LT code constraint.
+
+"""
+function get_constraint(ltq::LTQ, X::Integer)
+    Random.seed!(X)
+    d, _, _ = trip(X, ltq)
+    d = min(d, ltq.K)
+    set = Set{Int}()
+    while length(set) < d
+        push!(set, rand(1:ltq.K))
+    end
+    Is = sort!(collect(set))
+    Vs = [coefficient(X, i, ltq) for i in 1:d]
+    return sparsevec(Is, Vs, ltq.K)
+end
+
+"""
+    get_value(code, X, src)
+
+Return the value of the X-th constraint.
+
+"""
+function get_value(code, X::Integer, src)
+    @assert X >= 0
+    return get_value(get_constraint(code, X), src)
+end
+
+"""
+    get_value(constraint, src)
+
+Return the value of the X-th constraint.
+
+"""
+function get_value(constraint::SparseVector, src)
+    @assert length(constraint) == length(src)
+    @assert length(src) > 0
+    rv = zero(src[1])
+    for (i, v) in zip(constraint.nzind, constraint.nzval)
+        rv += v.*src[i]
+    end
+    return rv
 end
 
 # Using this method results in significantly higher
@@ -143,48 +203,28 @@ end
 #     return QSymbol(X, value, indices, coefficients)
 # end
 
-"generate an LT symbol from the intermediate symbols."
-function ltgenerate(C::Vector, X::Int, p::LTQ{CT}) where CT
-    d, _, _ = trip(X, p)
-    d = min(d, p.L)
-    set = Set{Int}()
-    while length(set) < d
-        push!(set, rand(1:p.L))
-    end
-    indices = sort!(collect(set))
-    coefficients = [coefficient(X, i, p) for i in 1:d]
-    value = sum(C[indices[i]]*coefficients[i] for i in 1:d)
-    return QSymbol(X, value, indices, coefficients)
+"""
+    Decoder{VT}(p::LT)
+
+Return a decoder for binary LT codes with value type VT.
+
+"""
+function Decoder(lt::LT) where VT
+    num_buckets = max(3, Int(round(log(lt.K))))
+    selector = HeapSelect(num_buckets, lt.K)
+    return Decoder{Bool}(selector, lt.K)
 end
 
 """
-    Decoder(p::LT)
+    Decoder{VT}(p::LTQ{CT}) where {CT,VT}
 
-Return a decoder for binary LT codes.
-
-"""
-function Decoder(p::LT)
-    num_buckets = max(3, Int(round(log(p.K))))
-    selector = HeapSelect(num_buckets, p.L)
-    return Decoder{GF256,Vector{GF256},LT,HeapSelect}(
-        p,
-        selector,
-        p.K,
-    )
-end
+Return a decoder for non-binary LT codes with coefficient type CT and
+value type VT. Note that it must be possible to multiply instances of
+VT by instances of CT.
 
 """
-    Decoder{CT,DT}(p::LTQ{CT,DT})
-
-Return a decoder for non-binary LT codes.
-
-"""
-function Decoder(p::LTQ{CT}) where CT
-    num_buckets = max(3, Int(round(log(p.K))))
-    selector = HeapSelect(num_buckets, p.L)
-    return Decoder{CT,Vector{CT},LTQ,HeapSelect}(
-        p,
-        selector,
-        p.K,
-    )
+function Decoder(lt::LTQ{CT}) where CT
+    num_buckets = max(3, Int(round(log(lt.K))))
+    selector = HeapSelect(num_buckets, lt.K)
+    return Decoder{CT}(selector, lt.K)
 end

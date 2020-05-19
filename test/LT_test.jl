@@ -1,208 +1,114 @@
-using FountainCodes, Test, Distributions
+using FountainCodes, Test
 
-function init(k=10)
-    dd = FountainCodes.Soliton(k, Int(round(k*2/3)), 0.01)
-    p = FountainCodes.LT(k, dd)
-    d = FountainCodes.Decoder(p)
-    C = [Vector{GF256}([i % 256]) for i in 1:p.L]
-    return p, d, C
+"""return an LT code object and a vector of source symbols"""
+function init(K; M=K-1, δ=1e-6)
+    dd = FountainCodes.Soliton(K, M, δ)
+    lt = FountainCodes.LT(K, dd)
+    src = [Vector{GF256}([i % 256]) for i in 1:K]
+    return lt, src
 end
 
-function init_gf256(k=10)
-    dd = FountainCodes.Soliton(k, Int(round(k*2/3)), 0.01)
-    p = FountainCodes.LTQ{GF256}(k, dd)
-    d = FountainCodes.Decoder(p)
-    C = [Vector{GF256}([i % 256]) for i in 1:p.L]
-    return p, d, C
-end
-
-function test_encode()
-    p, _, C = init()
-    for i in 1:length(C)
-        if !isassigned(C, i)
-            error("intermediate symbol at index $i not assigned.")
-        end
-    end
-    s = FountainCodes.ltgenerate(C, 1, p)
-    return true
-end
-@test test_encode()
-
-"""test that LT and LTQ ltgenerate choose the same indices"""
-function test_ltgenerate_1()
-    p_lt, _, C_lt = init(1024)
-    p_ltq, _, C_ltq = init_gf256(1024)
-    for i in 1:1300
-        s_lt = FountainCodes.ltgenerate(C_lt, i, p_lt)
-        s_ltq = FountainCodes.ltgenerate(C_ltq, i, p_ltq)
-        if s_lt.neighbours != s_ltq.neighbours
-            error("$(s_lt.neighbours) != $(s_ltq.neighbours) for ESI $i")
+"""test that get_constraint returns the same constraint at each call"""
+function test_constraint(K=10, r=K)
+    lt, src = init(K)
+    constraints = [get_constraint(lt, X) for X in 1:r]
+    for X in 1:r
+        correct = constraints[X]
+        constraint = get_constraint(lt, X)
+        if constraint != correct
+            error("expected the $X-th constraint to be $correct, but got $constraint")
         end
     end
     return true
 end
-# @test test_ltgenerate_1()
+@test test_constraint(10)
+@test test_constraint(100)
+@test test_constraint(1000)
 
-function test_decode_1()
-    p, d, C = init()
-    for i in 1:13
-        s = FountainCodes.ltgenerate(C, i, p)
-        FountainCodes.add!(d, s)
+"""test that the encoder covers all source symbols"""
+function test_encode(K=10)
+    lt, src = init(K)
+    covered = zeros(Int, K)
+    for X in 1:K
+        constraint = get_constraint(lt, X)
+        covered[constraint.nzind] .+= 1
     end
-    output = FountainCodes.decode!(d)
-    for i in 1:p.K
-        if output[i] != C[i]
-            error("decoding failure. source[$i] is $(output[i]). should be $(C[i]).")
+    for (i, v) in enumerate(covered)
+        if iszero(v)
+            error("$i-th source symbol not covered")
         end
     end
     return true
 end
-@test test_decode_1()
+@test test_encode(10)
+@test test_encode(100)
+@test test_encode(1000)
 
-function test_decode_2()
-    p, d, C = init(100)
-    for i in 1:120
-        s = FountainCodes.ltgenerate(C, i, p)
-        FountainCodes.add!(d, s)
+"""test diagonalization"""
+function test_diagonalize(K=10, r=round(Int, K*1.3))
+    lt, src = init(K)
+    Vs = [get_value(lt, X, src) for X in 1:r]
+    d = Decoder(lt)
+    for X in 1:r
+        FountainCodes.add!(d, get_constraint(lt, X))
     end
-    output = FountainCodes.decode!(d)
-    for i in 1:p.K
-        if output[i] != C[i]
-            error("decoding failure. source[$i] is $(output[i]). should be $(C[i]).")
-        end
-    end
-    return true
-end
-@test test_decode_2()
-
-function test_diagonalize_1()
-    p, d, C = init(1024)
-    for i in 1:1300
-        s = FountainCodes.ltgenerate(C, i, p)
-        FountainCodes.add!(d, s)
-    end
-    FountainCodes.diagonalize!(d)
+    FountainCodes.diagonalize!(d, Vs)
     for i in 1:d.num_decoded
         rpi = d.rowperm[i]
         cpi = d.colperm[i]
-        correct = C[cpi]
-        for ci in 1:d.p.L
+        correct = src[cpi]
+        for ci in 1:K
             cpj = d.colperm[ci]
             if !iszero(FountainCodes.getdense(d, rpi, cpj))
-                correct = correct + C[cpj]
+                correct = correct + src[cpj]
             end
         end
-        if d.values[rpi] != correct
-            error("diagonalization failed. values[$rpi] is $(d.values[rpi]) but should be $correct")
+        if Vs[rpi] != correct
+            error("expected Vs[$rpi] to be $correct, but got $(Vs[rpi])")
         end
     end
     return true
 end
-@test test_diagonalize_1()
+@test test_diagonalize(10)
+@test test_diagonalize(100)
+@test test_diagonalize(1000)
 
-function test_ge_1()
-    p, d, C = init(1024)
-    for i in 1:1400
-        s = FountainCodes.ltgenerate(C, i, p)
-        FountainCodes.add!(d, s)
+"""test solving the dense subsystem u_lower"""
+function test_solve_dense(K=10, r=round(Int, K*1.3))
+    lt, src = init(K)
+    Vs = [get_value(lt, X, src) for X in 1:r]
+    d = Decoder(lt)
+    for X in 1:r
+        FountainCodes.add!(d, get_constraint(lt, X))
     end
-    FountainCodes.diagonalize!(d)
-    FountainCodes.solve_dense!(d)
-    for i in d.p.L-d.num_inactivated+1:d.p.L
+    FountainCodes.diagonalize!(d, Vs)
+    FountainCodes.solve_dense!(d, Vs)
+    for i in K-d.num_inactivated+1:K
         rpi = d.rowperm[i]
         cpi = d.colperm[i]
-        correct = C[cpi]
-        if d.values[rpi] != correct
-            error("GE failed. values[$rpi] is $(d.values[rpi]) but should be $correct")
-        end
-        if countnz(d.dense, rpi) != 1
-            error("GE failed. row[$rpi]=$(getcolumn(d.dense,rpi)) does not sum to 1.")
+        correct = src[cpi]
+        if Vs[rpi] != correct
+            error("expected Vs[$rpi] to be $correct, but got $(Vs[rpi])")
         end
     end
     return true
 end
-@test test_ge_1()
+@test test_solve_dense(10)
+@test test_solve_dense(100)
+@test test_solve_dense(1000)
 
-function test_ge_2()
-    p, d, C = init(100)
-    for i in 1:130
-        s = FountainCodes.ltgenerate(C, i, p)
-        FountainCodes.add!(d, s)
-    end
-    FountainCodes.diagonalize!(d)
-    FountainCodes.solve_dense!(d)
-    for i in d.p.L-d.num_inactivated+1:d.p.L
-        rpi = d.rowperm[i]
-        cpi = d.colperm[i]
-        correct = C[cpi]
-        if d.values[rpi] != correct
-            error("GE failed. values[$rpi] is $(d.values[rpi]) but should be $correct")
-        end
-        if countnz(d.dense, rpi) != 1
-            error("GE failed. row[$rpi]=$(getcolumn(d.dense,rpi)) does not sum to 1.")
+"""test that decoding succeeds"""
+function test_decode(K=10, r=round(Int, K*1.3))
+    lt, src = init(K)
+    Vs = [get_value(lt, X, src) for X in 1:r]
+    dec = decode(lt, 1:r, Vs)
+    for i in 1:K
+        if dec[i] != src[i]
+            error("expected $(src[i]), but got $(dec[i])")
         end
     end
     return true
 end
-@test test_ge_2()
-
-function test_decoder_3()
-    p, d, C = init(1024)
-    for i in 1:1400
-        s = FountainCodes.ltgenerate(C, i, p)
-        FountainCodes.add!(d, s)
-    end
-    output = FountainCodes.decode!(d)
-    for i in 1:p.K
-        if output[i] != C[i]
-            error("decoding failure. source[$i] is $(output[i]). should be $(C[i]).")
-        end
-    end
-    return true
-end
-@test test_decoder_3()
-
-function test_decode_gf256_1()
-    p, d, C = init_gf256(1024)
-    for i in 1:1400
-        s = FountainCodes.ltgenerate(C, i, p)
-        FountainCodes.add!(d, s)
-    end
-    output = FountainCodes.decode!(d)
-    for i in 1:p.K
-        if output[i] != C[i]
-            error("decoding failure. source[$i] is $(output[i]). should be $(C[i]).")
-        end
-    end
-    return true
-end
-@test test_decode_gf256_1()
-
-function test_decode_gf256_2()
-    p, d, C = init_gf256(100)
-    for i in 1:120
-        s = FountainCodes.ltgenerate(C, i, p)
-        FountainCodes.add!(d, s)
-    end
-    output = FountainCodes.decode!(d)
-    for i in 1:p.K
-        if output[i] != C[i]
-            error("decoding failure. source[$i] is $(output[i]). should be $(C[i]).")
-        end
-    end
-    return true
-end
-@test test_decode_gf256_2()
-
-"test encoder using GF256 coefficients"
-function test_encode_gf256()
-    p, _, C = init_gf256()
-    for i in 1:length(C)
-        if !isassigned(C, i)
-            error("intermediate symbol at index $i not assigned.")
-        end
-    end
-    s = FountainCodes.ltgenerate(C, 1, p)
-    return true
-end
-@test test_encode_gf256()
+@test test_decode(10, 13)
+@test test_decode(100, 120)
+@test test_decode(1000, 1300)

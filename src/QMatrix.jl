@@ -2,11 +2,11 @@ export QMatrix, subtract!, getcolumn
 
 """
 
-This module implements a matrix that allows mixing binary columns with
-non-binary columns of element type T. Binary data is stored using a
-BitMatrix and non-binary columns are stored in a dict of
-Vector{T}. The module implements efficient methods to subtract one
-column from another.
+    QMatrix{T} <: AbstractMatrix{T}
+
+Efficient implementation of a matrix with mixed binary and non-binary
+entries. Binary entries are stored in a dense BitMatrix whereas
+non-binary columns are stored as separate vectors.
 
 """
 mutable struct QMatrix{T} <: AbstractMatrix{T}
@@ -27,16 +27,8 @@ end
 @inline _mod64(l) = l & 63
 @inline get_chunks_id(i::Integer) = _div64(Int(i)-1)+1, _mod64(Int(i)-1)
 
-function rows(M::QMatrix)
-    return M.m
-end
-
-function cols(M::QMatrix)
-    return M.n
-end
-
 function Base.size(M::QMatrix)
-    return rows(M), cols(M)
+    return M.m, M.n
 end
 
 """
@@ -128,7 +120,7 @@ function Base.resize!(M::QMatrix{T}, m, n) where T
     end
     M.binary = binary
     M.m, M.n = m, n
-    return
+    return M
 end
 
 """
@@ -200,33 +192,28 @@ end
 
 Subtract column c2 from column c1, i.e., M[:,c1] = M[:,c1] - M[:,c2].
 
-TODO: consider using a separate BitVector to store which columns are
-qary in order to speed up haskey operations.
-
-TODO: this function isn't properly tested.
-
 """
 function subtract!(M::QMatrix{T}, c1::Int, c2::Int) where T
     @boundscheck checkbounds(M.binary, 1, c1)
     @boundscheck checkbounds(M.binary, 1, c2)
     h1, h2 = haskey(M.qary, c1), haskey(M.qary, c2)
     if h1 && !h2
-        q = M.qary[c1]
-        for i in findall(!iszero, M.binary[:,c2])
-            q[i] = q[i] - one(T)
-        end
+        @views M.qary[c1] .-= M.binary[:, c2]
     elseif !h1 && h2
-        M.qary[c1] = M.binary[:,c1] - M.qary[c2]
+        @views M.qary[c1] = M.binary[:,c1] .- M.qary[c2]
     elseif h1 && h2
-        q1, q2 = M.qary[c1], M.qary[c2]
+        @views q1, q2 = M.qary[c1], M.qary[c2]
         q1 .-= q2
     else
         s2i = LinearIndices(M)
         kd0, ld0 = get_chunks_id(s2i[1, c1])
         kd1, ld1 = get_chunks_id(s2i[M.m, c1])
         offset = (c2-c1)*div(M.m,64)
-        for i in kd0:kd1
-            M.binary.chunks[i] = xor(M.binary.chunks[i], M.binary.chunks[i+offset])
+        @simd for i in kd0:kd1
+            @inbounds M.binary.chunks[i] = xor(
+                M.binary.chunks[i],
+                M.binary.chunks[i+offset],
+            )
         end
     end
     return
@@ -248,96 +235,14 @@ function subtract!(M::QMatrix{T}, d::T, c1::Int, c2::Int) where T
     end
     h1, h2 = haskey(M.qary, c1), haskey(M.qary, c2)
     if h1 && !h2
-        q = M.qary[c1]
-        # TODO: use array indexing
-        for i in findall(!iszero, M.binary[:,c2])
-            q[i] -= d
-        end
+        @views M.qary[c1] .-= d .* M.binary[:, c2]
     elseif !h1 && h2
-        M.qary[c1] = subeq!(Vector{T}(M.binary[:,c1]), M.qary[c2], d)
+        @views M.qary[c1] = M.binary[:,c1] .- d.*M.qary[c2]
     elseif h1 && h2
-        q1, q2 = M.qary[c1], M.qary[c2]
-        subeq!(q1, q2, d)
+        @views q1, q2 = M.qary[c1], M.qary[c2]
+        q1 .-= d.*q2
     else
-        M.qary[c1] = M.binary[:,c1]
-        # TODO: use array indexing
-        for i in findall(!iszero, M.binary[:,c2])
-            M.qary[c1][i] += d
-        end
-    end
-end
-
-## Benchmark code ##
-function xor!(c::BitArray, a::BitArray, b::BitArray) :: BitArray
-    for i in 1:length(a.chunks)
-        c.chunks[i] = xor(a.chunks[i], b.chunks[i])
-    end
-    return c
-end
-
-function row_wise(m::Int, b::BitMatrix)
-    for i in 2:m
-        j = i-1
-        view(b,j,:) = xor.(view(b,i-1,:), view(b,i,:))
+        @views M.qary[c1] = M.binary[:,c1] .- d.*M.binary[:,c2]
     end
     return
 end
-
-function col_wise(n::Int, b::BitMatrix)
-    for i in 2:n
-        j = i-1
-        view(b, :, j) = xor.(view(b,:,i-1), view(b,:,i))
-    end
-    return
-end
-
-function dots(n::Int, c::BitArray, a::BitArray, b::BitArray) :: BitArray
-    for _ in 1:n
-        c .= xor.(a, b)
-    end
-    return c
-end
-
-function chunks(n::Int, c::BitArray, a::BitArray, b::BitArray) :: BitArray
-    for _ in 1:n
-        c.chunks .= xor.(a.chunks, b.chunks)
-    end
-    return c
-end
-
-
-function mixed(n::Int, M::QMatrix)
-    for i in 2:n
-        subtract!(M, i-1, i)
-    end
-end
-
-function main()
-    m, n = 10000-16, 10000
-    a = BitVector(rand(Bool, m))
-    b = BitVector(rand(Bool, m))
-    M = QMatrix{UInt8}(m, n)
-
-    # set a few dense entries
-    for j in 1:0
-        M[rand(1:m),rand(1:n)] = 0x02
-    end
-
-    # warm up the jit
-    # mixed(1, M)
-    # dots(1, a, a, b)
-    # chunks(1, a, a, b)
-    # @timev dots(1000, a, a, b)
-    # @timev chunks(1000, a, a, b)
-
-    # row-wise dense binary
-    # @timev row_wise(m, b)
-
-    # column-wise dense binary
-    # @timev col_wise(n, b)
-
-    # column-wise mixed
-    @timev mixed(n, M)
-end
-
-# main()

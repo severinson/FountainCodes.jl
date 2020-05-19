@@ -14,29 +14,18 @@
 
 module FountainCodes
 
-using StatsBase, Statistics, Distributions
-using Primes, DataStructures, SparseArrays
+using StatsBase, Statistics, Distributions, Random
+using Primes, DataStructures, LinearAlgebra, SparseArrays
 export CoefficientType, Binary, NonBinary, Code
 
 # type system
-abstract type CoefficientType end
-mutable struct Binary <: CoefficientType end
-mutable struct NonBinary <: CoefficientType end
-abstract type Code{T<:CoefficientType} end
-const BinaryCode = Code{Binary}
-const NonBinaryCode = Code{NonBinary}
-abstract type Selector end
+abstract type AbstractErasureCode end
+abstract type AbstractSelector end
 
-"symbol value"
-abstract type Value end
-
-"coded symbol"
-abstract type CodeSymbol end
-
-include("Bound.jl")
 include("Numinv.jl")
 include("Soliton.jl")
-include("Symbols.jl")
+include("GF256.jl")
+include("CodedMvNormal.jl")
 include("Gray.jl")
 include("QMatrix.jl")
 include("DisjointSet.jl")

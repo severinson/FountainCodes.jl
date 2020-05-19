@@ -1,4 +1,4 @@
-struct HeapSelect <: Selector
+struct HeapSelect <: AbstractSelector
     buckets::Vector{PriorityQueue{Int,Int,Base.Order.ForwardOrdering}}
     lastsorted::Vector{Int} # number of decoded/inactivated symbols when a bucket was last sorted
     vdegree_from_rpi::Vector{Int}
@@ -50,7 +50,7 @@ function Base.push!(sel::HeapSelect, d::Decoder, rpi::Int, degree::Int)
 end
 
 """
-    pop!(e::Selector, d::Decoder)
+    pop!(sel::HeapSelect, d::Decoder) :: Int
 
 Remove a row from the selector and return its index.
 
@@ -124,9 +124,12 @@ function component_select(sel::HeapSelect, d::Decoder)
     for (rpi, deg) in bucket.xs
         vdeg = sel.vdegree_from_rpi[rpi]
         @assert vdeg == 2
-        if !isbinary(d.dense, rpi) # don't consider non-binary rows
+
+        # skip very heavy rows
+        if nnz(d.sparse[rpi]) > 0.45*size(d, 2)
             continue
         end
+
         i = 1
         for cpi in d.sparse[rpi].nzind
             ci = d.colperminv[cpi]
@@ -143,10 +146,9 @@ function component_select(sel::HeapSelect, d::Decoder)
 
         # It's likely that a component with positive excess will
         # evolve into the largest connected component (under some
-        # assumptions on the process generating the graph), i.e.,
-        # once we find a component with positive excess we can
-        # stop. See "The Birth of the Giant Component" for
-        # details.
+        # assumptions on the process generating the graph), i.e., once
+        # we find a component with positive excess we can stop. See
+        # "The Birth of the Giant Component" for details.
         excess = e - v
         if excess > 0
             crpi = rpi
@@ -167,7 +169,7 @@ end
 For compatibility with previous selectors.
 
 """
-function remove_column!(sel::Selector, d::Decoder, cpi::Int)
+function remove_column!(sel::AbstractSelector, d::Decoder, cpi::Int)
     return
 end
 

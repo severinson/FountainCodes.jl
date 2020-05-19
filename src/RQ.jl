@@ -136,12 +136,12 @@ iszero(C[x]). we should look into finding a better approach.
 function ltgenerate(C::Vector, X::Int, c::RQ)
     d, a, b, d1, a1, b1 = RQ_tuple(X, c)
     indices = zeros(Int, d+d1)
-    value = copy(C[b+1])
+    value = deepcopy(C[b+1])
     indices[1] = b+1
     for j in 1:d-1
         b = (b + a) % c.W
         if iszero(value)
-            value = copy(C[b+1])
+            value = deepcopy(C[b+1])
         elseif !iszero(C[b+1])
             value += C[b+1]
         end
@@ -149,7 +149,7 @@ function ltgenerate(C::Vector, X::Int, c::RQ)
     end
     while (b1 >= c.P) b1 = (b1+a1) % c.P1 end
     if iszero(value)
-        value = copy(C[c.W+b1+1])
+        value = deepcopy(C[c.W+b1+1])
     else
         value += C[c.W+b1+1]
     end
@@ -157,7 +157,7 @@ function ltgenerate(C::Vector, X::Int, c::RQ)
     for j in 1:d1-1
         b1 = (b1 + a1) % c.P1
         while (b1 >= c.P) b1 = (b1+a1) % c.P1 end
-        if iszero(value) value = copy(C[c.W+b1+1])
+        if iszero(value) value = deepcopy(C[c.W+b1+1])
         elseif !iszero(C[c.W+b1+1]) value += C[c.W+b1+1] end
         indices[d+j+1] = c.W+b1+1
     end
@@ -182,9 +182,13 @@ function precode!(C::Vector, c::RQ)
     if length(C) != c.L
         error("C must have length L")
     end
-    for i in c.K+1:c.L # TODO: remove?
+
+    # zero out the parity symbols
+    for i in c.K+1:c.L
         C[i] = zero(C[1])
     end
+
+    # decode the source symbols
     for X in 0:c.K-1
         s = ltgenerate(C, X, c)
         add!(d, s.neighbours, C[X+1])
@@ -247,7 +251,7 @@ function RQ_ldpc_constraints!(N::Vector, c::RQ)
 end
 
 function RQ_hdpc_constraints!(N::Vector, c::RQ)
-    alpha = 0x02
+    alpha = GF256(0x02)
     if length(N) != c.S+c.H
         error("N must have length c.S+c.H")
     end
@@ -318,13 +322,8 @@ Create a RaptorQ decoder and add the relevant constraint symbols.
 
 """
 function Decoder(c::RQ)
-    selector = HeapSelect(31, c.L) # one more than the highest LT symbol degree
-    d = Decoder{GF256,Vector{GF256},RQ,HeapSelect}(
-        c,
-        selector,
-        c.L,
-    )
-    # C = zeros(GF256, c.L)
+    selector = HeapSelect(31, c.L) # 31 is one more than the highest LT symbol degree
+    d = Decoder{GF256,Vector{GF256}}(c, selector, c.L)
     N = precode_relations(c)
 
     # LDPC constraints
@@ -342,9 +341,10 @@ function Decoder(c::RQ)
         add!(d, [i], Vector{GF256}())
     end
 
-    # permanent inactivations
+    # permanent inactivations. the corresponding coefficients are set
+    # correctly later by setinactive! in the decoder.
     for i in c.L-c.P+1:c.L
-        inactivate!(d, i)
+        mark_inactive!(d, i)
     end
 
     # only count dynamic inactivations
