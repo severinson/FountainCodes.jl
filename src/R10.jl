@@ -40,7 +40,7 @@ struct R10 <: AbstractErasureCode
         return code
     end
 end
-Base.repr(p::R10) = "R10($(p.K))"
+Base.show(io::IO, c::R10) = print(io, "R10($(c.K))")
 dimension(r10::R10) = r10.L
 
 """
