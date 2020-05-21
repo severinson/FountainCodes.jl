@@ -6,7 +6,7 @@ export RQ, precode!, ltgenerate
 RaptorQ code.
 
 """
-struct RQ <: NonBinaryCode
+struct RQ <: AbstractErasureCode
     K::Int # number of source symbols
     Kp::Int # number of source symbols including padding
     J::Int # systematic index
@@ -188,7 +188,7 @@ function precode!(C::Vector, c::RQ)
         C[i] = zero(C[1])
     end
 
-    # decode the source symbols
+    # decode the intermediate symbols
     for X in 0:c.K-1
         s = ltgenerate(C, X, c)
         add!(d, s.neighbours, C[X+1])
