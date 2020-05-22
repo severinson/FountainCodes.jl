@@ -29,7 +29,9 @@ function benchmark_lt(K=1000, r=1400, nsamples=100, M=K-1, δ=1e-6)
         Xs .= sample(1:10000000, r, replace=false) # Received ESIs
         Vs = [get_value(lt, X, src) for X in Xs]
         try
-            t += @elapsed decode(lt, Xs, Vs)
+            decoder = Decoder(lt)
+            t += @elapsed decode(lt, Xs, Vs, decoder=decoder)
+            println(decoder.metrics)
         catch
             println("Decoding failed")
         end
