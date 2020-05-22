@@ -3,7 +3,6 @@
 using FountainCodes, Test, Random
 Random.seed!(123) # reproducible tests
 println("Starting tests")
-@time @testset "Bounds tests" begin include("Bound_test.jl") end
 @time @testset "Numerical function inversion" begin include("Numinv_test.jl") end
 @time @testset "GF256" begin include("GF256_test.jl") end
 @time @testset "CodedMvNormal" begin include("CodedMvNormal_test.jl") end
