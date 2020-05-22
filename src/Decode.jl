@@ -760,20 +760,18 @@ add!(d::Decoder, code::AbstractErasureCode, X::Integer) = add!(d, get_constraint
 * Vs Values corresponding to each constraint.
 
 """
-function decode(code::AbstractErasureCode, constraints::AbstractVector{T},
-                Vs) where T <: SparseVector
+function decode(code::AbstractErasureCode, constraints::AbstractVector{T}, Vs; decoder=Decoder(code)) where T <: SparseVector
     length(constraints) == length(Vs) || throw(DimensionMismatch("The lengths of Xs and Vs are inconsistent."))
-    d = Decoder(code)
-    for constraint in constraints add!(d, constraint) end
-    check_cover(d)
-    d.phase = "diagonalize"
-    diagonalize!(d, Vs)
-    d.phase = "solve_dense"
-    solve_dense!(d, Vs)
-    d.phase = "backsolve"
-    backsolve!(d, Vs)
-    d.metrics["success"] = 1
-    return get_source(d, Vs)
+    for constraint in constraints add!(decoder, constraint) end
+    check_cover(decoder)
+    decoder.phase = "diagonalize"
+    diagonalize!(decoder, Vs)
+    decoder.phase = "solve_dense"
+    solve_dense!(decoder, Vs)
+    decoder.phase = "backsolve"
+    backsolve!(decoder, Vs)
+    decoder.metrics["success"] = 1
+    return get_source(decoder, Vs)
 end
 
 """
@@ -786,4 +784,4 @@ end
 * Vs Received values.
 
 """
-decode(code, Xs::AbstractVector{Int}, Vs) = decode(code, [get_constraint(code, X) for X in Xs], Vs)
+decode(code, Xs::AbstractVector{Int}, Vs; kwargs...) = decode(code, [get_constraint(code, X) for X in Xs], Vs; kwargs...)
