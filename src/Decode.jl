@@ -21,12 +21,12 @@ mutable struct Decoder{CT,SELECTOR<:AbstractSelector,DMT<:AbstractMatrix{CT}}
     num_symbols::Int # number of source symbols
     num_decoded::Int # denoted by i in the R10 spec.
     num_inactivated::Int # denoted by u in the R10 spec.
-    metrics::DataStructures.Accumulator{String,Int} # stores performance metrics
+    metrics::Union{Nothing, DataStructures.Accumulator{String,Int}} # stores performance metrics
     status::String # indicates success or stores the reason for decoding failure.
     phase::String # diagonalize, solve_dense, or backsolve. used for logging metrics.
 end
 
-function Decoder{CT}(dense::DMT, selector::SELECTOR, num_symbols::Integer) where {CT,DMT,SELECTOR}
+function Decoder{CT}(dense::DMT, selector::SELECTOR, num_symbols::Integer; log::Bool=true) where {CT,DMT,SELECTOR}
     d = Decoder{CT,SELECTOR,DMT}(
         [Vector{Int}() for _ in 1:num_symbols],
         Vector{SparseVector{CT,Int}}(),
@@ -41,18 +41,20 @@ function Decoder{CT}(dense::DMT, selector::SELECTOR, num_symbols::Integer) where
         num_symbols,
         0,
         0,
-        DataStructures.counter(String),
+        log ? DataStructures.counter(String) : nothing,
         "", ""
     )
-    d.metrics["success"] = 0
-    for phase in ["diagonalize", "solve_dense", "backsolve"]
-        d.metrics[string(phase, "_", "decoding_additions")] = 0
-        d.metrics[string(phase, "_", "decoding_multiplications")] = 0
-        d.metrics[string(phase, "_", "rowadds")] = 0
-        d.metrics[string(phase, "_", "rowmuls")] = 0
+    if log
+        d.metrics["success"] = 0
+        for phase in ["diagonalize", "solve_dense", "backsolve"]
+            d.metrics[string(phase, "_", "decoding_additions")] = 0
+            d.metrics[string(phase, "_", "decoding_multiplications")] = 0
+            d.metrics[string(phase, "_", "rowadds")] = 0
+            d.metrics[string(phase, "_", "rowmuls")] = 0
+        end
+        d.metrics["inactivations"] = 0
+        d.metrics["status"] = 0
     end
-    d.metrics["inactivations"] = 0
-    d.metrics["status"] = 0
     return d
 end
 
@@ -190,7 +192,7 @@ end
 function check_cover(d::Decoder)
     for i in 1:d.num_symbols
         if !iscovered(d, i)
-            push!(d.metrics, "status", -1)
+            if !isnothing(d.metrics) push!(d.metrics, "status", -1) end
             error("intermediate symbol with index $i not covered.")
         end
     end
@@ -283,13 +285,12 @@ function subtract!(d::Decoder, Vs, rpi::Int, rpj::Int, coefi::CT, coefj::CT) whe
     coef = get_ratio(coefi, coefj)::CT
     subtract!(d.dense, coef, rpj, rpi) # dense submatrix is stored explicitly
     subtract!(Vs, rpi, rpj, coef) # subtract the values
-    update_metrics!(d, rpi, coefi)
+    if !isnothing(d.metrics) update_metrics!(d, rpi, coefi) end
     return
 end
 
 """track performance metrics"""
 function update_metrics!(d::Decoder, rpi::Int, coef)
-    return # remove to log metrics. slows down decoding.
     if iszero(coef) return end # no-op
     weight = d.num_inactivated
     push!(d.metrics, string(d.phase, "_", "decoding_additions"), weight)
@@ -352,7 +353,7 @@ function mark_inactive!(d::Decoder, cpi::Int)
     end
     d.num_inactivated += 1
     swap_cols!(d, ci, rightmost_active_col)
-    push!(d.metrics, "inactivations", 1)
+    if !isnothing(d.metrics) push!(d.metrics, "inactivations", 1) end
 
     # need to extend the permutation arrays for each inactivation
     push!(d.uperm, d.num_inactivated)
@@ -457,7 +458,7 @@ function diagonalize!(d::Decoder, Vs)
             ci = d.colperminv[cpi]
         end
         if !(d.num_decoded < ci <= d.num_symbols-d.num_inactivated)
-            push!(d.metrics, "status", -3)
+            if !isnothing(d.metrics) push!(d.metrics, "status", -3) end
             error("incorrectly selected a row with no neighbours in V.")
         end
         mark_decoded!(d, cpi)
@@ -488,7 +489,7 @@ function solve_dense!(d::Decoder{Float64}, Vs::AbstractVector{VT}) where VT<:Abs
     lastcol = d.num_symbols # last column of the dense matrix
     @assert firstrow == firstcol "firstrow=$firstrow must be equal to firstcol=$firstcol"
     if lastrow-firstrow+1 < d.num_inactivated
-        push!(d.metrics, "status", -4)
+        if !isnothing(d.metrics) push!(d.metrics, "status", -4) end
         error("least-squares failed. u_lower must at least as many rows as there are inactivations.")
     end
     b = zeros(
@@ -541,7 +542,7 @@ function solve_dense!(d::Decoder{Float64}, Vs)
     lastcol = d.num_symbols # last column of the dense matrix
     @assert firstrow == firstcol "firstrow=$firstrow must be equal to firstcol=$firstcol"
     if lastrow-firstrow+1 < d.num_inactivated
-        push!(d.metrics, "status", -4)
+        if !isnothing(d.metrics) push!(d.metrics, "status", -4) end
         error("least-squares failed. u_lower must at least as many rows as there are inactivations.")
     end
     for ri in firstrow:lastrow
@@ -624,7 +625,7 @@ function solve_dense!(d::Decoder, Vs)
             if !iszero(ri) break end
         end
         if ri == 0
-            push!(d.metrics, "status", -4)
+            if !isnothing(d.metrics) push!(d.metrics, "status", -4) end
             error("Decoding failed due to rank deficiency.")
         end
         swap_rows!(d, d.num_decoded+1, ri)
@@ -770,7 +771,7 @@ function decode(code::AbstractErasureCode, constraints::AbstractVector{T}, Vs; d
     solve_dense!(decoder, Vs)
     decoder.phase = "backsolve"
     backsolve!(decoder, Vs)
-    decoder.metrics["success"] = 1
+    if !isnothing(decoder.metrics) decoder.metrics["success"] = 1 end
     return get_source(decoder, Vs)
 end
 
