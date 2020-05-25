@@ -113,7 +113,7 @@ end
 Return the SparseVector corresponding to the X-th LT code constraint.
 
 """
-function get_constraint(lt::LT, X::Integer)
+function get_constraint(lt::LT, X::Integer)::SparseVector{Bool,Int}
     d, a, b = trip(X, lt)
     while (b >= lt.K)
         b = (b + a) % lt.Lp
@@ -128,7 +128,7 @@ function get_constraint(lt::LT, X::Integer)
         Is[j+1] = b+1
     end
     Vs = ones(Bool, d)
-    return sparsevec(Is, Vs, lt.K)
+    return sparsevec(Is, Vs, lt.K)::SparseVector{Bool,Int}
 end
 
 """
@@ -137,7 +137,7 @@ end
 Return the SparseVector corresponding to the X-th LT code constraint.
 
 """
-function get_constraint(ltq::LTQ, X::Integer)
+function get_constraint(ltq::LTQ{CT}, X::Integer) where CT
     Random.seed!(X)
     d, _, _ = trip(X, ltq)
     d = min(d, ltq.K)
@@ -147,7 +147,7 @@ function get_constraint(ltq::LTQ, X::Integer)
     end
     Is = sort!(collect(set))
     Vs = [coefficient(X, i, ltq) for i in 1:d]
-    return sparsevec(Is, Vs, ltq.K)
+    return sparsevec(Is, Vs, ltq.K)::SparseVector{CT,Int}
 end
 
 """

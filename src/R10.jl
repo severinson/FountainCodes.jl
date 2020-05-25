@@ -153,7 +153,7 @@ function get_constraint(p::R10, X::Integer)
         Is[j+1] = b+1
     end
     Vs = ones(Bool, min(d, p.L))
-    return sparsevec(Is, Vs, p.L)
+    return sparsevec(Is, Vs, p.L)::SparseVector{Bool,Int}
 end
 
 """
