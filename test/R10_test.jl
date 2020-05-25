@@ -3,7 +3,7 @@ using FountainCodes, Test, Distributions, LinearAlgebra, SparseArrays
 """R10 code with scalar values"""
 function init(::Type{GF256}, K)
     r10 = R10(K)
-    d = Decoder(r10)
+    d = Decoder{Bool}(K)
     src = [GF256(i % 256) for i in 1:K]
     inter = precode(src, r10)
     return r10, d, src, inter
@@ -12,7 +12,7 @@ end
 """R10 code with vector values"""
 function init(::Type{Vector{GF256}}, K)
     r10 = R10(K)
-    d = Decoder(r10)
+    d = Decoder{Bool}(K)
     src = [Vector{GF256}([i % 256]) for i in 1:K]
     inter = precode(src, r10)
     return r10, d, src, inter

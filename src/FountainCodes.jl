@@ -20,7 +20,6 @@ export CoefficientType, Binary, NonBinary, Code
 
 # type system
 abstract type AbstractErasureCode end
-abstract type AbstractSelector end
 
 include("Numinv.jl")
 include("Soliton.jl")
@@ -30,7 +29,6 @@ include("Gray.jl")
 include("QMatrix.jl")
 include("DisjointSet.jl")
 include("Decode.jl")
-include("HeapSelect.jl")
 include("R10Tables.jl")
 include("R10.jl")
 include("LT.jl")

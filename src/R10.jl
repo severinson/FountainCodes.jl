@@ -168,16 +168,3 @@ function precode(src::Vector{VT}, code::R10) where VT
     append!(Vs, src) # source symbol values
     return decode(code, -(code.S+code.H):code.K-1, Vs)
 end
-
-"""
-    Decoder(code::R10)
-
-Return a decoder for Raptor10 codes.
-
-"""
-function Decoder(code::R10)
-    num_buckets = 41 # 1 more than the max LT degree
-    selector = HeapSelect(num_buckets, code.L)
-    d = Decoder{Bool}(selector, code.L)
-    return d
-end

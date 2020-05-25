@@ -1,14 +1,14 @@
 export Decoder, add!, decode, decode!, get_source, get_source!
 
 """
-    Decoder{CT,VT,CODE<:Code}
+    Decoder{CT,DMT<:AbstractMatrix{CT}}
 
 Inactivation decoder compatible with Raptor10 (rfc5053) and RaptorQ
 (rfc6330) codes.
 
 """
-mutable struct Decoder{CT,SELECTOR<:AbstractSelector,DMT<:AbstractMatrix{CT}}
-    columns::Vector{Vector{Int}} # stores which rows neighbour each column
+mutable struct Decoder{CT,DMT<:AbstractMatrix{CT}}
+    columns::Vector{Vector{Int}} # columns[cpi] contains the indices of rows (rpi) neighboring column cpi
     sparse::Vector{SparseVector{CT,Int}} # sparse row indices
     dense::DMT # dense (inactivated) symbols are stored separately
     colperm::Vector{Int} # colperm[ri] gives an index for a vector in sparse
@@ -17,17 +17,17 @@ mutable struct Decoder{CT,SELECTOR<:AbstractSelector,DMT<:AbstractMatrix{CT}}
     rowperminv::Vector{Int} # inverse of rowperm
     uperm::Vector{Int} # maps ui to upi
     uperminv::Vector{Int} # maps upi to ui
-    selector::SELECTOR # used to select which row to process next
     num_symbols::Int # number of source symbols
     num_decoded::Int # denoted by i in the R10 spec.
     num_inactivated::Int # denoted by u in the R10 spec.
     metrics::Union{Nothing, DataStructures.Accumulator{String,Int}} # stores performance metrics
     status::String # indicates success or stores the reason for decoding failure.
     phase::String # diagonalize, solve_dense, or backsolve. used for logging metrics.
+    rowpriority::PriorityQueue{Int,Float64,Base.Order.ForwardOrdering}
 end
 
-function Decoder{CT}(dense::DMT, selector::SELECTOR, num_symbols::Integer; log::Bool=true) where {CT,DMT,SELECTOR}
-    d = Decoder{CT,SELECTOR,DMT}(
+function Decoder{CT}(dense::DMT, num_symbols::Integer; log::Bool=true) where {CT,DMT}
+    d = Decoder{CT,DMT}(
         [Vector{Int}() for _ in 1:num_symbols],
         Vector{SparseVector{CT,Int}}(),
         dense,
@@ -37,12 +37,12 @@ function Decoder{CT}(dense::DMT, selector::SELECTOR, num_symbols::Integer; log::
         Vector{Int}(),
         Vector{Int}(),
         Vector{Int}(),
-        selector,
         num_symbols,
         0,
         0,
         log ? DataStructures.counter(String) : nothing,
-        "", ""
+        "", "",
+        PriorityQueue{Int,Float64}()
     )
     if log
         d.metrics["success"] = 0
@@ -58,12 +58,12 @@ function Decoder{CT}(dense::DMT, selector::SELECTOR, num_symbols::Integer; log::
     return d
 end
 
-function Decoder{CT}(selector::AbstractSelector, num_symbols::Integer) where CT
-    return Decoder{CT}(zeros(CT, 64, 1), selector, num_symbols)
+function Decoder{CT}(num_symbols::Integer) where CT
+    return Decoder{CT}(zeros(CT, 64, 1), num_symbols)
 end
 
-function Decoder{CT}(selector::AbstractSelector, num_symbols::Integer) where {CT<:Union{Bool,GF256}}
-    return Decoder{CT}(QMatrix{CT}(64, 1), selector, num_symbols)
+function Decoder{CT}(num_symbols::Integer) where {CT<:Union{Bool,GF256}}
+    return Decoder{CT}(QMatrix{CT}(64, 1), num_symbols)
 end
 
 """
@@ -325,13 +325,15 @@ Mark the column with permuted index cpi as decoded. Permutes the
 columns such that the decoded column is the rightmost column in I.
 
 """
-function mark_decoded!(d::Decoder, cpi::Int)
+function mark_decoded!(d::Decoder, cpi::Integer)
     d.num_decoded += 1
     ci = d.colperminv[cpi]
     swap_cols!(d, ci, d.num_decoded)
-
-    # notify the row selector that the column was removed from V
-    remove_column!(d.selector, d, cpi)
+    for rpi in d.columns[cpi] # Update the priority of adjacent rows
+        if haskey(d.rowpriority, rpi)
+            d.rowpriority[rpi] -= 1
+        end
+    end
     return
 end
 
@@ -345,7 +347,7 @@ Before calling this method d.num_decoded must point to the final row
 of I.
 
 """
-function mark_inactive!(d::Decoder, cpi::Int)
+function mark_inactive!(d::Decoder, cpi::Integer)
     rightmost_active_col = d.num_symbols - d.num_inactivated
     ci = d.colperminv[cpi]
     if ci > rightmost_active_col
@@ -359,8 +361,12 @@ function mark_inactive!(d::Decoder, cpi::Int)
     push!(d.uperm, d.num_inactivated)
     push!(d.uperminv, d.num_inactivated)
 
-    # notify the row selector that the column was removed from V
-    remove_column!(d.selector, d, cpi)
+    # Update the priority of adjacent rows
+    for rpi in d.columns[cpi]
+        if haskey(d.rowpriority, rpi)
+            d.rowpriority[rpi] -= 1
+        end
+    end
 
     # store the inactivated coefficient in the dense submatrix. note
     # that this requires that d.num_decoded is the final row of I. for
@@ -376,18 +382,30 @@ function mark_inactive!(d::Decoder, cpi::Int)
 end
 
 """
+    ci_is_active(d::Decoder, ci::Integer)
+
+Return true if ci corresponds to a column in V, i.e., a column that is
+neither decoded nor inactivated.
+
+"""
+function ci_is_active(d::Decoder, ci::Integer)
+    i::Int = d.num_decoded
+    u::Int = d.num_inactivated
+    L::Int = d.num_symbols
+    return i < ci <= L-u
+end
+cpi_is_active(d::Decoder, cpi::Integer) = ci_is_active(d, d.colperminv[cpi])
+
+"""
     vdegree(d::Decoder, rpi::Int)
 
 Return the number of non-zero entries the row with index rpi has in V.
 
 """
-function vdegree(d::Decoder, rpi::Int)
+function vdegree(d::Decoder, rpi::Integer)
     deg = 0
-    i::Int = d.num_decoded
-    u::Int = d.num_inactivated
-    L::Int = d.num_symbols
-    @inbounds for cpi in d.sparse[rpi].nzind
-        if i < d.colperminv[cpi] <= L-u
+    for cpi in d.sparse[rpi].nzind
+        if cpi_is_active(d, cpi)
             deg += 1
         end
     end
@@ -402,9 +420,90 @@ the diagonalization phase.
 
 """
 function select_row(d::Decoder)
-    # TODO: doesn't need to be a separate method
-    return pop!(d.selector, d)
+    # Drop rows without elements in V, i.e., elements in columns that
+    # are neither decoded nor inactivated.
+    while peek(d.rowpriority)[2] < 1 dequeue!(d.rowpriority) end
+
+    if 2 <= peek(d.rowpriority)[2] < 3
+        uf = IntDisjointSetsTracked(d.num_symbols)
+        rpi_pairs = Vector{Tuple{Int,Float64}}()
+        while 2 <= peek(d.rowpriority)[2] < 3 # Extract all rows of vdegree 2
+            rpi, priority = dequeue_pair!(d.rowpriority)
+            push!(rpi_pairs, (rpi, priority))
+        end
+
+        # Find any row part of the maximum component
+        max_rpi = -1
+        for (rpi, _) in rpi_pairs
+            cpis = active_cpis(d, rpi)
+            if length(cpis) != 2
+                error("Expected 2 elements in V, but got $(length(cpis)).")
+            end
+            root = union!(uf, cpis[1], cpis[2])
+            v, e = vertices(uf, root), edges(uf, root)
+            if v == cvertices(uf) # rpi is part of the maximum component
+                max_rpi = rpi
+            end
+        end
+        ri = d.rowperminv[max_rpi]
+
+        # Add the other rows back to the pq
+        for (rpi, priority) in rpi_pairs
+            if rpi == max_rpi continue end
+            enqueue!(d.rowpriority, rpi, priority)
+        end
+    else
+        # Return the row with lowest original degree out of the rows
+        # with minimal vdegree.
+        rpi = dequeue!(d.rowpriority)
+        ri = d.rowperminv[rpi]
+    end
+    return ri
 end
+
+"""
+
+Return a vector composed of the row indices (rpi) of the rows with
+original degree 1.
+
+"""
+function degree_one_rows(d::Decoder)
+    n, k = size(d)
+    rv = Vector{Int}()
+    for ri in d.num_decoded+1:n
+        rpi = d.rowperm[ri]
+        if nnz(d.sparse[rpi]) == 1
+            push!(rv, rpi)
+        end
+    end
+    return rv
+end
+
+"""
+
+Return a tuple composed of the minimal vdegree and vector of indices
+of rows (rpi) with that vdegree.
+
+"""
+function min_vdegree_rows(d::Decoder)
+    n, k = size(d)
+    min_vd = k+1
+    rv = Vector{Int}()
+    for ri in d.num_decoded+1:n
+        rpi = d.rowperm[ri]
+        vd = vdegree(d, rpi)
+        if vd < min_vd
+            rv = Vector{Int}()
+            min_vd = vd
+        end
+        if vd == min_vd
+            push!(rv, rpi)
+        end
+    end
+    return min_vd, rv
+end
+
+active_cpis(d::Decoder, rpi::Integer) = [cpi for cpi in d.sparse[rpi].nzind if cpi_is_active(d, cpi)]
 
 """zero out any elements of rows[rpi] below the diagonal"""
 function zerodiag!(d::Decoder, Vs, rpi::Int)
@@ -435,7 +534,7 @@ function peel_row!(d::Decoder, Vs, rpi::Int)
 end
 
 """
-    diagonalize!(d::Decoder)
+    diagonalize!(d::Decoder, Vs)
 
 Perform row and column operations to put the submatrix consisting of the first
 L-u columns into diagonal form. Referred to as the first phase in rfc6330.
@@ -463,7 +562,7 @@ function diagonalize!(d::Decoder, Vs)
         end
         mark_decoded!(d, cpi)
 
-        # inactivate the remaining neighbouring symbols
+        # inactivate the remaining neighboring symbols
         for j in i+1:length(row.nzind)
             cpi = row.nzind[j]
             ci = d.colperminv[cpi]
@@ -733,15 +832,24 @@ Add a row to the constraint matrix.
 
 """
 function add!(d::Decoder{CT}, constraint::SparseVector{CT}) where CT
-    dropzeros!(constraint)
     if d.status != ""
         error("cannot add more symbols after decoding has failed")
     end
+    dropzeros!(constraint)
     push!(d.sparse, constraint)
-    i = length(d.rowperm) + 1
+
+    # Update the permutation vectors.
+    i = length(d.rowperm) + 1 # = rpi = ri
     push!(d.rowperm, i)
     push!(d.rowperminv, i)
-    push!(d.selector, d, i, length(constraint))
+    # push!(d.selector, d, i, length(constraint))
+
+    # Add to the row priority queue, sorted by vdegree, then by original degree.
+    degree = nnz(constraint)
+    priority = degree+degree/(d.num_symbols+1)
+    enqueue!(d.rowpriority, i, priority)
+
+    # Index by the columns the row neighbors.
     for cpi in constraint.nzind
         push!(d.columns[cpi], i)
     end
@@ -761,8 +869,9 @@ add!(d::Decoder, code::AbstractErasureCode, X::Integer) = add!(d, get_constraint
 * Vs Values corresponding to each constraint.
 
 """
-function decode(code::AbstractErasureCode, constraints::AbstractVector{T}, Vs; decoder=Decoder(code)) where T <: SparseVector
-    length(constraints) == length(Vs) || throw(DimensionMismatch("The lengths of Xs and Vs are inconsistent."))
+function decode(constraints::Vector{SparseVector{CT,Ti}}, Vs::AbstractVector;
+                decoder=Decoder{CT}(length(constraints[1]))) where CT where Ti<:Integer
+    length(constraints) == length(Vs) || throw(DimensionMismatch("Inconsistent length of Xs and Vs."))
     for constraint in constraints add!(decoder, constraint) end
     check_cover(decoder)
     decoder.phase = "diagonalize"
@@ -785,4 +894,4 @@ end
 * Vs Received values.
 
 """
-decode(code, Xs::AbstractVector{Int}, Vs; kwargs...) = decode(code, [get_constraint(code, X) for X in Xs], Vs; kwargs...)
+decode(code::AbstractErasureCode, Xs::AbstractVector{Int}, Vs; kwargs...) = decode([get_constraint(code, X) for X in Xs], Vs; kwargs...)

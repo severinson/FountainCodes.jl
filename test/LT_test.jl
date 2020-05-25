@@ -48,7 +48,7 @@ end
 function test_diagonalize(K=10, r=round(Int, K*1.3))
     lt, src = init(K)
     Vs = [get_value(lt, X, src) for X in 1:r]
-    d = Decoder(lt)
+    d = Decoder{Bool}(K)
     for X in 1:r
         FountainCodes.add!(d, get_constraint(lt, X))
     end
@@ -77,7 +77,7 @@ end
 function test_solve_dense(K=10, r=round(Int, K*1.3))
     lt, src = init(K)
     Vs = [get_value(lt, X, src) for X in 1:r]
-    d = Decoder(lt)
+    d = Decoder{Bool}(K)
     for X in 1:r
         FountainCodes.add!(d, get_constraint(lt, X))
     end

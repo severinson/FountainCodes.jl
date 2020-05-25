@@ -202,29 +202,3 @@ end
 #     end
 #     return QSymbol(X, value, indices, coefficients)
 # end
-
-"""
-    Decoder{VT}(p::LT)
-
-Return a decoder for binary LT codes with value type VT.
-
-"""
-function Decoder(lt::LT) where VT
-    num_buckets = max(3, Int(round(log(lt.K))))
-    selector = HeapSelect(num_buckets, lt.K)
-    return Decoder{Bool}(selector, lt.K)
-end
-
-"""
-    Decoder{VT}(p::LTQ{CT}) where {CT,VT}
-
-Return a decoder for non-binary LT codes with coefficient type CT and
-value type VT. Note that it must be possible to multiply instances of
-VT by instances of CT.
-
-"""
-function Decoder(lt::LTQ{CT}) where CT
-    num_buckets = max(3, Int(round(log(lt.K))))
-    selector = HeapSelect(num_buckets, lt.K)
-    return Decoder{CT}(selector, lt.K)
-end

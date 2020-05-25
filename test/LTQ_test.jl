@@ -3,7 +3,7 @@ using FountainCodes, Test, LinearAlgebra, Distributions
 function init(::Type{GF256}, K; M=K-1, δ=1e-6)
     dd = FountainCodes.Soliton(K, M, δ)
     lt = FountainCodes.LTQ(K, dd)
-    d = FountainCodes.Decoder(lt)
+    d = Decoder{GF256}(K)
     src = [Vector{GF256}([i % 256]) for i in 1:K]
     return lt, d, src
 end
@@ -11,7 +11,7 @@ end
 function init(::Type{Float64}, K; M=K-1, δ=1e-6)
     dd = FountainCodes.Soliton(K, M, δ)
     lt = FountainCodes.LTQ{Float64}(K, dd)
-    d = FountainCodes.Decoder(lt)
+    d = Decoder{Float64}(K)
     src = randn(K)
     return lt, d, src
 end
@@ -19,7 +19,7 @@ end
 function init(::Type{Vector{Float64}}, K; M=K-1, δ=1e-6)
     dd = FountainCodes.Soliton(K, M, δ)
     lt = FountainCodes.LTQ{Float64}(K, dd)
-    d = FountainCodes.Decoder(lt)
+    d = Decoder{Float64}(K)
     src = [Vector{Float64}([i]) for i in 1:K]
     return lt, d, src
 end
