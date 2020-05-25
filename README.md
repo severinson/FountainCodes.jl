@@ -1,5 +1,7 @@
 # FountainCodes
 
+Luby Transform and Raptor10 codes, as well as inactivation decoding, in Julia.
+
 ``` julia
 using Pkg
 Pkg.activate(".") # activate the local environment
