@@ -8,7 +8,6 @@ println("Starting tests")
 @time @testset "GF256" begin include("GF256_test.jl") end
 @time @testset "CodedMvNormal" begin include("CodedMvNormal_test.jl") end
 @time @testset "Soliton distribution" begin include("Soliton_test.jl") end
-@time @testset "IntDisjointSets" begin include("DisjointSet_test.jl") end
 @time @testset "Gray sequence" begin include("Gray_test.jl") end
 @time @testset "QMatrix" begin include("QMatrix_test.jl") end
 @time @testset "Decoder" begin include("Decoder_test.jl") end

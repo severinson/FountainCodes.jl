@@ -8,22 +8,28 @@ Inactivation decoder compatible with Raptor10 (rfc5053) and RaptorQ
 
 """
 mutable struct Decoder{CT,DMT<:AbstractMatrix{CT}}
+    # Constraint matrix
     columns::Vector{Vector{Int}} # columns[cpi] contains the indices of rows (rpi) neighboring column cpi
     sparse::Vector{SparseVector{CT,Int}} # sparse row indices
     dense::DMT # dense (inactivated) symbols are stored separately
+    # Permutation vectors
     colperm::Vector{Int} # colperm[ri] gives an index for a vector in sparse
     colperminv::Vector{Int} # inverse of rowperm
     rowperm::Vector{Int} # sparse[rowperm[ri]] is the SparseVector of the ri-th row
     rowperminv::Vector{Int} # inverse of rowperm
     uperm::Vector{Int} # maps ui to upi
     uperminv::Vector{Int} # maps upi to ui
+    # Scalar values
     num_symbols::Int # number of source symbols
     num_decoded::Int # denoted by i in the R10 spec.
     num_inactivated::Int # denoted by u in the R10 spec.
     metrics::Union{Nothing, DataStructures.Accumulator{String,Int}} # stores performance metrics
     status::String # indicates success or stores the reason for decoding failure.
     phase::String # diagonalize, solve_dense, or backsolve. used for logging metrics.
+    # Row schedule
     rowpriority::PriorityQueue{Int,Float64,Base.Order.ForwardOrdering}
+    componentpq::PriorityQueue{Int,Int,Base.Order.ReverseOrdering{Base.Order.ForwardOrdering}}
+    components::IntDisjointSets
 end
 
 function Decoder{CT}(dense::DMT, num_symbols::Integer; log::Bool=true) where {CT,DMT}
@@ -42,7 +48,9 @@ function Decoder{CT}(dense::DMT, num_symbols::Integer; log::Bool=true) where {CT
         0,
         log ? DataStructures.counter(String) : nothing,
         "", "",
-        PriorityQueue{Int,Float64}()
+        PriorityQueue{Int,Float64}(),
+        PriorityQueue{Int,Int}(Base.Order.ReverseOrdering()),
+        IntDisjointSets(num_symbols)
     )
     if log
         d.metrics["success"] = 0
@@ -329,11 +337,7 @@ function mark_decoded!(d::Decoder, cpi::Integer)
     d.num_decoded += 1
     ci = d.colperminv[cpi]
     swap_cols!(d, ci, d.num_decoded)
-    for rpi in d.columns[cpi] # Update the priority of adjacent rows
-        if haskey(d.rowpriority, rpi)
-            d.rowpriority[rpi] -= 1
-        end
-    end
+    update_schedule!(d, cpi)
     return
 end
 
@@ -362,11 +366,7 @@ function mark_inactive!(d::Decoder, cpi::Integer)
     push!(d.uperminv, d.num_inactivated)
 
     # Update the priority of adjacent rows
-    for rpi in d.columns[cpi]
-        if haskey(d.rowpriority, rpi)
-            d.rowpriority[rpi] -= 1
-        end
-    end
+    update_schedule!(d, cpi)
 
     # store the inactivated coefficient in the dense submatrix. note
     # that this requires that d.num_decoded is the final row of I. for
@@ -379,6 +379,59 @@ function mark_inactive!(d::Decoder, cpi::Integer)
         setdense!(d, rpi, cpi, d.sparse[rpi][cpi])
     end
     return
+end
+
+"""Merge the components containing columns cpi and cpj."""
+function update_components!(d::Decoder, cpi::Integer, cpj::Integer)
+    x = find_root(d.components, cpi)
+    y = find_root(d.components, cpj)
+    if x == y return end
+
+    # Merge the components containing cpi and cpj
+    root = union!(d.components, x, y)
+
+    # Compute the size of the resulting component
+    size = 0
+    if haskey(d.componentpq, x)
+        size += d.componentpq[x]
+    else
+        size += 1
+    end
+    if haskey(d.componentpq, y)
+        size += d.componentpq[y]
+    else
+        size += 1
+    end
+
+    # Remove one component from the pq and update the size of the other
+    if x == root && haskey(d.componentpq, y)
+        delete!(d.componentpq, y)
+    elseif y == root && haskey(d.componentpq, x)
+        delete!(d.componentpq, x)
+    end
+    d.componentpq[root] = size
+end
+
+"""Update the row schedule after decoding/inactivating column cpi."""
+function update_schedule!(d::Decoder, cpi::Integer)
+
+    # Decrease the vdegree of neighboring rows by 1
+    for rpi in d.columns[cpi]
+        if !haskey(d.rowpriority, rpi) continue end
+
+        # Reduce the priority by 1 since a neighboring column was
+        # decoded or inactivated
+        priority = d.rowpriority[rpi] -= 1
+
+        # Drop rows with no elements in V, i.e., with no neighboring
+        # columns that aren't either decoded or inactivated
+        if priority < 1 delete!(d.rowpriority, rpi)
+        elseif 2 <= priority < 3
+            # Update the union-find data structure
+            cpi, cpj = active_cpis(d, rpi)
+            update_components!(d, cpi, cpj)
+        end
+    end
 end
 
 """
@@ -420,44 +473,31 @@ the diagonalization phase.
 
 """
 function select_row(d::Decoder)
-    # Drop rows without elements in V, i.e., elements in columns that
-    # are neither decoded nor inactivated.
-    while peek(d.rowpriority)[2] < 1 dequeue!(d.rowpriority) end
 
-    if 2 <= peek(d.rowpriority)[2] < 3
-        uf = IntDisjointSetsTracked(d.num_symbols)
-        rpi_pairs = Vector{Tuple{Int,Float64}}()
-        while 2 <= peek(d.rowpriority)[2] < 3 # Extract all rows of vdegree 2
-            rpi, priority = dequeue_pair!(d.rowpriority)
-            push!(rpi_pairs, (rpi, priority))
-        end
-
-        # Find any row part of the maximum component
-        max_rpi = -1
-        for (rpi, _) in rpi_pairs
-            cpis = active_cpis(d, rpi)
-            if length(cpis) != 2
-                error("Expected 2 elements in V, but got $(length(cpis)).")
-            end
-            root = union!(uf, cpis[1], cpis[2])
-            v, e = vertices(uf, root), edges(uf, root)
-            if v == cvertices(uf) # rpi is part of the maximum component
-                max_rpi = rpi
-            end
-        end
-        ri = d.rowperminv[max_rpi]
-
-        # Add the other rows back to the pq
-        for (rpi, priority) in rpi_pairs
-            if rpi == max_rpi continue end
-            enqueue!(d.rowpriority, rpi, priority)
-        end
-    else
-        # Return the row with lowest original degree out of the rows
-        # with minimal vdegree.
-        rpi = dequeue!(d.rowpriority)
-        ri = d.rowperminv[rpi]
+    # Drop rows without elements in V, i.e., columns that are neither
+    # decoded nor inactivated.
+    while peek(d.rowpriority)[2] < 1
+        dequeue!(d.rowpriority)
     end
+
+    # If the minimum vdegree is 2, inactivate a column part of the
+    # largest component
+    while 2 <= peek(d.rowpriority)[2] < 3
+
+        # Drop components corresponding to already decoded/inactivated columns
+        while length(d.componentpq) > 0 && !cpi_is_active(d, peek(d.componentpq)[1])
+            dequeue!(d.componentpq)
+        end
+
+        # Get a column part of the largest component and inactivate it
+        cpi = dequeue!(d.componentpq)
+        mark_inactive!(d, cpi)
+    end
+
+    # Return the row with lowest original degree out of the rows
+    # with minimal vdegree.
+    rpi = dequeue!(d.rowpriority) # 1/5 of the time
+    ri = d.rowperminv[rpi]
     return ri
 end
 
@@ -558,7 +598,7 @@ function diagonalize!(d::Decoder, Vs)
         end
         if !(d.num_decoded < ci <= d.num_symbols-d.num_inactivated)
             if !isnothing(d.metrics) push!(d.metrics, "status", -3) end
-            error("incorrectly selected a row with no neighbours in V.")
+            error("incorrectly selected a row with no neighbors in V.")
         end
         mark_decoded!(d, cpi)
 
@@ -835,25 +875,29 @@ function add!(d::Decoder{CT}, constraint::SparseVector{CT}) where CT
     if d.status != ""
         error("cannot add more symbols after decoding has failed")
     end
-    dropzeros!(constraint)
-    push!(d.sparse, constraint)
+    dropzeros!(constraint) # drop structural zeros
+    push!(d.sparse, constraint) # add to the vector of constraints
 
-    # Update the permutation vectors.
+    # Append to the permutation vectors.
     i = length(d.rowperm) + 1 # = rpi = ri
     push!(d.rowperm, i)
     push!(d.rowperminv, i)
-    # push!(d.selector, d, i, length(constraint))
 
     # Add to the row priority queue, sorted by vdegree, then by original degree.
     degree = nnz(constraint)
-    priority = degree+degree/(d.num_symbols+1)
+    priority = degree + degree/(d.num_symbols+1)
     enqueue!(d.rowpriority, i, priority)
 
-    # Index by the columns the row neighbors.
+    # If the row has degree 2, store it as part of a component
+    if degree == 2
+        cpi, cpj = constraint.nzind
+        update_components!(d, cpi, cpj)
+    end
+
+    # Index the rows by the columns they neighbor
     for cpi in constraint.nzind
         push!(d.columns[cpi], i)
     end
-    return
 end
 
 add!(d::Decoder, code::AbstractErasureCode, X::Integer) = add!(d, get_constraint(code, X))
