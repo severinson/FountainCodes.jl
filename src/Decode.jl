@@ -27,7 +27,7 @@ mutable struct Decoder{CT,DMT<:AbstractMatrix{CT}}
     status::String # indicates success or stores the reason for decoding failure.
     phase::String # diagonalize, solve_dense, or backsolve. used for logging metrics.
     # Row schedule
-    rowpriority::PriorityQueue{Int,Float64,Base.Order.ForwardOrdering}
+    rowpq::PriorityQueue{Int,Float64,Base.Order.ForwardOrdering}
     componentpq::PriorityQueue{Int,Int,Base.Order.ReverseOrdering{Base.Order.ForwardOrdering}}
     components::IntDisjointSets
 end
@@ -417,15 +417,15 @@ function update_schedule!(d::Decoder, cpi::Integer)
 
     # Decrease the vdegree of neighboring rows by 1
     for rpi in d.columns[cpi]
-        if !haskey(d.rowpriority, rpi) continue end
+        if !haskey(d.rowpq, rpi) continue end
 
         # Reduce the priority by 1 since a neighboring column was
         # decoded or inactivated
-        priority = d.rowpriority[rpi] -= 1
+        priority = d.rowpq[rpi] -= 1
 
         # Drop rows with no elements in V, i.e., with no neighboring
         # columns that aren't either decoded or inactivated
-        if priority < 1 delete!(d.rowpriority, rpi)
+        if priority < 1 delete!(d.rowpq, rpi)
         elseif 2 <= priority < 3
             # Update the union-find data structure
             cpi, cpj = active_cpis(d, rpi)
@@ -476,13 +476,13 @@ function select_row(d::Decoder)
 
     # Drop rows without elements in V, i.e., columns that are neither
     # decoded nor inactivated.
-    while peek(d.rowpriority)[2] < 1
-        dequeue!(d.rowpriority)
+    while peek(d.rowpq)[2] < 1
+        dequeue!(d.rowpq)
     end
 
     # If the minimum vdegree is 2, inactivate a column part of the
     # largest component
-    while 2 <= peek(d.rowpriority)[2] < 3
+    while 2 <= peek(d.rowpq)[2] < 3
 
         # Drop components corresponding to already decoded/inactivated columns
         while length(d.componentpq) > 0 && !cpi_is_active(d, peek(d.componentpq)[1])
@@ -496,7 +496,7 @@ function select_row(d::Decoder)
 
     # Return the row with lowest original degree out of the rows
     # with minimal vdegree.
-    rpi = dequeue!(d.rowpriority) # 1/5 of the time
+    rpi = dequeue!(d.rowpq) # 1/5 of the time
     ri = d.rowperminv[rpi]
     return ri
 end
@@ -886,7 +886,7 @@ function add!(d::Decoder{CT}, constraint::SparseVector{CT}) where CT
     # Add to the row priority queue, sorted by vdegree, then by original degree.
     degree = nnz(constraint)
     priority = degree + degree/(d.num_symbols+1)
-    enqueue!(d.rowpriority, i, priority)
+    enqueue!(d.rowpq, i, priority)
 
     # If the row has degree 2, store it as part of a component
     if degree == 2
