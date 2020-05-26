@@ -24,7 +24,6 @@ abstract type AbstractErasureCode end
 include("Numinv.jl")
 include("Soliton.jl")
 include("GF256.jl")
-include("CodedMvNormal.jl")
 include("Gray.jl")
 include("QMatrix.jl")
 include("Decode.jl")

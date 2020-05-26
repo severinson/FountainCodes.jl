@@ -28,21 +28,6 @@ compare(a, b) = a == b
 compare(a::Float64, b::Float64) = isapprox(a, b, rtol=1e-3)
 compare(a::Vector{Float64}, b::Vector{Float64}) = isapprox(a, b, rtol=1e-3)
 
-function test_mvnormal(K=10, r=round(Int, K*1.3))
-    lt, d, src = init(Float64, K)
-    Vs_μ = [get_value(lt, X, src) for X in 1:r]
-    Vs_Σ = diagm(0=>ones(r))
-    Vs = CodedMvNormal(Vs_μ, Vs_Σ)
-    dec = decode(lt, 1:r, Vs)
-    for i in 1:K
-        if !compare(dec[i], src[i])
-            error("expected dec[$i] to be $(src[i]), but got $(dec[i])")
-        end
-    end
-    return true
-end
-@test test_mvnormal()
-
 """test that get_constraint returns the same constraint at each call"""
 function test_constraint(VT, K=10, r=K)
     lt, _, src = init(VT, K)
