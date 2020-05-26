@@ -4,7 +4,6 @@ using StatsBase
 
 function benchmark_r10(K=1000, r=1200, m=256, n=100)
     r10 = R10(K)
-    d = Decoder(r10)
     src = [GF256(i % 256) for i in 1:K]
     inter = precode(src, r10)
     Vs = [zero(inter[1]) for _ in 1:(r10.S+r10.H)] # parity symbol values
@@ -29,9 +28,8 @@ function benchmark_lt(K=1000, r=1400, nsamples=100, M=K-1, δ=1e-6)
         Xs .= sample(1:10000000, r, replace=false) # Received ESIs
         Vs = [get_value(lt, X, src) for X in Xs]
         try
-            decoder = Decoder(lt)
+            decoder = Decoder{Bool}(K)
             t += @elapsed decode(lt, Xs, Vs, decoder=decoder)
-            println(decoder.metrics)
         catch
             println("Decoding failed")
         end
