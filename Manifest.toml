@@ -184,6 +184,14 @@ uuid = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
 [[Sockets]]
 uuid = "6462fe0b-24de-5631-8697-dd941f90decc"
 
+[[SolitonDistribution]]
+deps = ["Distributions", "Statistics", "StatsBase"]
+git-tree-sha1 = "656b129060abdfa010b25d98459a90df3aa676e8"
+repo-rev = "master"
+repo-url = "https://github.com/severinson/SolitonDistribution"
+uuid = "911e4c9e-1671-4ab5-b1b9-df3b860501e9"
+version = "0.1.0"
+
 [[SortingAlgorithms]]
 deps = ["DataStructures", "Random", "Test"]
 git-tree-sha1 = "03f5898c9959f8115e30bc7226ada7d0df554ddd"

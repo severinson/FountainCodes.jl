@@ -16,13 +16,12 @@ module FountainCodes
 
 using StatsBase, Statistics, Distributions, Random
 using Primes, DataStructures, LinearAlgebra, SparseArrays
+using SolitonDistribution
 export CoefficientType, Binary, NonBinary, Code
 
 # type system
 abstract type AbstractErasureCode end
 
-include("Numinv.jl")
-include("Soliton.jl")
 include("GF256.jl")
 include("Gray.jl")
 include("QMatrix.jl")

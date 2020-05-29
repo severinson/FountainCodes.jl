@@ -93,7 +93,6 @@ function test_solve_dense(K=10, r=round(Int, K*1.3))
     end
     return true
 end
-@test test_solve_dense(10)
 @test test_solve_dense(100)
 @test test_solve_dense(1000)
 
@@ -109,6 +108,5 @@ function test_decode(K=10, r=round(Int, K*1.3))
     end
     return true
 end
-@test test_decode(10, 13)
 @test test_decode(100, 120)
 @test test_decode(1000, 1300)
