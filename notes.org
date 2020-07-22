@@ -250,7 +250,6 @@ which its coefficients are defined. For example, binary, q* TODO ary, real.
 - Comparing computed values for matrix multiplication and optimized
   method.
 * TODO Simple selector is broken
-* TODO Add random selector for reference
 * DONE Set random seed in each test
   CLOSED: [2019-07-30 Tue 19:39]
 - Only setting it in runtests means adding tests can cause other tests
@@ -268,9 +267,6 @@ which its coefficients are defined. For example, binary, q* TODO ary, real.
 - Expanding a regular matrix is easy by just allocating a new empty
   matrix and moving over the values.
 - Remove the countnz method from the tests.
-* TODO Selector
-- Standardize API.
-- Make sure SimpleSelect works.
 * TODO code interface
 - The current interface assumes you want to create an encoded symbol,
   but in many cases we just want the lists of neighbours and
@@ -369,22 +365,9 @@ which its coefficients are defined. For example, binary, q* TODO ary, real.
 * TODO RQ Permanent inactivations tests
 - Permanent inactivations aren't tested. Removing the permanent
   inactivations doesn't fail any tests.
-* TODO Remove columns from decoder
-- Turns out the vdegree of each row is cached and that whenever a
-  column is decoded or inactivated we iterate over the list of
-  neighbouring rows stored in the corresponding columns vector to
-  update the count.
-  - The vdegree is the number of non-zero entries of a row that aren't
-    either decoded or inactivated. We need an efficient way of getting
-    the vdegree of a row since the selector makes decisions based on
-    the vdegree.
-- Removing the columns vectors means we need to compute the vdegree
-  many times for each time we select a row. Hence, we can't remove
-  columns unless we figure out a fast way of computing vdegree.
-- We can move columns to the selector.
-
-* TODO Cleaner fast row selector
-- HeapSelector is currently the fastest selector the conforms to the
+* DONE Cleaner fast row selector
+  CLOSED: [2020-05-25 Mon 18:09]
+- HeapSelector is currently the fastest selector that conforms to the
   standard. However, it's very much tangled up with the decoder. We
   should either merge it with the decoder entirely or make it entirely
   separate.
@@ -393,9 +376,10 @@ which its coefficients are defined. For example, binary, q* TODO ary, real.
     exactly r nonzeros in V, i.e., r non-zero entries not in the
     decoded or inactivated columns.
   - If r!=2, choose any row with r nonzeros in V with minimal original
-    degree, except that HDPC rows should always be chosen last.
-  - If r=2, build the graph and select any row part of the maximum
-    sized component.
+    degree, except that HDPC rows should always be chosen last. This
+    requirement can be addressed by putting a flag on each row.
+  - If r=2, build the graph and select any row part of the largest
+    component.
 - The current HeapSelector stores rows in multiple heaps ordered by
   original degree, where the heap is selected based on the
   vdegree. For example, the first heap stores all rows with vdegree 1
@@ -404,9 +388,10 @@ which its coefficients are defined. For example, binary, q* TODO ary, real.
   the graph based on the contents of the second bucket.
 - Rows are moved between heaps somewhat intelligently.
 - A selector needs to have the original and vdegree of all rows. The
-  vdegree changes whenever a column is decoded or inactivated.
+  vdegree changes whenever a neighboring column is decoded or
+  inactivated.
 - Proposed new selector:
-  - Store a list of rows indices together with their original degree,
+  - Store a list of row indices together with their original degree,
     sorted by the original degree. Based on the number of decoded
     symbols and the number of inactivations you know which rows has
     the potential to have a given vdegree.
@@ -424,6 +409,16 @@ which its coefficients are defined. For example, binary, q* TODO ary, real.
 - The selector should only have push and pop. Instead of using
   remove_column the selector can indicate which column to decode and
   which columns to inactivate.
+- A selector needs to
+  1. Find the smallest r, together with a row with that r
+  2. If r=2, find the largest component
+- I think it's all about exploiting chains. The selector shouldn't
+  return one row. It should return a list of rows to process in
+  order. So we should always build the component. That means we need
+  to use an exact algorithm. Store a set of
+- I've merged the selector into Decode.jl
+- Now the question is if we can make it faster
+- First, we need to know what the decoder spends time on
 * DONE MvNormal decoding
   CLOSED: [2019-07-30 Tue 19:38]
 - Want to be able to decode a vector with known covariance close to
@@ -489,7 +484,8 @@ which its coefficients are defined. For example, binary, q* TODO ary, real.
   entirely.
 * TODO decode should be decode!
 - Since it mutates Vs. Also move Vs to be the first argument.
-* TODO Build bipartite graph iteratively
+* DONE Build bipartite graph iteratively
+  CLOSED: [2020-06-07 Sun 11:31]
 - Query rows and build the graph iteratively since it avoids querying
   heavy rows unless needed.
 - In the current design we query all constraints when setting up the
@@ -502,6 +498,8 @@ which its coefficients are defined. For example, binary, q* TODO ary, real.
   indices.
 - We can use a cache that the code object is responsible for to avoid
   having to re-compute constraints.
+- Let's not do this actually. It's better to keep the dense rows
+  separate and only use them if required.
 ** TODO rowperm/rowperminv point to ESIs instead of rpis
 ** TODO Columns is added to iteratively.
 ** TODO New row selector
@@ -511,25 +509,16 @@ which its coefficients are defined. For example, binary, q* TODO ary, real.
 - Quit if you find any row with vdegree 1.
 - We should be doing something similar to what we're doing now, but
   only querying constraints as needed.
-* TODO Remove selector from decoder
+* DONE Remove selector from decoder
+  CLOSED: [2020-05-25 Mon 18:08]
 - Pass it around as a separate argument.
 * TODO Remove dense from decoder
 - Pass it around as a separate argument.
-* TODO R10 on-demand precode constraints
-- Only add constraint symbols when queried.
-- Use negative indices for precode-symbols?
 * TODO get_value in LT.jl
 - The general function should be moved somewhere else.
 * DONE Remove R10_256
   CLOSED: [2019-07-30 Tue 19:41]
 - It's just an inferior version of RQ codes.
-* TODO Decode entire connected component
-- Once we find the largest connected component we should decode all of
-  those values in sequence. We just need to find the neighbouring row
-  in the connected component and return it the next time a row is
-  requested.
-- This may generalise, which would mean we need to find a new row from
-  scratch less often.
 * TODO Decoder failure despite full rank constraint matrix
 - Sometimes the decoder fails despite the constraint matrix having
   full rank, e.g., for R10(7000) (tested that it has full rank by
@@ -539,3 +528,51 @@ which its coefficients are defined. For example, binary, q* TODO ary, real.
 - It could be that the selector drops rows or returns rows multiple
   times. Let's revisit this one when we've improved the selector
   situation.
+
+* TODO FiniteFieldSolvers.jl
+- Decode.jl is an algorithm for solving linear systems of equations
+  over finite fields.
+- With the caveat that Raptor matrices have a somewhat special
+  structure. We'd need to implement the solver for those separately.
+* TODO Completely separate sparse and dense matrices
+- We can separate the sparse and dense matrices completely.
+- Do inactivation decoding on the sparse matrix until it gets stuck.
+- Then, zerodiag the dense rows and do Gaussian elimination on the
+  dense rows. Finally, back-substitute. There's nothing more clever
+  that can be done on the dense rows than regular old GE. Just do
+  zerodiag on the dense rows and then solve the resulting system of
+  inactivated symbols.
+- Do zerodiag until all columns are either decoded or
+  inactivated. Then, work on the inactivated system. If the
+  inactivated system is rank deficit, add one dense row at a
+  time. Select a dense row, zerodiag it, set the inactivated symbols,
+  and then continue with GE.
+
+* TODO get_constraint mess
+- The decoder should just accept and work on a matrix. It shouldn't
+  have any connection to codes. Currently, it calls get_constraint to
+  get rows of the constraint matrix. I did it this way so that it
+  could get constraints on-demand. However, I no longer think that's
+  the right way since we're using the column index to update row
+  priority.
+- So we should take out get_constraint from Decode.jl and just have it
+  accept a matrix.
+- Then we can also remove the negative indices for precode constraints
+  and just put a function constraints that takes as its argument a
+  list of ESIs and returns the correct constraint matrix, which
+  includes precode constraints.
+* TODO LT rank issues
+- How we
+* Performance numbers
+R10(1000)
+Decoding time: 0.006761250839999997 s
+
+R10(1000)
+Decoding time: 0.006084113880000002 s
+
+LT{Soliton}(1000, 1009, Soliton(K=1000, mode=999, delta=1.0e-6, R=1.001001001001001, c=0.001527482747255093, beta=1.0213213022200716))
+Decoding time: 0.013712039949999998 s
+6 failures
+
+LT{Soliton}(1000, 1009, Soliton(K=1000, mode=999, delta=1.0e-6, R=1.001001001001001, c=0.001527482747255093, beta=1.0213213022200716))
+Decoding time: 0.015838293740000012 s
