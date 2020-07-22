@@ -244,5 +244,6 @@ function test_decode(VT, K=10, r=round(Int, K*1.3))
     return true
 end
 for K in 4:100 @test test_decode(GF256, K, K) end
+for K in [1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000] @test test_decode(GF256, K, K) end
 @test test_decode(Vector{GF256}, 100, 100)
 # @test test_decode(GF256, 8192, 8192)
