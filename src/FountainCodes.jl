@@ -16,7 +16,6 @@ module FountainCodes
 
 using StatsBase, Statistics, Distributions, Random
 using Primes, DataStructures, LinearAlgebra, SparseArrays
-using SolitonDistribution
 export CoefficientType, Binary, NonBinary, Code
 
 # type system

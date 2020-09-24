@@ -1,6 +1,6 @@
 #!/usr/bin/env julia
 
-using FountainCodes, Test, Random
+using FountainCodes, Test, Random, Distributions
 Random.seed!(123) # reproducible tests
 println("Starting tests")
 
