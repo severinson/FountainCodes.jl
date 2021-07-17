@@ -383,8 +383,8 @@ end
 
 """Merge the components containing columns cpi and cpj."""
 function update_components!(d::Decoder, cpi::Integer, cpj::Integer)
-    x = find_root(d.components, cpi)
-    y = find_root(d.components, cpj)
+    x = find_root!(d.components, cpi)
+    y = find_root!(d.components, cpj)
     if x == y return end
 
     # Merge the components containing cpi and cpj
