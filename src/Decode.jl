@@ -70,9 +70,9 @@ function Decoder{CT}(num_symbols::Integer) where CT
     return Decoder{CT}(zeros(CT, 64, 1), num_symbols)
 end
 
-function Decoder{CT}(num_symbols::Integer) where {CT<:Union{Bool,GF256}}
-    return Decoder{CT}(QMatrix{CT}(64, 1), num_symbols)
-end
+# function Decoder{CT}(num_symbols::Integer) where {CT<:Union{Bool,GF256}}
+#     return Decoder{CT}(QMatrix{CT}(64, 1), num_symbols)
+# end
 
 """
     size(d::Decoder)
