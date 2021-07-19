@@ -23,7 +23,8 @@ mutable struct Decoder{CT,DMT<:AbstractMatrix{CT}}
     num_symbols::Int # number of source symbols
     num_decoded::Int # denoted by i in the R10 spec.
     num_inactivated::Int # denoted by u in the R10 spec.
-    metrics::Union{Nothing, DataStructures.Accumulator{String,Int}} # stores performance metrics
+    record_metrics::Bool # record performance metrics if true
+    metrics::Accumulator{String,Int} # stores performance metrics if record_metrics is true
     status::String # indicates success or stores the reason for decoding failure.
     phase::String # diagonalize, solve_dense, or backsolve. used for logging metrics.
     # Row schedule
@@ -32,8 +33,18 @@ mutable struct Decoder{CT,DMT<:AbstractMatrix{CT}}
     components::IntDisjointSets
 end
 
-function Decoder{CT}(dense::DMT, num_symbols::Integer; log::Bool=true) where {CT,DMT}
-    d = Decoder{CT,DMT}(
+function Decoder{CT}(dense::DMT, num_symbols::Integer; record_metrics::Bool=true) where {CT,DMT}
+    metrics = counter(String)
+    d.metrics["success"] = 0
+    for phase in ["diagonalize", "solve_dense", "backsolve"]
+        d.metrics[string(phase, "_", "decoding_additions")] = 0
+        d.metrics[string(phase, "_", "decoding_multiplications")] = 0
+        d.metrics[string(phase, "_", "rowadds")] = 0
+        d.metrics[string(phase, "_", "rowmuls")] = 0
+    end
+    d.metrics["inactivations"] = 0
+    d.metrics["status"] = 0
+    return Decoder{CT,DMT}(
         [Vector{Int}() for _ in 1:num_symbols],
         Vector{SparseVector{CT,Int}}(),
         dense,
@@ -46,28 +57,90 @@ function Decoder{CT}(dense::DMT, num_symbols::Integer; log::Bool=true) where {CT
         num_symbols,
         0,
         0,
-        log ? DataStructures.counter(String) : nothing,
+        record_metrics,
+        metrics,
         "", "",
         PriorityQueue{Int,Float64}(),
         PriorityQueue{Int,Int}(Base.Order.ReverseOrdering()),
         IntDisjointSets(num_symbols)
     )
-    if log
-        d.metrics["success"] = 0
-        for phase in ["diagonalize", "solve_dense", "backsolve"]
-            d.metrics[string(phase, "_", "decoding_additions")] = 0
-            d.metrics[string(phase, "_", "decoding_multiplications")] = 0
-            d.metrics[string(phase, "_", "rowadds")] = 0
-            d.metrics[string(phase, "_", "rowmuls")] = 0
-        end
-        d.metrics["inactivations"] = 0
-        d.metrics["status"] = 0
-    end
-    return d
 end
 
 function Decoder{CT}(num_symbols::Integer) where CT
     return Decoder{CT}(zeros(CT, 64, 1), num_symbols)
+end
+
+"""
+
+Create a decoder object from a matrix `A`, where each column of `A` corresponds to a constraint. If
+`log=true`, performance metrics are recorded during decoding.
+"""
+function Decoder(A::SparseArrays.AbstractSparseMatrixCSC{Tv,Ti}; record_metrics::Bool=true, initial_inactivation_storage::Integer=64) where {Tv,Ti}
+    k, n = size(A)
+    n >= k || error("Matrix is rank deficit")
+    dropzeros!(A)
+    constraints = [A[:, i] for i in 1:n]
+
+    # permutation vectors
+    rowperm = collect(1:n)
+    rowperminv = collect(1:n)
+    colperm = collect(1:k)
+    colperminv = collect(1:k)
+    uperm = collect(1:initial_inactivation_storage)
+    uperminv = collect(1:initial_inactivation_storage)
+
+    # Index each constraint by the source symbols it neighbors
+    columns = [Vector{Int}() for _ in 1:k]
+    for (i, constraint) in enumerate(constraints)
+        for cpi in constraint.nzind
+            push!(columns[cpi], i)
+        end
+    end
+
+    # The degree of a constraint is equal to the number of non-zero entries it has, whereas the
+    # vdegree is the number of non-zero entries corresponding to source symbols that are neither
+    # decoded nor inactivated. Rows are prioritized first by vdegree and second by degree. Note
+    # that the vdegree and degree is upper-bounded by k.
+    rowpq = PriorityQueue{Int, Float64}(Base.Order.Forward)
+    componentpq = PriorityQueue{Int, Int}(Base.Order.Reverse)
+    components = IntDisjointSets(k)
+    for (i, constraint) in enumerate(constraints)
+        degree = nnz(constraint)
+        priority = degree + degree/(k+1)
+        enqueue!(rowpq, i, priority)
+
+        # Two constraints are refered to as neighbors if both constraints have non-zero entries 
+        # corresponding to the same source symbol. Constraints with vdegree 2 are prioritized by 
+        # the number of neighboring that also have vdegree 2.
+        if degree == 2
+            cpi, cpj = constraint.nzind
+            update_components!(componentpq, components, cpi, cpj)
+        end
+    end
+
+    # Storage for inactivated symbols
+    dense = zeros(Tv, initial_inactivation_storage, n)
+
+    # metrics
+    metrics = counter(String)
+    metrics["success"] = 0
+    for phase in ["diagonalize", "solve_dense", "backsolve"]
+        metrics[string(phase, "_", "decoding_additions")] = 0
+        metrics[string(phase, "_", "decoding_multiplications")] = 0
+        metrics[string(phase, "_", "rowadds")] = 0
+        metrics[string(phase, "_", "rowmuls")] = 0
+    end
+    metrics["inactivations"] = 0
+    metrics["status"] = 0
+
+    Decoder(
+        columns, constraints, dense, 
+        colperm, colperminv, rowperm, rowperminv, uperm, uperminv,
+        k, 0, 0,
+        record_metrics, metrics,
+        "", "",
+        rowpq, componentpq, components
+    )
 end
 
 # function Decoder{CT}(num_symbols::Integer) where {CT<:Union{Bool,GF256}}
@@ -361,9 +434,13 @@ function mark_inactive!(d::Decoder, cpi::Integer)
     swap_cols!(d, ci, rightmost_active_col)
     if !isnothing(d.metrics) push!(d.metrics, "inactivations", 1) end
 
-    # need to extend the permutation arrays for each inactivation
-    push!(d.uperm, d.num_inactivated)
-    push!(d.uperminv, d.num_inactivated)
+    # extend the dense matrix permutation vectors when necessary
+    @assert length(d.uperm) == length(d.uperminv)
+    @assert d.num_inactivated <= length(d.uperminv) + 1
+    if d.num_inactivated > length(d.uperm)
+        push!(d.uperm, d.num_inactivated)
+        push!(d.uperminv, d.num_inactivated)        
+    end
 
     # Update the priority of adjacent rows
     update_schedule!(d, cpi)
@@ -381,36 +458,33 @@ function mark_inactive!(d::Decoder, cpi::Integer)
     return
 end
 
-"""Merge the components containing columns cpi and cpj."""
-function update_components!(d::Decoder, cpi::Integer, cpj::Integer)
-    x = find_root!(d.components, cpi)
-    y = find_root!(d.components, cpj)
-    if x == y return end
 
-    # Merge the components containing cpi and cpj
-    root = union!(d.components, x, y)
+"""
 
-    # Compute the size of the resulting component
-    size = 0
-    if haskey(d.componentpq, x)
-        size += d.componentpq[x]
-    else
-        size += 1
+Merge the components containing the constraints indexed by `cpi` and `cpj`, and set the priority
+of the resulting component equal to the size of the resulting combined component.
+"""
+function update_components!(componentpq, components, cpi::Integer, cpj::Integer)
+    x = find_root!(components, cpi)
+    y = find_root!(components, cpj)
+    if x == y
+        return
     end
-    if haskey(d.componentpq, y)
-        size += d.componentpq[y]
-    else
-        size += 1
+    root = union!(components, x, y)
+    hasx = haskey(componentpq, x)
+    hasy = haskey(componentpq, y)
+    sizex = hasx ? componentpq[x] : 1
+    sizey = hasy ? componentpq[y] : 1
+    size = sizex + sizey
+    if root == x && hasy
+        delete!(componentpq, y)
+    elseif root == y && hasx
+        delete!(componentpq, x)
     end
-
-    # Remove one component from the pq and update the size of the other
-    if x == root && haskey(d.componentpq, y)
-        delete!(d.componentpq, y)
-    elseif y == root && haskey(d.componentpq, x)
-        delete!(d.componentpq, x)
-    end
-    d.componentpq[root] = size
+    componentpq[root] = size
 end
+
+update_components!(d::Decoder, cpi::Integer, cpj::Integer) = update_components!(d.componentpq, d.components, cpi, cpj)
 
 """Update the row schedule after decoding/inactivating column cpi."""
 function update_schedule!(d::Decoder, cpi::Integer)
@@ -927,6 +1001,21 @@ function decode(constraints::Vector{SparseVector{CT,Ti}}, Vs::AbstractVector;
     if !isnothing(decoder.metrics) decoder.metrics["success"] = 1 end
     return get_source(decoder, Vs)
 end
+
+function decode(A::SparseArrays.AbstractSparseMatrixCSC{Tv,Ti}, Vs::AbstractVector; decoder=Decoder(A)) where Tv where Ti<:Integer
+    k, n = size(A)
+    length(Vs) == n || throw(DimensionMismatch("A has dimensions $(size(A)), but Vs has dimension $(length(Vs))"))
+    check_cover(decoder)
+    decoder.phase = "diagonalize"
+    diagonalize!(decoder, Vs)
+    decoder.phase = "solve_dense"
+    solve_dense!(decoder, Vs)
+    decoder.phase = "backsolve"
+    backsolve!(decoder, Vs)
+    if !isnothing(decoder.metrics) decoder.metrics["success"] = 1 end
+    return get_source(decoder, Vs)
+end
+
 
 """
     decode(code, Xs::AbstractVector{Int}, Vs)
