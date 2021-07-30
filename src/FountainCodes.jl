@@ -14,22 +14,25 @@
 
 module FountainCodes
 
-using StatsBase, Statistics, Distributions, Random
-using Primes, DataStructures, LinearAlgebra, SparseArrays
+using Random, StatsBase, Statistics
+# Distributions
+using LinearAlgebra, SparseArrays
+using Primes, DataStructures
+
 export CoefficientType, Binary, NonBinary, Code
 
 # type system
 abstract type AbstractErasureCode end
 
 include("GF256.jl")
-include("Gray.jl")
 include("QMatrix.jl")
 include("Decode.jl")
-include("R10Tables.jl")
-include("R10.jl")
-include("LT.jl")
-include("RQTables.jl")
-include("RQ.jl")
-include("LDPC.jl")
+# include("Gray.jl")
+# include("R10Tables.jl")
+# include("R10.jl")
+# include("LT.jl")
+# include("RQTables.jl")
+# include("RQ.jl")
+# include("LDPC.jl")
 
 end # module

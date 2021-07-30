@@ -24,9 +24,9 @@ end
 # for K in [1, 10, 100, 200, 250, 254]
 #     @test test_diagonal(Bool, K)
 # end
-for K in [1, 10, 100, 200, 250, 254]
-    @test test_diagonal(GF256, K)
-end
+# for K in [1, 10, 100, 200, 250, 254]
+#     @test test_diagonal(GF256, K)
+# end
 
 function test_bidiagonal(K::Integer, Tv=GF256)
     dv = ones(Tv, K)
@@ -45,9 +45,9 @@ function test_bidiagonal(K::Integer, Tv=GF256)
     end        
     true
 end
-for K in [10, 100, 200, 250, 254]
-    @test test_bidiagonal(K)
-end
+# for K in [10, 100, 200, 250, 254]
+#     @test test_bidiagonal(K)
+# end
 
 function test_tridiagonal(K::Integer, Tv=GF256)
     du = ones(Tv, K-1)
@@ -67,7 +67,7 @@ function test_tridiagonal(K::Integer, Tv=GF256)
     end        
     true
 end
-for K in [10, 100, 200, 250, 254]
+for K in [10] # [10, 100, 200, 250, 254]
     @test test_tridiagonal(K)
 end
 
@@ -93,6 +93,6 @@ function test_dense(K::Integer)
     end
     true
 end
-for K in [1, 10, 100, 200, 250, 254]
-    @test test_dense(K)
-end
+# for K in [1, 10, 100, 200, 250, 254]
+#     @test test_dense(K)
+# end
