@@ -60,7 +60,7 @@ Base.iterate(a::GF256) = (a, nothing)
 Base.iterate(a::GF256, ::Nothing) = nothing
 
 # random numbers
-Base.rand(rng::AbstractRNG, ::Type{GF256}) = GF256(rand(rng, UInt8))
+Base.rand(rng::AbstractRNG, ::Random.SamplerType{GF256}) = GF256(rand(rng, UInt8))
 
 """logarithm as defined by rfc6330. used for multiplication and division."""
 function Base.log(a::GF256)::GF256
