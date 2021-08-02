@@ -2,97 +2,102 @@
 
 using FountainCodes, LinearAlgebra, SparseArrays, Test
 
-"""Test decoding with a diagonal constraint matrix."""
-function test_diagonal(CT, K::Integer)
-    constraints = [sparsevec([i], [one(CT)], K) for i in 1:K]
-    A = hcat(constraints...)
-    Vs = [GF256(i%256) for i in 0:K-1]
-    # d = Decoder{CT}(K)
-    # dec = decode(constraints, Vs, decoder=d)
-    decoder = Decoder(A)
-    dec = decode(A, Vs; decoder)
-    for i in 1:K
-        if dec[i] != Vs[i]
-            error("expected $(Vs[i]), but got $(dec[i])")
-        end
+function rand_nonzero(rng::AbstractRNG, T::Type)
+    rv = rand(rng, T)
+    while iszero(rv)
+        rv = rand(rng, T)    
     end
-    if decoder.metrics["inactivations"] != 0
-        error("expected 0 inactivations, but got $(decoder.metrics["inactivations"])")
+    rv
+end
+
+function rand_nonzero(rng::AbstractRNG, T::Type, dims...)
+    rv = zeros(T, dims...)
+    for i in 1:length(rv)
+        rv[i] = rand_nonzero(rng, T)
+    end
+    rv
+end
+
+function test_decoder(A, b; expected_inactivations=nothing)
+    x = transpose(A)*b
+    println("Input source: $(Int.(b))")
+    println("Input symbols: $(Int.(x))")
+    tc = TestConstraints(A, x)
+    decoder = Decoder(A)
+    dec = decode(A, tc; decoder)
+    # @show Int.(tc.A')
+    println("Input source: $(Int.(b))")
+    println("Input symbols: $(Int.(x))")
+    println("Decoded symbols: $(Int.(dec))")    
+    @test dec == b
+    if !isnothing(expected_inactivations)
+        @test decoder.metrics["inactivations"] == expected_inactivations
     end
     true
+end
+
+"""Test decoding with a diagonal constraint matrix."""
+function test_diagonal(K::Integer, Tv=GF256)
+    rng = MersenneTwister(123)
+    constraints = [sparsevec([i], [rand_nonzero(rng, Tv)], K) for i in 1:K]
+    A = hcat(constraints...)
+    b = rand(rng, Tv, K)
+    test_decoder(A, b, expected_inactivations=0)
 end
 # for K in [1, 10, 100, 200, 250, 254]
 #     @test test_diagonal(Bool, K)
 # end
-# for K in [1, 10, 100, 200, 250, 254]
-#     @test test_diagonal(GF256, K)
-# end
+for K in [1, 10, 100, 200, 250, 254]
+    @test test_diagonal(K)
+end
 
 function test_bidiagonal(K::Integer, Tv=GF256)
-    dv = ones(Tv, K)
-    ev = ones(Tv, K-1)
+    rng = MersenneTwister(123)
+    dv = rand_nonzero(rng, Tv, K)
+    ev = rand_nonzero(rng, Tv, K-1)
     A = sparse(Bidiagonal(dv, ev, :U))
-    Vs = [GF256(i%256) for i in 0:K-1]
-    decoder = Decoder(A)
-    dec = decode(A, Vs; decoder)
-    for i in 1:K
-        if dec[i] != Vs[i]
-            error("expected $(Vs[i]), but got $(dec[i])")
-        end
-    end
-    if decoder.metrics["inactivations"] != 0
-        error("expected 0 inactivations, but got $(decoder.metrics["inactivations"])")
-    end        
-    true
+    b = rand(rng, Tv, K)
+    test_decoder(A, b, expected_inactivations=0)
 end
-# for K in [10, 100, 200, 250, 254]
-#     @test test_bidiagonal(K)
-# end
+for K in [10, 100, 200, 250, 254]
+    @test test_bidiagonal(K)
+end
+
+function test_bidiagonal_permuted(K::Integer, Tv=GF256)
+    rng = MersenneTwister(123)
+    dv = rand_nonzero(rng, Tv, K)
+    ev = rand_nonzero(rng, Tv, K-1)
+    p = randperm(rng, K)
+    q = randperm(rng, K)
+    A = sparse(Bidiagonal(dv, ev, :U)[p, q])
+    b = rand(rng, Tv, K)
+    test_decoder(A, b, expected_inactivations=0)
+end
+for K in [10, 100, 200, 250, 254]
+    @test test_bidiagonal(K)
+end
 
 function test_tridiagonal(K::Integer, Tv=GF256)
-    du = ones(Tv, K-1)
-    d = ones(Tv, K)
-    dl = ones(Tv, K-1)
+    rng = MersenneTwister(123)
+
+    du = rand_nonzero(rng, Tv, K-1)
+    d = rand_nonzero(rng, Tv, K)
+    dl = rand_nonzero(rng, Tv, K-1)
     A = sparse(Tridiagonal(dl, d, du))
-    Vs = [GF256(i%256) for i in 0:K-1]
-    decoder = Decoder(A)
-    dec = decode(A, Vs; decoder)
-    for i in 1:K
-        if dec[i] != Vs[i]
-            error("expected $(Vs[i]), but got $(dec[i])")
-        end
-    end
-    if decoder.metrics["inactivations"] != 1
-        error("expected 1 inactivation, but got $(decoder.metrics["inactivations"])")
-    end        
-    true
+    b = rand(rng, Tv, K)
+    test_decoder(A, b, expected_inactivations=1)
 end
-for K in [10] # [10, 100, 200, 250, 254]
+for K in [10, 100, 200, 250, 254]
     @test test_tridiagonal(K)
 end
 
 """Test decoding for a dense constraint matrix."""
-function test_dense(K::Integer)
-    Is = collect(1:K)
-    Cs = [GF256(i) for i in 1:K]
-    constraints = [sparsevec(Is, circshift(Cs, i), K) for i in 0:K-1]
-    A = hcat(constraints...)    
-    src = [GF256(i%256) for i in 0:K-1]
-    enc = [dot(constraint, src) for constraint in constraints]
-    # d = Decoder{GF256}(K)
-    # dec = decode(constraints, enc, decoder=d)
-    decoder = Decoder(A)
-    dec = decode(A, enc; decoder)
-    for i in 1:K
-        if dec[i] != src[i]
-            error("expected $(Vs[i]), but got $(dec[i])")
-        end
-    end
-    if decoder.metrics["inactivations"] != K-1
-        error("expected $(K-1) inactivations, but got $(decoder.metrics["inactivations"])")
-    end
-    true
+function test_dense(m::Integer, n::Integer=m, Tv=GF256)
+    rng = MersenneTwister(123)    
+    A = sparse(rand_nonzero(rng, Tv, m, n))
+    b = rand(rng, Tv, m)
+    test_decoder(A, b, expected_inactivations=m-1)
 end
-# for K in [1, 10, 100, 200, 250, 254]
-#     @test test_dense(K)
-# end
+for K in [10, 100, 200, 250, 254]
+    @test test_dense(K)
+end

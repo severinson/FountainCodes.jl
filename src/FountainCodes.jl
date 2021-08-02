@@ -24,6 +24,28 @@ export CoefficientType, Binary, NonBinary, Code
 # type system
 abstract type AbstractErasureCode end
 
+export TestConstraints, subtract!
+
+struct TestConstraints{Tc,Tv} <: AbstractVector{Tv}
+    A::Matrix{Tc}
+    Vs::Vector{Tv}
+    function TestConstraints(A, Vs)
+        _, n = size(A)
+        length(Vs) == n || throw(DimensionMismatch("Vs has dimension $length(Vs)), but A has dimensions $(size(A))"))
+        new{eltype(A),eltype(Vs)}(Matrix(A), deepcopy(Vs))
+    end
+end
+
+Base.length(tc::TestConstraints) = length(tc.Vs)
+Base.size(tc::TestConstraints) = (length(tc),)
+Base.getindex(tc::TestConstraints, args...) = getindex(tc.Vs, args...)
+
+function subtract!(tc::TestConstraints; coef, rpi_src, rpi_dst)
+    tc.A[:, rpi_dst] .-= coef .* view(tc.A, :, rpi_src)
+    tc.Vs[rpi_dst] -= coef * tc.Vs[rpi_src]
+    return
+end
+
 include("GF256.jl")
 include("QMatrix.jl")
 include("Decode.jl")

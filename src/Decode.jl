@@ -28,7 +28,7 @@ mutable struct Decoder{CT,DMT<:AbstractMatrix{CT}}
     status::String # indicates success or stores the reason for decoding failure.
     phase::String # diagonalize, solve_dense, or backsolve. used for logging metrics.
     # Row schedule
-    rowpq::PriorityQueue{Int,Float64,Base.Order.ForwardOrdering}
+    rowpq::PriorityQueue{Int,Tuple{Int,Int},Base.Order.ForwardOrdering}
     componentpq::PriorityQueue{Int,Int,Base.Order.ReverseOrdering{Base.Order.ForwardOrdering}}
     components::IntDisjointSets
 end
@@ -78,7 +78,8 @@ Create a decoder object from a matrix `A`, where each column of `A` corresponds 
 function Decoder(A::SparseArrays.AbstractSparseMatrixCSC{Tv,Ti}; record_metrics::Bool=true, initial_inactivation_storage::Integer=64) where {Tv,Ti}
     k, n = size(A)
     n >= k || error("Matrix is rank deficit")
-    dropzeros!(A)
+    count(iszero, nonzeros(A)) == 0 || throw(ArgumentError("Structural zeros are not supported, i.e., there may be no explicitly stored zeros in A"))
+    # dropzeros!(A)    
     constraints = [A[:, i] for i in 1:n]
 
     # permutation vectors
@@ -101,12 +102,13 @@ function Decoder(A::SparseArrays.AbstractSparseMatrixCSC{Tv,Ti}; record_metrics:
     # vdegree is the number of non-zero entries corresponding to source symbols that are neither
     # decoded nor inactivated. Rows are prioritized first by vdegree and second by degree. Note
     # that the vdegree and degree is upper-bounded by k.
-    rowpq = PriorityQueue{Int, Float64}(Base.Order.Forward)
+    rowpq = PriorityQueue{Int, Tuple{Int,Int}}(Base.Order.Forward)
     componentpq = PriorityQueue{Int, Int}(Base.Order.Reverse)
     components = IntDisjointSets(k)
     for (i, constraint) in enumerate(constraints)
         degree = nnz(constraint)
-        priority = degree + degree/(k+1)
+        priority = (degree, degree)
+        # priority = degree + degree/(k+1)
         enqueue!(rowpq, i, priority)
 
         # Two constraints are refered to as neighbors if both constraints have non-zero entries 
@@ -152,6 +154,7 @@ end
 Print the decoder state to stdout (used for debugging).
 """
 function print_state(d::Decoder)
+    return
     n = length(d.sparse)
     k = d.num_symbols
     println("### Sparse constraint matrix ###")
@@ -167,11 +170,12 @@ function print_state(d::Decoder)
             end
             cpi = d.colperm[ci]
             coef = d.sparse[rpi][cpi]
-            if iszero(coef)
-                print(" ")
-            else
-                print(".")
-            end
+            print(" $(Int(coef)) ")
+            # if iszero(coef)
+            #     print(" ")
+            # else
+            #     print(".")
+            # end
             if ci == n - d.num_inactivated
                 print(" | ")            
             end
@@ -182,7 +186,7 @@ function print_state(d::Decoder)
     println("### Dense constraint matrix ###")
     for ri in 1:n
         rpi = d.rowperm[ri]
-        setinactive!(d, rpi)
+        # setinactive!(d, rpi)
         s = "($ri, $rpi)"
         s *= reduce(*, [" " for _ in 1:30-length(s)])
         s *= "["
@@ -190,23 +194,24 @@ function print_state(d::Decoder)
         for ci in 1:k
             cpi = d.colperm[ci]
             coef = getdense(d, rpi, cpi)
-            if iszero(coef)
-                print(" ")
-            else
-                print(".")
-            end
+            print(" $(Int(coef)) ")            
+            # if iszero(coef)
+            #     print(" ")
+            # else
+            #     print(".")
+            # end
         end
         println("]")
     end    
     println()
-    println("### Permutation vectors ###")
-    println(d.rowperm)
-    println(d.rowperminv)
-    println(d.colperm)
-    println(d.colperminv)
-    println(d.uperm)
-    println(d.uperminv)
-    println()
+    # println("### Permutation vectors ###")
+    # println(d.rowperm)
+    # println(d.rowperminv)
+    # println(d.colperm)
+    # println(d.colperminv)
+    # println(d.uperm)
+    # println(d.uperminv)
+    # println()
     return
 end
 
@@ -247,9 +252,6 @@ end
 Set the coefficient of the dense matrix corresponding to element `[rpi, cpi]` to `v`.
 """
 function setdense!(d::Decoder, rpi::Integer, cpi::Integer, v)
-    if !iszero(v)
-        println(("Setdense", rpi, cpi))
-    end
     ci = d.colperminv[cpi]
     ui = _ci2ui(d, ci)
     upi = d.uperm[ui]
@@ -365,13 +367,14 @@ end
 end
 
 ## functions for subtracting one row from another ##
-@inline function get_ratio(coefi::Bool, coefj::Bool)
-    !iszero(coefj) || throw(DivideError()) 
-    coefi
+@inline function get_ratio(;coef_src::Bool, coef_dst::Bool)
+    error("Deprecated")    
+    !iszero(coef_src) || throw(DivideError())
+    coef_dst
 end
 
-@inline function get_ratio(coefi::CT, coefj::CT) where CT
-    coefi / coefj
+@inline function get_ratio(;coef_src::Tv, coef_dst::Tv) where Tv
+    coef_dst / coef_src
 end
 
 """subtract the rpi-th dense row multiplied by coef from the rpj-th row."""
@@ -388,7 +391,7 @@ row objects are only allocated when needed.
 """
 function subtract!(d::Decoder, rpi::Int, rpj::Int, coef1)
     error("Deprecated")
-    return subtract!(d, rpi, rpj, coef1, one(coef1))
+    subtract!(d, rpi, rpj, coef1, one(coef1))
 end
 
 """
@@ -420,12 +423,12 @@ end
 Subtract the `rpi`-th constraint multiplied by `coefi / coefj` from the `rpj`-th constraint. 
 Updates `Vs` and the dense sub-matrix in-place.
 """
-function subtract!(d::Decoder, Vs; rpi_src::Integer, rpi_dst::Integer, coef_src::CT, coef_dst::CT) where CT
+function subtract!(d::Decoder, Vs; rpi_src::Integer, rpi_dst::Integer, coef_src::Tv, coef_dst::Tv) where Tv
     # rpi => rpi_src
     # rpj => rpi_dst
     # coefi => coef_src
     # coefj => coef_dst
-    coef = get_ratio(coef_src, coef_dst)::CT
+    coef = get_ratio(;coef_src, coef_dst)::Tv
     subtract!(d.dense; coef, rpi_src, rpi_dst) # dense submatrix is stored explicitly
     subtract!(Vs; coef, rpi_src, rpi_dst) # subtract the values
     # if !isnothing(d.metrics) update_metrics!(d, rpi, coefi) end
@@ -469,8 +472,9 @@ columns such that the decoded column is the rightmost column in I.
 
 """
 function mark_decoded!(d::Decoder, cpi::Integer)
-    d.num_decoded += 1
     ci = d.colperminv[cpi]
+    ci_is_active(d, ci) || throw(ArgumentError("expected $ci to be active"))
+    d.num_decoded += 1    
     swap_cols!(d, ci, d.num_decoded)
     update_schedule!(d, cpi)
     return
@@ -489,13 +493,10 @@ of I.
 function mark_inactive!(d::Decoder, cpi::Integer)
     ci = d.colperminv[cpi]
     ci_is_active(d, ci) || throw(ArgumentError("expected $ci to be active"))
-    println(("Inactivating", ci, cpi))
-    # if ci > rightmost_active_col
-    #     return # already inactivated
-    # end
     rightmost_active_col = d.num_symbols - d.num_inactivated        
     swap_cols!(d, ci, rightmost_active_col)
     d.num_inactivated += 1
+    println("Inactivated cpi: $cpi")
     if !isnothing(d.metrics) push!(d.metrics, "inactivations", 1) end
 
     # extend the dense matrix permutation vectors when necessary
@@ -514,11 +515,11 @@ function mark_inactive!(d::Decoder, cpi::Integer)
     # columns marked as inactive before decoding starts, i.e., if this
     # method is called when num_decoded is zero, these values will
     # instead be set correctly by setinactive! later.
-    # if d.num_decoded > 0
-    #     expand_dense!(d)
-    #     rpi = d.rowperm[d.num_decoded]
-    #     setdense!(d, rpi, cpi, d.sparse[rpi][cpi])
-    # end
+    if d.num_decoded > 0
+        expand_dense!(d)
+        rpi = d.rowperm[d.num_decoded]
+        setdense!(d, rpi, cpi, d.sparse[rpi][cpi])
+    end
     return
 end
 
@@ -557,23 +558,30 @@ function update_schedule!(d::Decoder, cpi::Integer)
 
     # Decrease the vdegree of neighboring rows by 1
     for rpi in d.columns[cpi]
-        if !haskey(d.rowpq, rpi) 
+        if !haskey(d.rowpq, rpi)
             continue
         end
 
-        # Reduce the priority by 1 since a neighboring column was
-        # decoded or inactivated
-        priority = d.rowpq[rpi] -= 1
+        # Reduce the vdegree by 1, since a neighboring column was decoded or inactivated
+        vdegree, degree = d.rowpq[rpi]
+        vdegree -= 1
+        d.rowpq[rpi] = (vdegree, degree)
 
-        # Drop rows with no elements in V, i.e., with no neighboring
-        # columns that aren't either decoded or inactivated
-        if priority < 1 
-            delete!(d.rowpq, rpi)
-        elseif 2 <= priority < 3
-            # Update the union-find data structure
+        # Update the connected components if the vdegree becomes 2
+        if vdegree == 2
             cpi, cpj = active_cpis(d, rpi)
             update_components!(d, cpi, cpj)
         end
+
+        # # Drop rows with no elements in V, i.e., with no neighboring
+        # # columns that aren't either decoded or inactivated        
+        # if priority < 1 
+        #     delete!(d.rowpq, rpi)
+        # elseif 2 <= priority < 3
+        #     # Update the union-find data structure
+        #     cpi, cpj = active_cpis(d, rpi)
+        #     update_components!(d, cpi, cpj)
+        # end
     end
 end
 
@@ -614,14 +622,17 @@ Select the next row to process in the diagonalization phase.
 """
 function select_row(d::Decoder)
 
+    # println("=========== select_row! ===========")    
+    # println(d.rowpq)    
+
     # Drop rows without elements in V, i.e., that don't have non-zero elements in columns 
     # corresponding to symbols that aren't decoded or inactivated
-    while peek(d.rowpq)[2] < 1
+    while iszero(peek(d.rowpq)[2][1])
         dequeue!(d.rowpq)
     end
 
     # If the minimum vdegree is 2, inactivate a column part of the largest component
-    while 2 <= peek(d.rowpq)[2] < 3
+    while peek(d.rowpq)[2][1] == 2
 
         # Drop components corresponding to already decoded/inactivated columns
         while length(d.componentpq) > 0 && !cpi_is_active(d, peek(d.componentpq)[1])
@@ -629,14 +640,18 @@ function select_row(d::Decoder)
         end
 
         # Get a column part of the largest component and inactivate it
-        cpi = dequeue!(d.componentpq)        
+        cpi = dequeue!(d.componentpq)
+        # println("select_row! dequed cpi: $cpi")
         mark_inactive!(d, cpi)
+        # println(d.rowpq)                
     end
 
     # Return the row with lowest original degree out of the rows
     # with minimal vdegree.
     rpi = dequeue!(d.rowpq)
     ri = d.rowperminv[rpi]
+    # println("select_row! dequed $((rpi, ri))")
+    # println(d.rowpq)
     return ri
 end
 
@@ -723,10 +738,10 @@ L-u columns into diagonal form. Referred to as the first phase in rfc6330.
 """
 function diagonalize!(d::Decoder, Vs)
     while d.num_decoded + d.num_inactivated < d.num_symbols
-        print_state(d)
+        # print_state(d)
         # println((d.num_decoded, d.num_symbols, d.num_inactivated))        
         ri = select_row(d)
-        print_state(d)        
+        # print_state(d)        
         rpi = d.rowperm[ri]
         # println((d.num_decoded, d.num_symbols, d.num_inactivated))
         println(("Selected row", ri, rpi))
@@ -762,6 +777,8 @@ function diagonalize!(d::Decoder, Vs)
                 mark_inactive!(d, cpi)                
             end
         end
+        print_state(d)        
+        println("================================")
     end
     return d
 end
@@ -878,8 +895,9 @@ Solve for the inactivated symbols from the system of equations consisting of the
 inactivated columns using Gaussian Elimination.
 
 """
-function solve_dense!(d::Decoder, Vs)
+function solve_dense!(d::Decoder, Vs)    
     for i in 1:d.num_inactivated
+        # print_state(d)
 
         # select the first row with non-zero inactive degree
         ci = d.num_decoded+1
@@ -933,17 +951,21 @@ function solve_dense!(d::Decoder, Vs)
         swap_cols!(d, ci, cj)
 
         # subtract this row from all rows in u_lower above this one
-        for rj in d.num_symbols-d.num_inactivated+1:d.num_decoded
+        for rj in (d.num_symbols-d.num_inactivated+1):d.num_decoded
             rpj = d.rowperm[rj]
             cpj = d.colperm[d.num_decoded+1]
-            coef = getdense(d, rpj, cpj)
-            if !iszero(coef)
+            coef_dst = getdense(d, rpj, cpj)
+            if !iszero(coef_dst)
                 rpk = d.rowperm[d.num_decoded+1]
+                coef_src = getdense(d, rpk, cpj)
                 # subtract!(d, Vs, rpk, rpj, coef, getdense(d, rpk, cpj))
-                subtract!(d, Vs; rpi_src=rpk, rpi_dst=rpj, coef_src=coef, coef_dst=getdense(d, rpk, cpj))
+                # subtract!(d, Vs; rpi_src=rpk, rpi_dst=rpj, coef_src=coef, coef_dst=getdense(d, rpk, cpj))
+                subtract!(d, Vs; rpi_src=rpk, rpi_dst=rpj, coef_src, coef_dst)
             end
         end
         d.num_decoded += 1
+        # print_state(d)
+        # println("============================")        
     end
     return d
 end
@@ -958,7 +980,9 @@ TODO: consider the table lookup approach.
 
 """
 function backsolve!(d::Decoder, Vs)
-    for ri in 1:d.num_symbols-d.num_inactivated
+    println("================= backsolve =================")
+    print_state(d)
+    for ri in 1:(d.num_symbols-d.num_inactivated)
         rpi = d.rowperm[ri]
         for upi in 1:d.num_inactivated
             coef = d.dense[upi, rpi]
@@ -970,9 +994,15 @@ function backsolve!(d::Decoder, Vs)
             cpi = d.colperm[ci]
             rpj = d.rowperm[ci]
             # subtract!(d, Vs, rpj, rpi, coef, getdense(d, rpj, cpi))
-            subtract!(d, Vs; rpi_src=rpj, rpi_dst=rpi, coef_src=coef, coef_dst=getdense(d, rpj, cpi))
+            rpi_dst = rpi
+            rpi_src = rpj
+            coef_dst = coef
+            coef_src = getdense(d, rpi_src, cpi)
+            subtract!(d, Vs; rpi_src, rpi_dst, coef_src, coef_dst)
         end
     end
+    print_state(d)    
+    println("============================")
     return d
 end
 
@@ -996,30 +1026,20 @@ In-place version of get_source()
 
 """
 function get_source!(dec::AbstractVector, d::Decoder, Vs)
-    if length(dec) != d.num_symbols
-        error("expected dec to have length $(d.num_symbols), but it is $(length(dec))")
-    end
-    for ri in 1:d.num_symbols-d.num_inactivated
+    length(dec) == d.num_symbols || throw(DimensionMismatch("dec has dimension $(length(dec)), but num_symbols is $(d.num_symbols))"))
+    for ri in 1:(d.num_symbols-d.num_inactivated)
         rpi = d.rowperm[ri]
         cpi = d.colperm[ri]
         coef = d.sparse[rpi][cpi]
-        if coef == one(coef)
-            dec[cpi] = Vs[rpi]
-        else
-            dec[cpi] = Vs[rpi] / coef
-        end
+        dec[cpi] = isone(coef) ? Vs[rpi] : Vs[rpi] / coef
     end
-    for ri in d.num_symbols-d.num_inactivated+1:d.num_symbols
+    for ri in (d.num_symbols-d.num_inactivated+1):d.num_symbols
         rpi = d.rowperm[ri]
         cpi = d.colperm[ri]
         coef = getdense(d, rpi, cpi)
-        if coef == one(coef)
-            dec[cpi] = Vs[rpi]
-        else
-            dec[cpi] = Vs[rpi] / coef
-        end
+        dec[cpi] = isone(coef) ? Vs[rpi] : Vs[rpi] / coef
     end
-    return dec
+    dec
 end
 
 """
@@ -1097,7 +1117,7 @@ function decode(A::SparseArrays.AbstractSparseMatrixCSC{Tv,Ti}, Vs::AbstractVect
     decoder.phase = "backsolve"
     backsolve!(decoder, Vs)
     if !isnothing(decoder.metrics) decoder.metrics["success"] = 1 end
-    return get_source(decoder, Vs)
+    get_source(decoder, Vs)
 end
 
 

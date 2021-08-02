@@ -577,4 +577,6 @@ Decoding time: 0.013712039949999998 s
 LT{Soliton}(1000, 1009, Soliton(K=1000, mode=999, delta=1.0e-6, R=1.001001001001001, c=0.001527482747255093, beta=1.0213213022200716))
 Decoding time: 0.015838293740000012 s
 
-* Use tuples as row priority, instead of the current solution with floats
+* TODO Use tuples as row priority, instead of the current solution with floats
+* TODO Add checks to make sure setinactive is called at most once for each row
+- E.g., using a bitmask to mark columns that have been set
