@@ -26,6 +26,16 @@ end
 # Base.promote_rule(::Type{GF256}, ::Type{Bool}) = GF256
 # Base.promote_rule(::Type{GF256}, ::Type{Int}) = Int
 
+Base.Int128(a::GF256) = Int128(a.x)
+Base.UInt128(a::GF256) = UInt128(a.x)
+Base.Int64(a::GF256) = Int64(a.x)
+Base.UInt64(a::GF256) = UInt64(a.x)
+Base.Int32(a::GF256) = Int32(a.x)
+Base.UInt32(a::GF256) = UInt32(a.x)
+Base.Int16(a::GF256) = Int16(a.x)
+Base.UInt16(a::GF256) = UInt16(a.x)
+Base.UInt8(a::GF256) = UInt8(a.x)
+
 # zeros/ones
 Base.zero(::GF256) = GF256(0)
 Base.zero(::Type{GF256}) = GF256(0)
