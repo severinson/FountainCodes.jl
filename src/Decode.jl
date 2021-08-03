@@ -78,7 +78,7 @@ function Decoder(A::SparseArrays.AbstractSparseMatrixCSC{Tv,Ti}; record_metrics:
         # the number of neighboring that also have vdegree 2.
         if degree == 2
             cpi, cpj = constraint.nzind
-            update_components!(componentpq, components, cpi, cpj)
+            merge_components!(componentpq, components, cpi, cpj)
         end
     end
 
@@ -352,8 +352,6 @@ function subtract!(d::Decoder, Vs; rpi_src::Integer, rpi_dst::Integer, coef_src:
     return
 end
 
-# subtract!(d, Vs, rpj, rpi, rowi[cpi], rowj[cpi])
-
 """track performance metrics"""
 function update_metrics!(d::Decoder, rpi::Int, coef)
     if iszero(coef) return end # no-op
@@ -444,7 +442,7 @@ end
 Merge the components containing the constraints indexed by `cpi` and `cpj`, and set the priority
 of the resulting component equal to the size of the resulting combined component.
 """
-function update_components!(componentpq, components, cpi::Integer, cpj::Integer)
+function merge_components!(componentpq, components, cpi::Integer, cpj::Integer)
     x = find_root!(components, cpi)
     y = find_root!(components, cpj)
     if x == y
@@ -464,7 +462,20 @@ function update_components!(componentpq, components, cpi::Integer, cpj::Integer)
     componentpq[root] = size
 end
 
-update_components!(d::Decoder, cpi::Integer, cpj::Integer) = update_components!(d.componentpq, d.components, cpi, cpj)
+merge_components!(d::Decoder, cpi::Integer, cpj::Integer) = merge_components!(d.componentpq, d.components, cpi, cpj)
+
+"""
+
+Return the indices of non-zero coefficients in the `rpi`-th constraint corresponding to active 
+symbols. Assumes that there exactly two non-zero coefficients.
+"""
+function component_indices(d::Decoder, rpi::Integer)
+    nzinds = d.sparse[rpi].nzind
+    f = (x) -> cpi_is_active(d, x)
+    i = findfirst(f, nzinds)
+    j = findnext(f, nzinds, i+1)
+    nzinds[i], nzinds[j]
+end
 
 """
 
@@ -485,35 +496,22 @@ function update_schedule!(d::Decoder, cpi::Integer)
 
         # Update the connected components if the vdegree becomes 2
         if vdegree == 2
-            cpi, cpj = active_cpis(d, rpi)
-            update_components!(d, cpi, cpj)
+            cpi, cpj = component_indices(d, rpi)
+            merge_components!(d, cpi, cpj)
         end
-
-        # # Drop rows with no elements in V, i.e., with no neighboring
-        # # columns that aren't either decoded or inactivated        
-        # if priority < 1 
-        #     delete!(d.rowpq, rpi)
-        # elseif 2 <= priority < 3
-        #     # Update the union-find data structure
-        #     cpi, cpj = active_cpis(d, rpi)
-        #     update_components!(d, cpi, cpj)
-        # end
     end
 end
 
-"""
+"""Return `true` if the `ci`-th symbol has been decoded."""
+ci_is_decoded(d::Decoder, ci::Integer) = ci <= d.num_decoded
+cpi_is_decoded(d::Decoder, cpi::Integer) = ci_is_decoded(d, d.colperminv[cpi])
 
-Return `true` if the `ci`-th column is in the active portion of the matrix, which is denoted by V, 
-i.e., if `ci` corresponds to a column that is neither decoded nor inactivated, and `false` 
-otherwise.
-"""
-function ci_is_active(d::Decoder, ci::Integer)
-    0 < ci <= d.num_symbols || throw(ArgumentError("ci is $ci, but must be in [1, $(d.num_symbols)]"))
-    i::Int = d.num_decoded
-    L::Int = d.num_symbols    
-    u::Int = d.num_inactivated
-    i < ci <= (L-u)
-end
+"""Return `true` if the `ci`-th symbol has been inactivated."""
+ci_is_inactivated(d::Decoder, ci::Integer) = ci > d.num_symbols - d.num_inactivated
+cpi_is_inactivated(d::Decoder, cpi::Integer) = cpi_is_inactivateded(d, d.colperminv[cpi])
+
+"""Return `true` if the `ci`-th symbol is in the active portion of the matrix (denoted by V in the spec.)."""
+ci_is_active(d::Decoder, ci::Integer) = !ci_is_decoded(d, ci) && !ci_is_inactivated(d, ci)
 cpi_is_active(d::Decoder, cpi::Integer) = ci_is_active(d, d.colperminv[cpi])
 
 """
@@ -550,68 +548,19 @@ function select_row(d::Decoder)
 
     # Return the row with lowest original degree out of the rows with minimal vdegree.
     rpi = dequeue!(d.rowpq)
-    ri = d.rowperminv[rpi]
-    return ri
+    return rpi
 end
 
-"""
-
-Return a vector composed of the row indices (rpi) of the rows with
-original degree 1.
-
-"""
-function degree_one_rows(d::Decoder)
-    error("Deprecated")
-    n, k = size(d)
-    rv = Vector{Int}()
-    for ri in d.num_decoded+1:n
-        rpi = d.rowperm[ri]
-        if nnz(d.sparse[rpi]) == 1
-            push!(rv, rpi)
-        end
-    end
-    return rv
-end
-
-"""
-
-Return a tuple composed of the minimal vdegree and vector of indices
-of rows (rpi) with that vdegree.
-
-"""
-function min_vdegree_rows(d::Decoder)
-    error("Deprecated")
-    n, k = size(d)
-    min_vd = k+1
-    rv = Vector{Int}()
-    for ri in d.num_decoded+1:n
-        rpi = d.rowperm[ri]
-        vd = vdegree(d, rpi)
-        if vd < min_vd
-            rv = Vector{Int}()
-            min_vd = vd
-        end
-        if vd == min_vd
-            push!(rv, rpi)
-        end
-    end
-    return min_vd, rv
-end
-
-active_cpis(d::Decoder, rpi::Integer) = [cpi for cpi in d.sparse[rpi].nzind if cpi_is_active(d, cpi)]
-
-"""zero out any elements of rows[rpi] below the diagonal"""
-function zerodiag!(d::Decoder, Vs, rpi::Int)
-    rowi = d.sparse[rpi]    
+"""Zero out any elements of the `rpi`-th constraint below the diagonal."""
+function zerodiag!(d::Decoder, Vs, rpi::Integer)
+    rowi = d.sparse[rpi]
     for cpi in rowi.nzind
         ci = d.colperminv[cpi]
-        coef_dst = rowi[cpi]        
-        if ci < d.num_decoded+1 && ci <= d.num_symbols-d.num_inactivated
-            rpj = d.rowperm[ci]
-            rowj = d.sparse[rpj]
-            # subtract!(d, Vs, rpj, rpi, rowi[cpi], rowj[cpi])
-            coef_src = rowj[cpi]
-            subtract!(d, Vs; rpi_src=rpj, rpi_dst=rpi, coef_src, coef_dst)
+        coef_dst = rowi[cpi]
+        if ci_is_decoded(d, ci) && !ci_is_inactivated(d, ci)
+            rpi_src = d.rowperm[ci]
+            coef_src = d.sparse[rpi_src][cpi]
+            subtract!(d, Vs; rpi_src, rpi_dst=rpi, coef_src, coef_dst)
         end
     end
     return
@@ -637,38 +586,66 @@ Perform row and column operations to put the submatrix consisting of the first L
 diagonal form. Referred to as the first phase in rfc6330.
 """
 function diagonalize!(d::Decoder, Vs)
+    f = (x) -> cpi_is_active(d, x)
     while d.num_decoded + d.num_inactivated < d.num_symbols
-        ri = select_row(d)
-        rpi = d.rowperm[ri]
-        peel_row!(d, Vs, rpi)
-        swap_rows!(d, ri, d.num_decoded+1)
 
-        # swap any non-zero entry in V into the first column of V
-        row = d.sparse[d.rowperm[d.num_decoded+1]]
-        i = 1
-        cpi = row.nzind[i]
-        ci = d.colperminv[cpi]
-        while i < nnz(row) && !ci_is_active(d, ci)
-            i += 1
-            cpi = row.nzind[i]
-            ci = d.colperminv[cpi]
-        end
-        if !ci_is_active(d, ci)
-            if !isnothing(d.metrics) push!(d.metrics, "status", -3) end
-            error("incorrectly selected a row with no neighbors in V.")
-        end
+        # select a constraint to operate on and move it into position
+        rpi = select_row(d)
+        ri = d.rowperminv[rpi]
+        swap_rows!(d, ri, d.num_decoded+1)        
+
+        # previously decoded symbols are are zeroed out lazily
+        peel_row!(d, Vs, rpi)
+
+        # swap any non-zero active symbol (not decoded or inactivated) into the first column of V
+        constraint = d.sparse[rpi]
+        i::Int = findfirst(f, constraint.nzind)::Int
+        cpi = constraint.nzind[i]
+        ci = d.colperminv[cpi]        
         mark_decoded!(d, cpi)
 
         # inactivate the remaining neighboring symbols
-        for j in i+1:nnz(row)
-            cpi = row.nzind[j]
+        for j in i+1:nnz(constraint)
+            cpi = constraint.nzind[j]
             ci = d.colperminv[cpi]
             if ci_is_active(d, ci)
-                mark_inactive!(d, cpi)                
+                mark_inactive!(d, cpi)
             end
         end
     end
     return d
+end
+
+
+"""
+
+Zero out all elements of the dense matrix below the diagonal of the `rpj`-th constraint.
+"""
+function peel_dense_left!(d::Decoder, Vs, rpj::Integer)
+    for cj in (d.num_symbols-d.num_inactivated+1):d.num_decoded
+        cpj = d.colperm[cj]
+        coef = getdense(d, rpj, cpj)
+        rpk = d.rowperm[cj]
+        coef_src = getdense(d, rpk, cpj)
+        subtract!(d, Vs; rpi_src=rpk, rpi_dst=rpj, coef_src, coef_dst=coef)        
+    end
+    return
+end
+
+"""
+
+Zero out all elements of u_lower above the diagonal.
+"""
+function peel_dense_above!(d::Decoder, Vs)
+    for rj in (d.num_symbols-d.num_inactivated+1):d.num_decoded
+        rpj = d.rowperm[rj]
+        cpj = d.colperm[d.num_decoded+1]
+        coef_dst = getdense(d, rpj, cpj)
+        rpk = d.rowperm[d.num_decoded+1]
+        coef_src = getdense(d, rpk, cpj)
+        subtract!(d, Vs; rpi_src=rpk, rpi_dst=rpj, coef_src, coef_dst)
+    end    
+    return
 end
 
 """
@@ -677,33 +654,32 @@ Solve for the inactivated symbols from the system of equations consisting of the
 columns using Gaussian Elimination.
 """
 function solve_dense!(d::Decoder, Vs)    
-    for i in 1:d.num_inactivated
+    for _ in 1:d.num_inactivated
 
-        # select the first row with non-zero inactive degree
+        # select the first constraint with at least 1 non-zero entry in the section of the matrix
+        # consisting of inactivated symbols
         ci = d.num_decoded+1
-        cpi = d.colperm[ci]
-        ri = 0
-        rpi = 0
         upi = 0
-        for rj in d.num_decoded+1:size(d, 1)
+        rpi = 0        
+        ri = 0        
+        rj = d.num_decoded + 1
+        while rj <= d.num_symbols && iszero(ri)
+
+            # zero out elements below the diagonal
             rpj = d.rowperm[rj]
             peel_row!(d, Vs, rpj)
+            peel_dense_left!(d, Vs, rpj)
 
-            # zero out the elements below the diagonal
-            for cj in d.num_symbols-d.num_inactivated+1:d.num_decoded
-                cpj = d.colperm[cj]
-                coef = getdense(d, rpj, cpj)
-                if !iszero(coef)
-                    rpk = d.rowperm[cj]
-                    coef_src = getdense(d, rpk, cpj)
-                    @assert !iszero(coef_src) "dense[$rpk, $cpj] is zero, but must be non-zero "
-                    # subtract!(d, Vs, rpk, rpj, coef, coef2)
-                    subtract!(d, Vs; rpi_src=rpk, rpi_dst=rpj, coef_src, coef_dst=coef)
-                end
-            end
+            # # check if there are any non-zero elements left
+            # i = findfirst(!iszero, view(d.dense, :, rpj))
+            # if !isnothing(i)
+            #     ri = rj
+            #     rpi = rpj
+            #     upi::Int = i
+            # end
 
-            # look for a non-zero entry in this row
-            for upj in 1:size(d.dense, 1)
+            # check if there are any non-zero elements left
+            for upj in 1:d.num_inactivated
                 if !iszero(d.dense[upj, rpj])
                     ri = rj
                     rpi = rpj
@@ -711,38 +687,22 @@ function solve_dense!(d::Decoder, Vs)
                     break
                 end
             end
-
-            # stop once we've found a row with a non-zero entry we
-            # haven't already decoded
-            if !iszero(ri) break end
         end
-        if ri == 0
+        if iszero(ri)
             if !isnothing(d.metrics) push!(d.metrics, "status", -4) end
             error("Decoding failed due to rank deficiency.")
         end
         swap_rows!(d, d.num_decoded+1, ri)
 
-        # swap the non-zero entry we found into the i-th column of u_lower
-        @assert upi <= d.num_inactivated "$upi must be <= $(d.num_inactivated) row=$row"
+        # swap columns such that the non-zero entry found is on the diagonal
         ui = d.uperminv[upi]
         cj = _ui2ci(d, ui)
         uj = _ci2ui(d, ci)
         swap_dense_cols!(d, ui, uj)
         swap_cols!(d, ci, cj)
 
-        # subtract this row from all rows in u_lower above this one
-        for rj in (d.num_symbols-d.num_inactivated+1):d.num_decoded
-            rpj = d.rowperm[rj]
-            cpj = d.colperm[d.num_decoded+1]
-            coef_dst = getdense(d, rpj, cpj)
-            if !iszero(coef_dst)
-                rpk = d.rowperm[d.num_decoded+1]
-                coef_src = getdense(d, rpk, cpj)
-                # subtract!(d, Vs, rpk, rpj, coef, getdense(d, rpk, cpj))
-                # subtract!(d, Vs; rpi_src=rpk, rpi_dst=rpj, coef_src=coef, coef_dst=getdense(d, rpk, cpj))
-                subtract!(d, Vs; rpi_src=rpk, rpi_dst=rpj, coef_src, coef_dst)
-            end
-        end
+        # zero out elements above the entry just swapped onto the diagonal
+        peel_dense_above!(d, Vs)        
         d.num_decoded += 1
     end
     return d
@@ -787,8 +747,8 @@ Return the decoded intermediate symbols.
 # TODO: intermediate() would be a better name. for systematic codes the source
 symbols are the first K LT symbols.
 """
-function get_source(d::Decoder{CT}, Vs::AbstractVector{VT}) where {CT,VT}
-    return get_source!(Vector{VT}(undef, d.num_symbols), d, Vs)
+function get_source(d::Decoder, Vs::AbstractVector{Tv}) where {Tv}
+    get_source!(Vector{Tv}(undef, d.num_symbols), d, Vs)
 end
 
 """
@@ -836,20 +796,4 @@ function decode(A::SparseArrays.AbstractSparseMatrixCSC{Tv,Ti}, Vs::AbstractVect
     backsolve!(decoder, Vs)
     if !isnothing(decoder.metrics) decoder.metrics["success"] = 1 end
     get_source(decoder, Vs)
-end
-
-
-"""
-    decode(code, Xs::AbstractVector{Int}, Vs)
-
-* code Code object.
-
-* Xs Encoded symbol identifiers of received symbols.
-
-* Vs Received values.
-
-"""
-function decode(code::AbstractErasureCode, Xs::AbstractVector{Int}, Vs; kwargs...)
-    error("Deprecated")
-    decode([get_constraint(code, X) for X in Xs], Vs; kwargs...)
 end
