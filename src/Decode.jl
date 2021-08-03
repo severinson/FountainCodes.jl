@@ -340,7 +340,7 @@ Set the dense elements of row `rpi` based on which columns have been inactivated
 """
 function setinactive!(d::Decoder, rpi::Integer)
     row = d.sparse[rpi]
-    for cpi in row.nzind
+    for cpi in rowvals(row)
         ci = d.colperminv[cpi]
         if ci > d.num_symbols - d.num_inactivated
             setdense!(d, rpi, cpi, row[cpi])
@@ -439,7 +439,7 @@ Return the indices of non-zero coefficients in the `rpi`-th constraint correspon
 symbols. Assumes that there exactly two non-zero coefficients.
 """
 function component_indices(d::Decoder, rpi::Integer)
-    nzinds = d.sparse[rpi].nzind
+    nzinds = rowvals(d.sparse[rpi])
     f = (x) -> cpi_is_active(d, x)
     i = findfirst(f, nzinds)
     j = findnext(f, nzinds, i+1)
@@ -488,7 +488,7 @@ cpi_is_active(d::Decoder, cpi::Integer) = ci_is_active(d, d.colperminv[cpi])
 Return the number of non-zero coefficients of the `rpi`-th constraint that are neither decoder nor 
 inactivated.
 """
-vdegree(d::Decoder, rpi::Integer) = count(cpi_is_active, d.sparse[rpi].nzind)
+vdegree(d::Decoder, rpi::Integer) = count(cpi_is_active, rowvals(d.sparse[rpi]))
 
 """
 
@@ -568,14 +568,15 @@ function diagonalize!(d::Decoder, Vs)
 
         # swap any non-zero active symbol (not decoded or inactivated) into the first column of V
         constraint = d.sparse[rpi]
-        i::Int = findfirst(f, constraint.nzind)::Int
-        cpi = constraint.nzind[i]
+        nzinds = rowvals(constraint)
+        i::Int = findfirst(f, nzinds)::Int
+        cpi = nzinds[i]
         ci = d.colperminv[cpi]        
         mark_decoded!(d, cpi)
 
         # inactivate the remaining neighboring symbols
         for j in i+1:nnz(constraint)
-            cpi = constraint.nzind[j]
+            cpi = nzinds[j]
             ci = d.colperminv[cpi]
             if ci_is_active(d, ci)
                 mark_inactive!(d, cpi)
