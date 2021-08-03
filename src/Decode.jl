@@ -10,8 +10,7 @@ Inactivation decoder compatible with Raptor10 (rfc5053) and RaptorQ
 mutable struct Decoder{CT,DMT<:AbstractMatrix{CT}}
     # Constraint matrix
     columns::Vector{Vector{Int}} # columns[cpi] contains the indices of rows (rpi) neighboring column cpi
-    sparse::Vector{SparseVector{CT,Int}} # sparse row indices
-    # sparse::SparseMatrixCSC{CT,Int}
+    A::SparseMatrixCSC{CT,Int} # input constraint matrix
     dense::DMT # dense (inactivated) symbols are stored separately
     # Permutation vectors
     colperm::Vector{Int} # colperm[ri] gives an index for a vector in sparse
@@ -102,7 +101,7 @@ function Decoder(A::SparseArrays.AbstractSparseMatrixCSC{Tv,Ti}; record_metrics:
     metrics["status"] = 0
 
     Decoder(
-        columns, constraints, dense, 
+        columns, A, dense, 
         colperm, colperminv, rowperm, rowperminv, uperm, uperminv,
         k, 0, 0,
         record_metrics, metrics,
@@ -116,7 +115,7 @@ end
 Print the decoder state to stdout (used for debugging).
 """
 function print_state(d::Decoder)
-    n = length(d.sparse)
+    n = size(d.A, 2)
     k = d.num_symbols    
     println("### Sparse constraint matrix ###")
     for ri in 1:n
@@ -130,7 +129,7 @@ function print_state(d::Decoder)
                 print(" | ")
             end
             cpi = d.colperm[ci]
-            coef = d.sparse[rpi][cpi]
+            coef = d.A[cpi, rpi]
             print(" $(Int(coef)) ")
             # if iszero(coef)
             #     print(" ")
@@ -343,11 +342,13 @@ end
 Set the dense elements of row `rpi` based on which columns have been inactivated.
 """
 function setinactive!(d::Decoder, rpi::Integer)
-    row = d.sparse[rpi]
-    for cpi in rowvals(row)
+    rows = rowvals(d.A)
+    vals = nonzeros(d.A)
+    for i in nzrange(d.A, rpi)
+        cpi = rows[i]
         ci = d.colperminv[cpi]
-        if ci > d.num_symbols - d.num_inactivated
-            setdense!(d, rpi, cpi, row[cpi])
+        if ci_is_inactivated(d, ci)
+            setdense!(d, rpi, cpi, vals[i])
         end
     end
 end
@@ -432,11 +433,13 @@ Return the indices of non-zero coefficients in the `rpi`-th constraint correspon
 symbols. Assumes that there exactly two non-zero coefficients.
 """
 function component_indices(d::Decoder, rpi::Integer)
-    nzinds = rowvals(d.sparse[rpi])
-    f = (x) -> cpi_is_active(d, x)
-    i = findfirst(f, nzinds)
-    j = findnext(f, nzinds, i+1)
-    nzinds[i], nzinds[j]
+    Is = nzrange(d.A, rpi)
+    rows = rowvals(d.A)
+    f = (x) -> cpi_is_active(d, x)::Bool
+    i::Int = findnext(f, rows, first(Is))::Int
+    j::Int = findnext(f, rows, i+1)::Int
+    @assert i < j <= last(Is)
+    rows[i], rows[j]
 end
 
 """
@@ -478,13 +481,6 @@ cpi_is_active(d::Decoder, cpi::Integer) = ci_is_active(d, d.colperminv[cpi])
 
 """
 
-Return the number of non-zero coefficients of the `rpi`-th constraint that are neither decoder nor 
-inactivated.
-"""
-vdegree(d::Decoder, rpi::Integer) = count(cpi_is_active, rowvals(d.sparse[rpi]))
-
-"""
-
 Select the next row to process in the diagonalization phase.
 """
 function select_row(d::Decoder)
@@ -515,13 +511,15 @@ end
 
 """Zero out any elements of the `rpi`-th constraint below the diagonal."""
 function zerodiag!(d::Decoder, Vs, rpi::Integer)
-    rowi = d.sparse[rpi]
-    for cpi in rowi.nzind
+    rows = rowvals(d.A)
+    vals = nonzeros(d.A)
+    for i in nzrange(d.A, rpi)
+        cpi = rows[i]
         ci = d.colperminv[cpi]
-        coef_dst = rowi[cpi]
+        coef_dst = vals[i]
         if ci_is_decoded(d, ci) && !ci_is_inactivated(d, ci)
             rpi_src = d.rowperm[ci]
-            coef_src = d.sparse[rpi_src][cpi]
+            coef_src = d.A[cpi, rpi_src]
             subtract!(d, Vs; rpi_src, rpi_dst=rpi, coef_src, coef_dst)
         end
     end
@@ -549,6 +547,8 @@ diagonal form. Referred to as the first phase in rfc6330.
 """
 function diagonalize!(d::Decoder, Vs)
     f = (x) -> cpi_is_active(d, x)
+    rows = rowvals(d.A)
+    vals = nonzeros(d.A)
     while d.num_decoded + d.num_inactivated < d.num_symbols
 
         # select a constraint to operate on and move it into position
@@ -559,22 +559,23 @@ function diagonalize!(d::Decoder, Vs)
         # previously decoded symbols are are zeroed out lazily
         peel_row!(d, Vs, rpi)
 
-        # swap any non-zero active symbol (not decoded or inactivated) into the first column of V
-        constraint = d.sparse[rpi]
-        nzinds = rowvals(constraint)
-        i::Int = findfirst(f, nzinds)::Int
-        cpi = nzinds[i]
-        ci = d.colperminv[cpi]        
+        # swap any non-zero active symbol (not decoded or inactivated) into the first column of V        
+        Is = nzrange(d.A, rpi)
+        i::Int = findnext(f, rows, first(Is))::Int
+        @assert i <= last(Is)
+        cpi = rows[i]
+        ci = d.colperminv[cpi]
         mark_decoded!(d, cpi)
 
         # inactivate the remaining neighboring symbols
-        for j in i+1:nnz(constraint)
-            cpi = nzinds[j]
+        for j in i+1:last(Is)
+            cpi = rows[j]
             ci = d.colperminv[cpi]
             if ci_is_active(d, ci)
                 mark_inactive!(d, cpi)
                 expand_dense!(d)
-                setdense!(d, rpi, cpi, d.sparse[rpi][cpi])
+                coef = vals[j]
+                setdense!(d, rpi, cpi, coef)
             end
         end
     end
@@ -726,7 +727,7 @@ function get_source!(dec::AbstractVector, d::Decoder, Vs)
     for ri in 1:(d.num_symbols-d.num_inactivated)
         rpi = d.rowperm[ri]
         cpi = d.colperm[ri]
-        coef = d.sparse[rpi][cpi]
+        coef = d.A[cpi, rpi]
         dec[cpi] = isone(coef) ? Vs[rpi] : Vs[rpi] / coef
     end
     for ri in (d.num_symbols-d.num_inactivated+1):d.num_symbols
