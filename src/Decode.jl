@@ -38,7 +38,7 @@ end
 Create a decoder object from a matrix `A`, where each column of `A` corresponds to a constraint. If
 `log=true`, performance metrics are recorded during decoding.
 """
-function Decoder(A::SparseArrays.AbstractSparseMatrixCSC{Tv,Ti}; record_metrics::Bool=true, initial_inactivation_storage::Integer=64) where {Tv,Ti}
+function Decoder(A::SparseArrays.AbstractSparseMatrixCSC{Tv,Ti}; record_metrics::Bool=true, initial_inactivation_storage::Integer=2) where {Tv,Ti}
     k, n = size(A)
     n >= k || error("Matrix is rank deficit")
     count(iszero, nonzeros(A)) == 0 || throw(ArgumentError("Structural zeros are not supported, i.e., there may be no explicitly stored zeros in A"))
@@ -172,22 +172,6 @@ function print_state(d::Decoder)
     return
 end
 
-"""
-    size(d::Decoder)
-
-Return the size of the constraint matrix as a tuple (rows, cols).
-"""
-Base.size(d::Decoder) = (length(d.sparse), d.num_symbols)
-function Base.size(d::Decoder, i)::Int
-    if i == 1
-        return length(d.sparse)
-    elseif i == 2
-        return d.num_symbols
-    else
-        return 1
-    end
-end
-
 ## getting, setting, indexing for the dense submatrix ###
 
 # the dense matrix stores inactivated entries and should be seen as
@@ -229,6 +213,9 @@ function getdense(d::Decoder, rpi::Integer, cpi::Integer)
     d.dense[upi, rpi]
 end
 
+# The point here is to make sure the dense matrix is large enough to fit all inactivated symbols
+# I may need to increase the number of columns
+
 """
 
 Expand the matrix storing inactivated symbols.
@@ -238,7 +225,7 @@ function expand_dense!(d::Decoder)
     while m < d.num_inactivated
         m *= 2
     end
-    n = size(d, 1)
+    n = size(d.dense, 2)
     if m == size(d.dense, 1) && n == size(d.dense, 2)
         return
     end
@@ -261,12 +248,6 @@ end
 
 function expand_dense!(dense::QMatrix, m::Integer, n::Integer)
     return resize!(dense, m, n)
-end
-
-"""return the number of remaining source symbols to process in stage 1."""
-function num_remaining(d::Decoder)
-    error("Deprecated")
-    return d.num_symbols - p.num_decoded - p.num_inactivated
 end
 
 """check if an intermediate symbol is covered."""
@@ -312,18 +293,6 @@ end
 function subtract!(dense::AbstractMatrix; coef, rpi_src::Integer, rpi_dst::Integer)
     dense[:, rpi_dst] .-= coef .* view(dense, :, rpi_src)
     return
-end
-
-"""
-    subtract!(d::Decoder, rpi::Int, rpj::Int, coef)
-
-Subtract coef*rows[rpi] from rows[rpj] and assign the result to rows[rpj]. New
-row objects are only allocated when needed.
-
-"""
-function subtract!(d::Decoder, rpi::Int, rpj::Int, coef1)
-    error("Deprecated")
-    subtract!(d, rpi, rpj, coef1, one(coef1))
 end
 
 function subtract!(Vs::AbstractVector{<:Number}; coef, rpi_src::Integer, rpi_dst::Integer)
