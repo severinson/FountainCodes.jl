@@ -392,17 +392,6 @@ function mark_inactive!(d::Decoder, cpi::Integer)
 
     # Update the priority of adjacent rows
     update_schedule!(d, cpi)
-
-    # store the inactivated coefficient in the dense submatrix. note
-    # that this requires that d.num_decoded is the final row of I. for
-    # columns marked as inactive before decoding starts, i.e., if this
-    # method is called when num_decoded is zero, these values will
-    # instead be set correctly by setinactive! later.
-    if d.num_decoded > 0
-        expand_dense!(d)
-        rpi = d.rowperm[d.num_decoded]
-        setdense!(d, rpi, cpi, d.sparse[rpi][cpi])
-    end
     return
 end
 
@@ -580,6 +569,8 @@ function diagonalize!(d::Decoder, Vs)
             ci = d.colperminv[cpi]
             if ci_is_active(d, ci)
                 mark_inactive!(d, cpi)
+                expand_dense!(d)
+                setdense!(d, rpi, cpi, d.sparse[rpi][cpi])
             end
         end
     end
