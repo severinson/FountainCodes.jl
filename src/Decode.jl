@@ -11,6 +11,7 @@ mutable struct Decoder{CT,DMT<:AbstractMatrix{CT}}
     # Constraint matrix
     columns::Vector{Vector{Int}} # columns[cpi] contains the indices of rows (rpi) neighboring column cpi
     sparse::Vector{SparseVector{CT,Int}} # sparse row indices
+    # sparse::SparseMatrixCSC{CT,Int}
     dense::DMT # dense (inactivated) symbols are stored separately
     # Permutation vectors
     colperm::Vector{Int} # colperm[ri] gives an index for a vector in sparse
@@ -53,10 +54,12 @@ function Decoder(A::SparseArrays.AbstractSparseMatrixCSC{Tv,Ti}; record_metrics:
     uperminv = collect(1:initial_inactivation_storage)
 
     # Index each constraint by the source symbols it neighbors
+    rows = rowvals(A)
     columns = [Vector{Int}() for _ in 1:k]
-    for (i, constraint) in enumerate(constraints)
-        for cpi in constraint.nzind
-            push!(columns[cpi], i)
+    for j in 1:n
+        for i in nzrange(A, j)
+            cpi = rows[i]
+            push!(columns[cpi], j)
         end
     end
 
@@ -67,17 +70,18 @@ function Decoder(A::SparseArrays.AbstractSparseMatrixCSC{Tv,Ti}; record_metrics:
     rowpq = PriorityQueue{Int, Tuple{Int,Int}}(Base.Order.Forward)
     componentpq = PriorityQueue{Int, Int}(Base.Order.Reverse)
     components = IntDisjointSets(k)
-    for (i, constraint) in enumerate(constraints)
-        degree = nnz(constraint)
+    for j in 1:n
+        Is = nzrange(A, j)
+        degree = length(Is)
         vdegree = degree # degree consisting of only symbols that are neither decoded nor inactivated
         priority = (vdegree, degree)
-        enqueue!(rowpq, i, priority)
+        enqueue!(rowpq, j, priority)
 
         # Two constraints are refered to as neighbors if both constraints have non-zero entries 
         # corresponding to the same source symbol. Constraints with vdegree 2 are prioritized by 
         # the number of neighboring that also have vdegree 2.
         if degree == 2
-            cpi, cpj = constraint.nzind
+            cpi, cpj = rows[Is]
             merge_components!(componentpq, components, cpi, cpj)
         end
     end
@@ -113,7 +117,7 @@ Print the decoder state to stdout (used for debugging).
 """
 function print_state(d::Decoder)
     n = length(d.sparse)
-    k = d.num_symbols
+    k = d.num_symbols    
     println("### Sparse constraint matrix ###")
     for ri in 1:n
         rpi = d.rowperm[ri]
