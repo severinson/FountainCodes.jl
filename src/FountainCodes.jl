@@ -14,8 +14,7 @@
 
 module FountainCodes
 
-using Random, StatsBase, Statistics
-# Distributions
+using Random, StatsBase, Statistics, Distributions
 using LinearAlgebra, SparseArrays
 using Primes, DataStructures
 
@@ -54,6 +53,8 @@ function rand_nonzero(rng::AbstractRNG, T::Type)
     rv
 end
 
+rand_nonzero(rng::AbstractRNG, T::Type{<:AbstractFloat}) = randn(rng, T)
+
 function rand_nonzero(rng::AbstractRNG, T::Type, dims...)
     rv = zeros(T, dims...)
     for i in 1:length(rv)
@@ -70,7 +71,7 @@ include("Decode.jl")
 include("Gray.jl")
 include("R10Tables.jl")
 include("R10.jl")
-# include("LT.jl")
+include("LT.jl")
 # include("RQTables.jl")
 # include("RQ.jl")
 # include("LDPC.jl")
