@@ -7,29 +7,29 @@ Inactivation decoder compatible with Raptor10 (rfc5053) and RaptorQ
 (rfc6330) codes.
 
 """
-mutable struct Decoder{CT,DMT<:AbstractMatrix{CT}}
+mutable struct Decoder{Tv,Ti<:Integer,Tm<:AbstractMatrix{Tv}}
     # Constraint matrix
-    columns::Vector{Vector{Int}} # columns[cpi] contains the indices of rows (rpi) neighboring column cpi
-    dense::DMT # dense (inactivated) symbols are stored separately
+    columns::Vector{Vector{Ti}} # columns[cpi] contains the indices of rows (rpi) neighboring column cpi
+    dense::Tm # dense (inactivated) symbols are stored separately
     # Permutation vectors
-    colperm::Vector{Int} # colperm[ri] gives an index for a vector in sparse
-    colperminv::Vector{Int} # inverse of rowperm
-    rowperm::Vector{Int} # sparse[rowperm[ri]] is the SparseVector of the ri-th row
-    rowperminv::Vector{Int} # inverse of rowperm
-    uperm::Vector{Int} # maps ui to upi
-    uperminv::Vector{Int} # maps upi to ui
+    colperm::Vector{Ti} # colperm[ri] gives an index for a vector in sparse
+    colperminv::Vector{Ti} # inverse of rowperm
+    rowperm::Vector{Ti} # sparse[rowperm[ri]] is the SparseVector of the ri-th row
+    rowperminv::Vector{Ti} # inverse of rowperm
+    uperm::Vector{Ti} # maps ui to upi
+    uperminv::Vector{Ti} # maps upi to ui
     # Scalar values
-    num_symbols::Int # number of source symbols
-    num_decoded::Int # denoted by i in the R10 spec.
-    num_inactivated::Int # denoted by u in the R10 spec.
+    num_symbols::Ti # number of source symbols
+    num_decoded::Ti # denoted by i in the R10 spec.
+    num_inactivated::Ti # denoted by u in the R10 spec.
     record_metrics::Bool # record performance metrics if true
-    metrics::Accumulator{String,Int} # stores performance metrics if record_metrics is true
+    metrics::Accumulator{String,Ti} # stores performance metrics if record_metrics is true
     status::String # indicates success or stores the reason for decoding failure.
     phase::String # diagonalize, solve_dense, or backsolve. used for logging metrics.
     # Row schedule
-    rowpq::PriorityQueue{Int,Tuple{Int,Int},Base.Order.ForwardOrdering}
-    componentpq::PriorityQueue{Int,Int,Base.Order.ReverseOrdering{Base.Order.ForwardOrdering}}
-    components::IntDisjointSets
+    rowpq::PriorityQueue{Ti,Tuple{Ti,Ti},Base.Order.ForwardOrdering}
+    componentpq::PriorityQueue{Ti,Ti,Base.Order.ReverseOrdering{Base.Order.ForwardOrdering}}
+    components::IntDisjointSets{Ti}
 end
 
 """
@@ -43,16 +43,16 @@ function Decoder(A::SparseArrays.AbstractSparseMatrixCSC{Tv,Ti}; record_metrics:
     count(iszero, nonzeros(A)) == 0 || throw(ArgumentError("Structural zeros are not supported, i.e., there may be no explicitly stored zeros in A"))
 
     # permutation vectors
-    rowperm = collect(1:n)
-    rowperminv = collect(1:n)
-    colperm = collect(1:k)
-    colperminv = collect(1:k)
-    uperm = collect(1:initial_inactivation_storage)
-    uperminv = collect(1:initial_inactivation_storage)
+    rowperm = collect(Ti, 1:n)
+    rowperminv = collect(Ti, 1:n)
+    colperm = collect(Ti, 1:k)
+    colperminv = collect(Ti, 1:k)
+    uperm = collect(Ti, 1:initial_inactivation_storage)
+    uperminv = collect(Ti, 1:initial_inactivation_storage)
 
     # Index each constraint by the source symbols it neighbors
     rows = rowvals(A)
-    columns = [Vector{Int}() for _ in 1:k]
+    columns = [Vector{Ti}() for _ in 1:k]
     for j in 1:n
         for i in nzrange(A, j)
             cpi = rows[i]
@@ -64,9 +64,9 @@ function Decoder(A::SparseArrays.AbstractSparseMatrixCSC{Tv,Ti}; record_metrics:
     # vdegree is the number of non-zero entries corresponding to source symbols that are neither
     # decoded nor inactivated. Rows are prioritized first by vdegree and second by degree. Note
     # that the vdegree and degree is upper-bounded by k.
-    rowpq = PriorityQueue{Int, Tuple{Int,Int}}(Base.Order.Forward)
-    componentpq = PriorityQueue{Int, Int}(Base.Order.Reverse)
-    components = IntDisjointSets(k)
+    rowpq = PriorityQueue{Ti, Tuple{Ti,Ti}}(Base.Order.Forward)
+    componentpq = PriorityQueue{Ti,Ti}(Base.Order.Reverse)
+    components = IntDisjointSets{Ti}(k)
     for j in 1:n
         Is = nzrange(A, j)
         degree = length(Is)
@@ -98,7 +98,7 @@ function Decoder(A::SparseArrays.AbstractSparseMatrixCSC{Tv,Ti}; record_metrics:
     metrics["inactivations"] = 0
     metrics["status"] = 0
 
-    Decoder(
+    Decoder{Tv,Ti,typeof(dense)}(
         columns, dense,
         colperm, colperminv, rowperm, rowperminv, uperm, uperminv,
         k, 0, 0,
@@ -527,7 +527,7 @@ Peel away previously decoded symbols from a row. Has to be carried out each time
 a row is selected.
 
 """
-function peel_row!(d::Decoder, A::SparseArrays.AbstractSparseMatrixCSC, Vs, rpi::Int)
+function peel_row!(d::Decoder, A::SparseArrays.AbstractSparseMatrixCSC, Vs, rpi::Integer)
     expand_dense!(d)
     setinactive!(d, A, rpi)
     zerodiag!(d, A, Vs, rpi)

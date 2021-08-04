@@ -48,7 +48,7 @@ for K in [1, 10, 100, 200, 250, 254]
     test_diagonal(K)
 end
 
-function test_bidiagonal(K::Integer, Tv=GF256; permuted=false)
+function test_bidiagonal(K::Integer; Tv=GF256, Ti=Int, permuted=false)
     rng = MersenneTwister(123)
     dv = rand_nonzero(rng, Tv, K)
     ev = rand_nonzero(rng, Tv, K-1)
@@ -56,9 +56,9 @@ function test_bidiagonal(K::Integer, Tv=GF256; permuted=false)
     if permuted
         p = randperm(rng, K)
         q = randperm(rng, K)        
-        A = sparse(Bidiagonal(dv, ev, :U)[p, q])
+        A = SparseMatrixCSC{Tv,Ti}(sparse(Bidiagonal(dv, ev, :U)[p, q]))
     else
-        A = sparse(Bidiagonal(dv, ev, :U))
+        A = SparseMatrixCSC{Tv,Ti}(sparse(Bidiagonal(dv, ev, :U)))
     end
     test_decoder(A, b, expected_inactivations=0)
 end
@@ -66,6 +66,7 @@ for K in [10, 100, 200, 250, 254]
     test_bidiagonal(K, permuted=false)
     test_bidiagonal(K, permuted=true)
 end
+test_bidiagonal(10, Ti=Int32, permuted=false)
 
 function test_tridiagonal(K::Integer, Tv=GF256; permuted=false)
     rng = MersenneTwister(123)
