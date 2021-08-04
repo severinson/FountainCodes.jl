@@ -24,8 +24,8 @@ export CoefficientType, Binary, NonBinary, Code
 # type system
 abstract type AbstractErasureCode end
 
-export TestConstraints, subtract!
-
+# For testing
+export TestConstraints, subtract!, rand_nonzero
 struct TestConstraints{Tc,Tv} <: AbstractVector{Tv}
     A::Matrix{Tc}
     Vs::Vector{Tv}
@@ -46,12 +46,30 @@ function subtract!(tc::TestConstraints; coef, rpi_src, rpi_dst)
     return
 end
 
+function rand_nonzero(rng::AbstractRNG, T::Type)
+    rv = rand(rng, T)
+    while iszero(rv)
+        rv = rand(rng, T)    
+    end
+    rv
+end
+
+function rand_nonzero(rng::AbstractRNG, T::Type, dims...)
+    rv = zeros(T, dims...)
+    for i in 1:length(rv)
+        rv[i] = rand_nonzero(rng, T)
+    end
+    rv
+end
+
+export dimension, constraint_matrix, generator_matrix
+
 include("GF256.jl")
 include("QMatrix.jl")
 include("Decode.jl")
-# include("Gray.jl")
-# include("R10Tables.jl")
-# include("R10.jl")
+include("Gray.jl")
+include("R10Tables.jl")
+include("R10.jl")
 # include("LT.jl")
 # include("RQTables.jl")
 # include("RQ.jl")

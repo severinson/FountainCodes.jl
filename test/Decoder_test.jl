@@ -2,22 +2,6 @@
 
 using FountainCodes, LinearAlgebra, SparseArrays, Test
 
-function rand_nonzero(rng::AbstractRNG, T::Type)
-    rv = rand(rng, T)
-    while iszero(rv)
-        rv = rand(rng, T)    
-    end
-    rv
-end
-
-function rand_nonzero(rng::AbstractRNG, T::Type, dims...)
-    rv = zeros(T, dims...)
-    for i in 1:length(rv)
-        rv[i] = rand_nonzero(rng, T)
-    end
-    rv
-end
-
 function test_decoder(A, b; expected_inactivations=nothing)
     x = transpose(A)*b
     # println("Input source: $(Int.(b))")
@@ -41,7 +25,7 @@ function test_decoder(A, b; expected_inactivations=nothing)
 end
 
 """Test decoding with a diagonal constraint matrix."""
-function test_diagonal(K::Integer, Tv=GF256)
+function test_diagonal(K::Integer; Tv=GF256)
     rng = MersenneTwister(123)
     constraints = [sparsevec([i], [rand_nonzero(rng, Tv)], K) for i in 1:K]
     A = hcat(constraints...)
@@ -94,7 +78,7 @@ end
 test_tridiagonal(10, Tv=Float64, permuted=false)
 
 """Test decoding for a dense constraint matrix."""
-function test_dense(m::Integer, n::Integer=m, Tv=GF256)
+function test_dense(m::Integer, n::Integer=m; Tv=GF256)
     rng = MersenneTwister(123)    
     A = sparse(rand_nonzero(rng, Tv, m, n))
     b = rand(rng, Tv, m)
@@ -103,6 +87,15 @@ end
 for K in [10, 100, 200, 250, 254]
     test_dense(K)
 end
+
+# """Test decoding with each value consisting of an array"""
+# function test_vector_values(m::Integer, n::Integer=m, dims=(1,); Tv=GF256)
+#     rng = MersenneTwister(123)    
+#     A = sparse(rand_nonzero(rng, Tv, m, n))
+#     b = [rand(rng, Tv, dims...) for _ in 1:m]
+#     test_decoder(A, b, expected_inactivations=m-1)
+# end
+# test_vector_values(10)
 
 """Test that connected components are selected correctly."""
 function test_inactivations_1(Tv=GF256)
