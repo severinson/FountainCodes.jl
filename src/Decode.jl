@@ -42,7 +42,6 @@ function Decoder(A::SparseArrays.AbstractSparseMatrixCSC{Tv,Ti}; record_metrics:
     k, n = size(A)
     n >= k || error("Matrix is rank deficit")
     count(iszero, nonzeros(A)) == 0 || throw(ArgumentError("Structural zeros are not supported, i.e., there may be no explicitly stored zeros in A"))
-    constraints = [A[:, i] for i in 1:n]
 
     # permutation vectors
     rowperm = collect(1:n)
