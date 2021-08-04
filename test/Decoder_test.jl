@@ -29,7 +29,11 @@ function test_decoder(A, b; expected_inactivations=nothing)
     # println("Input source: $(Int.(b))")
     # println("Input symbols: $(Int.(x))")
     # println("Decoded symbols: $(Int.(dec))")    
-    @test dec == b
+    if eltype(A) <: AbstractFloat
+        @test dec ≈ b
+    else
+        @test dec == b
+    end
     if !isnothing(expected_inactivations)
         @test decoder.metrics["inactivations"] == expected_inactivations
     end
@@ -68,7 +72,7 @@ for K in [10, 100, 200, 250, 254]
 end
 test_bidiagonal(10, Ti=Int32, permuted=false)
 
-function test_tridiagonal(K::Integer, Tv=GF256; permuted=false)
+function test_tridiagonal(K::Integer; Tv=GF256, permuted=false)
     rng = MersenneTwister(123)
     du = rand_nonzero(rng, Tv, K-1)
     d = rand_nonzero(rng, Tv, K)
@@ -87,6 +91,7 @@ for K in [10, 100, 200, 250, 254]
     test_tridiagonal(K, permuted=false)
     test_tridiagonal(K, permuted=true)
 end
+test_tridiagonal(10, Tv=Float64, permuted=false)
 
 """Test decoding for a dense constraint matrix."""
 function test_dense(m::Integer, n::Integer=m, Tv=GF256)
