@@ -10,7 +10,6 @@ Inactivation decoder compatible with Raptor10 (rfc5053) and RaptorQ
 mutable struct Decoder{CT,DMT<:AbstractMatrix{CT}}
     # Constraint matrix
     columns::Vector{Vector{Int}} # columns[cpi] contains the indices of rows (rpi) neighboring column cpi
-    A::SparseMatrixCSC{CT,Int} # input constraint matrix
     dense::DMT # dense (inactivated) symbols are stored separately
     # Permutation vectors
     colperm::Vector{Int} # colperm[ri] gives an index for a vector in sparse
@@ -100,7 +99,7 @@ function Decoder(A::SparseArrays.AbstractSparseMatrixCSC{Tv,Ti}; record_metrics:
     metrics["status"] = 0
 
     Decoder(
-        columns, A, dense, 
+        columns, dense,
         colperm, colperminv, rowperm, rowperminv, uperm, uperminv,
         k, 0, 0,
         record_metrics, metrics,
@@ -113,8 +112,8 @@ end
 
 Print the decoder state to stdout (used for debugging).
 """
-function print_state(d::Decoder)
-    n = size(d.A, 2)
+function print_state(d::Decoder, A::SparseArrays.AbstractSparseMatrixCSC)
+    n = size(A, 2)
     k = d.num_symbols    
     println("### Sparse constraint matrix ###")
     for ri in 1:n
@@ -128,7 +127,7 @@ function print_state(d::Decoder)
                 print(" | ")
             end
             cpi = d.colperm[ci]
-            coef = d.A[cpi, rpi]
+            coef = A[cpi, rpi]
             print(" $(Int(coef)) ")
             # if iszero(coef)
             #     print(" ")
@@ -340,10 +339,10 @@ end
 
 Set the dense elements of row `rpi` based on which columns have been inactivated.
 """
-function setinactive!(d::Decoder, rpi::Integer)
-    rows = rowvals(d.A)
-    vals = nonzeros(d.A)
-    for i in nzrange(d.A, rpi)
+function setinactive!(d::Decoder, A::SparseArrays.AbstractSparseMatrixCSC, rpi::Integer)
+    rows = rowvals(A)
+    vals = nonzeros(A)
+    for i in nzrange(A, rpi)
         cpi = rows[i]
         ci = d.colperminv[cpi]
         if ci_is_inactivated(d, ci)
@@ -359,26 +358,22 @@ Mark the column with permuted index cpi as decoded. Permutes the
 columns such that the decoded column is the rightmost column in I.
 
 """
-function mark_decoded!(d::Decoder, cpi::Integer)
+function mark_decoded!(d::Decoder, A::SparseArrays.AbstractSparseMatrixCSC, cpi::Integer)
     ci = d.colperminv[cpi]
     ci_is_active(d, ci) || throw(ArgumentError("expected $ci to be active"))
     d.num_decoded += 1    
     swap_cols!(d, ci, d.num_decoded)
-    update_schedule!(d, cpi)
+    update_schedule!(d, A, cpi)
     return
 end
 
 """
-    mark_inactive!(d::Decoder, cpi::Int)
 
 Mark the column with permuted index cpi as inactivated. Permutes the
 columns such that the inactivated column is the leftmost column of
 u. Expands the dense submatrix and permutation vectors as needed.
-Before calling this method d.num_decoded must point to the final row
-of I.
-
 """
-function mark_inactive!(d::Decoder, cpi::Integer)
+function mark_inactive!(d::Decoder, A::SparseArrays.AbstractSparseMatrixCSC, cpi::Integer)
     ci = d.colperminv[cpi]
     ci_is_active(d, ci) || throw(ArgumentError("expected $ci to be active"))
     rightmost_active_col = d.num_symbols - d.num_inactivated        
@@ -395,7 +390,7 @@ function mark_inactive!(d::Decoder, cpi::Integer)
     end
 
     # Update the priority of adjacent rows
-    update_schedule!(d, cpi)
+    update_schedule!(d, A, cpi)
     return
 end
 
@@ -431,9 +426,9 @@ merge_components!(d::Decoder, cpi::Integer, cpj::Integer) = merge_components!(d.
 Return the indices of non-zero coefficients in the `rpi`-th constraint corresponding to active 
 symbols. Assumes that there exactly two non-zero coefficients.
 """
-function component_indices(d::Decoder, rpi::Integer)
-    Is = nzrange(d.A, rpi)
-    rows = rowvals(d.A)
+function component_indices(d::Decoder, A::SparseArrays.AbstractSparseMatrixCSC, rpi::Integer)
+    Is = nzrange(A, rpi)
+    rows = rowvals(A)
     f = (x) -> cpi_is_active(d, x)::Bool
     i::Int = findnext(f, rows, first(Is))::Int
     j::Int = findnext(f, rows, i+1)::Int
@@ -445,7 +440,7 @@ end
 
 Update the row schedule after decoding/inactivating column cpi.
 """
-function update_schedule!(d::Decoder, cpi::Integer)
+function update_schedule!(d::Decoder, A::SparseArrays.AbstractSparseMatrixCSC, cpi::Integer)
 
     # Decrease the vdegree of neighboring rows by 1
     for rpi in d.columns[cpi]
@@ -460,7 +455,7 @@ function update_schedule!(d::Decoder, cpi::Integer)
 
         # Update the connected components if the vdegree becomes 2
         if vdegree == 2
-            cpi, cpj = component_indices(d, rpi)
+            cpi, cpj = component_indices(d, A, rpi)
             merge_components!(d, cpi, cpj)
         end
     end
@@ -482,7 +477,7 @@ cpi_is_active(d::Decoder, cpi::Integer) = ci_is_active(d, d.colperminv[cpi])
 
 Select the next row to process in the diagonalization phase.
 """
-function select_row(d::Decoder)
+function select_row(d::Decoder, A::SparseArrays.AbstractSparseMatrixCSC)
 
     # Drop rows without elements in V, i.e., that don't have non-zero elements in columns 
     # corresponding to symbols that aren't decoded or inactivated
@@ -500,7 +495,7 @@ function select_row(d::Decoder)
 
         # Get a column part of the largest component and inactivate it
         cpi = dequeue!(d.componentpq)
-        mark_inactive!(d, cpi)
+        mark_inactive!(d, A, cpi)
     end
 
     # Return the row with lowest original degree out of the rows with minimal vdegree.
@@ -509,16 +504,16 @@ function select_row(d::Decoder)
 end
 
 """Zero out any elements of the `rpi`-th constraint below the diagonal."""
-function zerodiag!(d::Decoder, Vs, rpi::Integer)
-    rows = rowvals(d.A)
-    vals = nonzeros(d.A)
-    for i in nzrange(d.A, rpi)
+function zerodiag!(d::Decoder, A::SparseArrays.AbstractSparseMatrixCSC, Vs, rpi::Integer)
+    rows = rowvals(A)
+    vals = nonzeros(A)
+    for i in nzrange(A, rpi)
         cpi = rows[i]
         ci = d.colperminv[cpi]
         coef_dst = vals[i]
         if ci_is_decoded(d, ci) && !ci_is_inactivated(d, ci)
             rpi_src = d.rowperm[ci]
-            coef_src = d.A[cpi, rpi_src]
+            coef_src = A[cpi, rpi_src]
             subtract!(d, Vs; rpi_src, rpi_dst=rpi, coef_src, coef_dst)
         end
     end
@@ -532,10 +527,10 @@ Peel away previously decoded symbols from a row. Has to be carried out each time
 a row is selected.
 
 """
-function peel_row!(d::Decoder, Vs, rpi::Int)
+function peel_row!(d::Decoder, A::SparseArrays.AbstractSparseMatrixCSC, Vs, rpi::Int)
     expand_dense!(d)
-    setinactive!(d, rpi)
-    zerodiag!(d, Vs, rpi)
+    setinactive!(d, A, rpi)
+    zerodiag!(d, A, Vs, rpi)
     return
 end
 
@@ -544,34 +539,34 @@ end
 Perform row and column operations to put the submatrix consisting of the first L-u columns into 
 diagonal form. Referred to as the first phase in rfc6330.
 """
-function diagonalize!(d::Decoder, Vs)
+function diagonalize!(d::Decoder, A::SparseArrays.AbstractSparseMatrixCSC, Vs)
     f = (x) -> cpi_is_active(d, x)
-    rows = rowvals(d.A)
-    vals = nonzeros(d.A)
+    rows = rowvals(A)
+    vals = nonzeros(A)
     while d.num_decoded + d.num_inactivated < d.num_symbols
 
         # select a constraint to operate on and move it into position
-        rpi = select_row(d)
+        rpi = select_row(d, A)
         ri = d.rowperminv[rpi]
         swap_rows!(d, ri, d.num_decoded+1)        
 
         # previously decoded symbols are are zeroed out lazily
-        peel_row!(d, Vs, rpi)
+        peel_row!(d, A, Vs, rpi)
 
         # swap any non-zero active symbol (not decoded or inactivated) into the first column of V        
-        Is = nzrange(d.A, rpi)
+        Is = nzrange(A, rpi)
         i::Int = findnext(f, rows, first(Is))::Int
         @assert i <= last(Is)
         cpi = rows[i]
         ci = d.colperminv[cpi]
-        mark_decoded!(d, cpi)
+        mark_decoded!(d, A, cpi)
 
         # inactivate the remaining neighboring symbols
         for j in i+1:last(Is)
             cpi = rows[j]
             ci = d.colperminv[cpi]
             if ci_is_active(d, ci)
-                mark_inactive!(d, cpi)
+                mark_inactive!(d, A, cpi)
                 expand_dense!(d)
                 coef = vals[j]
                 setdense!(d, rpi, cpi, coef)
@@ -618,7 +613,7 @@ end
 Solve for the inactivated symbols from the system of equations consisting of the inactivated 
 columns using Gaussian Elimination.
 """
-function solve_dense!(d::Decoder, Vs)    
+function solve_dense!(d::Decoder, A::SparseArrays.AbstractSparseMatrixCSC, Vs)    
     for _ in 1:d.num_inactivated
 
         # select the first constraint with at least 1 non-zero entry in the section of the matrix
@@ -632,7 +627,7 @@ function solve_dense!(d::Decoder, Vs)
 
             # zero out elements below the diagonal
             rpj = d.rowperm[rj]
-            peel_row!(d, Vs, rpj)
+            peel_row!(d, A, Vs, rpj)
             peel_dense_left!(d, Vs, rpj)
 
             # # check if there are any non-zero elements left
@@ -712,8 +707,8 @@ Return the decoded intermediate symbols.
 # TODO: intermediate() would be a better name. for systematic codes the source
 symbols are the first K LT symbols.
 """
-function get_source(d::Decoder, Vs::AbstractVector{Tv}) where {Tv}
-    get_source!(Vector{Tv}(undef, d.num_symbols), d, Vs)
+function get_source(d::Decoder, A::SparseArrays.AbstractSparseMatrixCSC, Vs::AbstractVector{Tv}) where {Tv}
+    get_source!(Vector{Tv}(undef, d.num_symbols), d, A, Vs)
 end
 
 """
@@ -721,12 +716,12 @@ end
 
 In-place version of get_source()
 """
-function get_source!(dec::AbstractVector, d::Decoder, Vs)
+function get_source!(dec::AbstractVector, d::Decoder, A::SparseArrays.AbstractSparseMatrixCSC, Vs)
     length(dec) == d.num_symbols || throw(DimensionMismatch("dec has dimension $(length(dec)), but num_symbols is $(d.num_symbols))"))
     for ri in 1:(d.num_symbols-d.num_inactivated)
         rpi = d.rowperm[ri]
         cpi = d.colperm[ri]
-        coef = d.A[cpi, rpi]
+        coef = A[cpi, rpi]
         dec[cpi] = isone(coef) ? Vs[rpi] : Vs[rpi] / coef
     end
     for ri in (d.num_symbols-d.num_inactivated+1):d.num_symbols
@@ -754,11 +749,11 @@ function decode(A::SparseArrays.AbstractSparseMatrixCSC{Tv,Ti}, Vs::AbstractVect
     length(Vs) == n || throw(DimensionMismatch("A has dimensions $(size(A)), but Vs has dimension $(length(Vs))"))
     check_cover(decoder)
     decoder.phase = "diagonalize"
-    diagonalize!(decoder, Vs)
+    diagonalize!(decoder, A, Vs)
     decoder.phase = "solve_dense"
-    solve_dense!(decoder, Vs)
+    solve_dense!(decoder, A, Vs)
     decoder.phase = "backsolve"
     backsolve!(decoder, Vs)
     if !isnothing(decoder.metrics) decoder.metrics["success"] = 1 end
-    get_source(decoder, Vs)
+    get_source(decoder, A, Vs)
 end
