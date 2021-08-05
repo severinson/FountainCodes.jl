@@ -72,8 +72,8 @@ include("Gray.jl")
 include("R10Tables.jl")
 include("R10.jl")
 include("LT.jl")
-# include("RQTables.jl")
-# include("RQ.jl")
+include("RQTables.jl")
+include("RQ.jl")
 # include("LDPC.jl")
 
 end # module

@@ -578,6 +578,7 @@ LT{Soliton}(1000, 1009, Soliton(K=1000, mode=999, delta=1.0e-6, R=1.001001001001
 Decoding time: 0.015838293740000012 s
 
 * DONE Use tuples as row priority, instead of the current solution with floats
+
 * TODO Add checks to make sure setinactive is called at most once for each row
 - E.g., using a bitmask to mark columns that have been set
 
@@ -593,13 +594,20 @@ Decoding time: 0.015838293740000012 s
 * DONE Add a test to make sure components are selected correctly
 - Let's create a matrix with multiple connected components of different size, but where only one of them needs to be decoded, to make sure it selects the largest one
 
-* TODO Add an index type to the decoder
+* DONE Add an index type to the decoder
 - Using smaller ints would improve cache locality, which may improve performance
 
 * TODO Do something nicer in case of rank-deficit matrices
 - E.g., return the rank of the matrix
 
 * TODO I may be setting the inactive elements twice
+
+* DONE Clean up the type argument names in the decoder object
+
+* TODO Rename Decoder to InactivationDecoder
+
+* TODO Add the GeneratorMatrix type to this project
+- I think I created it for the FountainCodes.jl package
 
 Things seem to be working correctly now
 Next steps include removing the sparse matrix from the decoder object and instead passing it around as a separate object
@@ -612,3 +620,39 @@ Next, I want to pass the matrix around as a separate object
 Let's start by going over the code to mark all the places I need to update
 That'll be all the places that I access the constraints
 I can start by using the nzrange and nonzeros functions for the current constraint and then switch to using a matrix
+The decoder is using a SparseMatrixCSC now
+Let's pass it around separately instead of keeping it inside the decoder object
+
+I think the decoder is working well enough now
+Let's add some tests for Float64
+The decoder is working well and takes as its input a SparseMatrixCSC
+Hence, I can use it to solve any system of equations
+Next, I need to add the systems for creating a generator matrix from a code object
+That's necessary for R10/RQ/LT, which I've implemented
+For LDPC does I'll just load a matrix from file
+My goal is to run it for LDPC codes
+
+Raptor codes have a precode, which is a particy check code
+Start by creating the constraint matrix consisting of the precode constraints and the first K LT constraints
+Next, recover the intermediate symbols by decoding the source symbols using this constraint matrix
+Next, generate LT symbols from the intermediate using only the LT constraints
+The first K of those symbols will be the source symbols
+
+R10
+I just need a way to generate the constraint matrix and the generator matrix
+So let's create functions
+constraint_matrix(code)
+generator_matrix(code)
+
+I have R10 codes working
+Nice
+Next, let's go for RQ?
+I can use the same strategy as for R10 codes
+I'm not using all the optimizations, but maybe that's fine
+
+Let's fix up LT codes first
+LT codes are looking all right
+Still want to fix RQ and LDPC codes
+There are optimizations I haven't implemented, but let's perhaps first implement a basic version of R10 and RQ before looking at optimizations
+There doesn't need to be a specific LDPC code module
+It's sufficient to load the parity matrix as a sparse matrix, drop the rows corresponding to erased symbols, and solve the resulting system
