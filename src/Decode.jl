@@ -614,6 +614,7 @@ Solve for the inactivated symbols from the system of equations consisting of the
 columns using Gaussian Elimination.
 """
 function solve_dense!(d::Decoder, A::SparseArrays.AbstractSparseMatrixCSC, Vs)    
+    nconstraints = size(A, 2)
     for _ in 1:d.num_inactivated
 
         # select the first constraint with at least 1 non-zero entry in the section of the matrix
@@ -623,7 +624,7 @@ function solve_dense!(d::Decoder, A::SparseArrays.AbstractSparseMatrixCSC, Vs)
         rpi = 0        
         ri = 0        
         rj = d.num_decoded + 1
-        while rj <= d.num_symbols && iszero(ri)
+        while rj <= nconstraints && iszero(ri)
 
             # zero out elements below the diagonal
             rpj = d.rowperm[rj]
@@ -647,6 +648,7 @@ function solve_dense!(d::Decoder, A::SparseArrays.AbstractSparseMatrixCSC, Vs)
                     break
                 end
             end
+            rj += 1
         end
         if iszero(ri)
             if !isnothing(d.metrics) push!(d.metrics, "status", -4) end
