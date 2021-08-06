@@ -77,15 +77,15 @@ function test_precode(K::Integer)
 
     # compute the intermediate symbols
     A = constraint_matrix(code, 0:K-1)
-    pre = zeros(GF256, size(A, 1))
+    pre = zeros(GF256, size(A, 2))
     pre[end-K+1:end] .= src
-    pre = decode(A, pre)
+    int = decode(A, pre)
 
     # test that the first K coded symbols are equal to the src symbols, i.e., that the code is 
     # systematic
     G = generator_matrix(code, 0:K-1)
-    out = G'*pre
-    @test out[1:K] == src
+    enc = G'*int
+    @test enc[1:K] == src
 end
 for K in 4:100
     test_precode(K)
