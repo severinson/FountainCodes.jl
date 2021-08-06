@@ -69,6 +69,7 @@ function test_hdpc_constraints()
 end
 test_hdpc_constraints()
 
+"""Test that decoding with ESIs 0 through K-1 succeeds"""
 function test_precode(K::Integer)
     rng = MersenneTwister(123)
     code = R10(K)
