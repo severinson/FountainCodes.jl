@@ -1,5 +1,9 @@
 # standardized tables given in RFC5053
 
+# used to map uniformly random numbers to degrees
+const R10_DEGREE_TABLE_D = [1, 2, 3, 4, 10, 11, 40]
+const R10_DEGREE_TABLE_F = [0, 10241, 491582, 712794, 831695, 948446, 1032189, 1048576]
+
 """table V0 of rfc5053 and rfc6330."""
 const V0 = Vector{UInt32}([
     251291136, 3952231631, 3370958628, 4070167936, 123631495,
