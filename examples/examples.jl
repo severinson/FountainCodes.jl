@@ -114,11 +114,44 @@ function lt_example(nsrc=10, nenc=20)
     # decode the source symbols from the encoded symbols
     dec = decode(G, enc)
     println("decoded intermediate symbols:")
-    println(dec)
+    println(dec)    
 end
 
 using DelimitedFiles
 
-function ldpc_example()
-    H = SparseMatrixCSC{GF256,Int}(readdlm("./examples/H_612_1224.txt"))
+function ldpc_example(nerasures=20)
+    # read the parity check matrix 
+    # (transposed, since the decoder expects columns to correspond to constraints and rows to symbols)
+    # despite it being a binary matrix, we're using symbols of type GF256 since there are no
+    # optimizations specific to the binary field
+    H = SparseMatrixCSC{GF256,Int}(readdlm("./examples/H_612_1224.txt")')
+    # H = SparseMatrixCSC{GF256,Int}(readdlm("./examples/H_2400_4800.txt")')
+    nenc, nconstraints = size(H)
+
+    # since we do not consider encoding, we use the all-zeros vector, which is a valid codeword in 
+    # any linear code
+    enc = zeros(GF256, nenc)
+
+    # randomly select nerasures symbols to erase
+    Xs = collect(1:nenc)
+    shuffle!(Xs)
+    Xs_rec = sort!(Xs[1:nenc-nerasures])
+    Xs_era = sort!(Xs[end-nerasures+1:end])
+    H_rec = H[Xs_rec, :] # constraints corresponding to received symbols
+    H_era = H[Xs_era, :] # constraints corresponding to erased symbols
+    enc_rec = enc[Xs_rec]
+    enc_era = enc[Xs_era]
+    println("erased encoded symbols:")
+    println(enc_era)
+    println()
+
+    # note that H'*enc = H_rec'*enc_rec + H_era'*enc_era = 0, i.e., we can solve for enc_era from 
+    # the system of equations H_era'*enc_era = - H_rec'*enc_rec = H_rec'*enc_rec,
+    # where the second equality is due to the fact that -GF256(x) = GF256(x)
+    # finally, assuming that the code is systematic, the source symbols can be recovered from the 
+    # decoded enc vector by selecting the subset of its indices corresponding to the systematic entries
+    rhs = H_rec'*enc_rec
+    enc_era_dec = decode(H_era, rhs)    
+    println("decoded erased symbols:")
+    println(enc_era_dec)
 end
