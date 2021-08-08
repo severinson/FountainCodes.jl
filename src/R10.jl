@@ -45,13 +45,8 @@ end
 """Map a uniformly distributed random number v to a degree."""
 function r10_degree(v::Integer)
     0 <= v < 1048576 || throw(DomainError(v, "v must be in [0, 1048576)"))
-    d = [1, 2, 3, 4, 10, 11, 40]
-    f = [0, 10241, 491582, 712794, 831695, 948446, 1032189, 1048576]
-    j = 1
-    while !(f[j-1+1] <= v < f[j+1]) 
-        j += 1
-    end
-    d[j]
+    j = searchsortedlast(R10_DEGREE_TABLE_F, v)
+    R10_DEGREE_TABLE_D[j]
 end
 
 """Map an ESI `X` to a triple `(d, a, b)`."""
