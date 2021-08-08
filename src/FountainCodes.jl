@@ -14,22 +14,65 @@
 
 module FountainCodes
 
-using StatsBase, Statistics, Distributions, Random
-using Primes, DataStructures, LinearAlgebra, SparseArrays
+using Random, StatsBase, Statistics, Distributions
+using LinearAlgebra, SparseArrays
+using Primes, DataStructures
+
 export CoefficientType, Binary, NonBinary, Code
 
 # type system
 abstract type AbstractErasureCode end
 
+# For testing
+export TestConstraints, subtract!, rand_nonzero
+struct TestConstraints{Tc,Tv} <: AbstractVector{Tv}
+    A::Matrix{Tc}
+    Vs::Vector{Tv}
+    function TestConstraints(A, Vs)
+        _, n = size(A)
+        length(Vs) == n || throw(DimensionMismatch("Vs has dimension $length(Vs)), but A has dimensions $(size(A))"))
+        new{eltype(A),eltype(Vs)}(Matrix(A), deepcopy(Vs))
+    end
+end
+
+Base.length(tc::TestConstraints) = length(tc.Vs)
+Base.size(tc::TestConstraints) = (length(tc),)
+Base.getindex(tc::TestConstraints, args...) = getindex(tc.Vs, args...)
+
+function subtract!(tc::TestConstraints; coef, rpi_src, rpi_dst)
+    tc.A[:, rpi_dst] .-= coef .* view(tc.A, :, rpi_src)
+    tc.Vs[rpi_dst] -= coef * tc.Vs[rpi_src]
+    return
+end
+
+function rand_nonzero(rng::AbstractRNG, T::Type)
+    rv = rand(rng, T)
+    while iszero(rv)
+        rv = rand(rng, T)    
+    end
+    rv
+end
+
+rand_nonzero(rng::AbstractRNG, T::Type{<:AbstractFloat}) = randn(rng, T)
+
+function rand_nonzero(rng::AbstractRNG, T::Type, dims...)
+    rv = zeros(T, dims...)
+    for i in 1:length(rv)
+        rv[i] = rand_nonzero(rng, T)
+    end
+    rv
+end
+
+export dimension, constraint_matrix, generator_matrix
+
 include("GF256.jl")
-include("Gray.jl")
-include("QMatrix.jl")
+include("QMatrix.jl") # currently unused
 include("Decode.jl")
+include("Gray.jl")
 include("R10Tables.jl")
 include("R10.jl")
 include("LT.jl")
 include("RQTables.jl")
 include("RQ.jl")
-include("LDPC.jl")
 
 end # module
