@@ -22,10 +22,7 @@ mutable struct Decoder{Tv,Ti<:Integer,Tm<:AbstractMatrix{Tv}}
     num_symbols::Ti # number of source symbols
     num_decoded::Ti # denoted by i in the R10 spec.
     num_inactivated::Ti # denoted by u in the R10 spec.
-    record_metrics::Bool # record performance metrics if true
-    metrics::Accumulator{String,Ti} # stores performance metrics if record_metrics is true
-    status::String # indicates success or stores the reason for decoding failure.
-    phase::String # diagonalize, solve_dense, or backsolve. used for logging metrics.
+    num_rowops::Ti # for performance tracking (not used by the decoder)
     # Row schedule
     rowpq::PriorityQueue{Ti,Tuple{Ti,Ti},Base.Order.ForwardOrdering}
     componentpq::PriorityQueue{Ti,Ti,Base.Order.ReverseOrdering{Base.Order.ForwardOrdering}}
@@ -34,10 +31,9 @@ end
 
 """
 
-Create a decoder object from a matrix `A`, where each column of `A` corresponds to a constraint. If
-`log=true`, performance metrics are recorded during decoding.
+Create a decoder object from a matrix `A`, where each column of `A` corresponds to a constraint.
 """
-function Decoder(A::SparseArrays.AbstractSparseMatrixCSC{Tv,Ti}; record_metrics::Bool=true, initial_inactivation_storage::Integer=2) where {Tv,Ti}
+function Decoder(A::SparseArrays.AbstractSparseMatrixCSC{Tv,Ti}; initial_inactivation_storage::Integer=2) where {Tv,Ti}
     k, n = size(A)
     n >= k || error("Matrix is rank deficit")
     count(iszero, nonzeros(A)) == 0 || throw(ArgumentError("Structural zeros are not supported, i.e., there may be no explicitly stored zeros in A"))
@@ -86,24 +82,10 @@ function Decoder(A::SparseArrays.AbstractSparseMatrixCSC{Tv,Ti}; record_metrics:
     # Storage for inactivated symbols
     dense = zeros(Tv, initial_inactivation_storage, n)
 
-    # metrics
-    metrics = counter(String)
-    metrics["success"] = 0
-    for phase in ["diagonalize", "solve_dense", "backsolve"]
-        metrics[string(phase, "_", "decoding_additions")] = 0
-        metrics[string(phase, "_", "decoding_multiplications")] = 0
-        metrics[string(phase, "_", "rowadds")] = 0
-        metrics[string(phase, "_", "rowmuls")] = 0
-    end
-    metrics["inactivations"] = 0
-    metrics["status"] = 0
-
     Decoder{Tv,Ti,typeof(dense)}(
         columns, dense,
         colperm, colperminv, rowperm, rowperminv, uperm, uperminv,
-        k, 0, 0,
-        record_metrics, metrics,
-        "", "",
+        k, 0, 0, 0,
         rowpq, componentpq, components
     )
 end
@@ -260,7 +242,6 @@ end
 function check_cover(d::Decoder)
     for i in 1:d.num_symbols
         if !iscovered(d, i)
-            if !isnothing(d.metrics) push!(d.metrics, "status", -1) end
             error("intermediate symbol with index $i not covered.")
         end
     end
@@ -297,7 +278,6 @@ function subtract!(dense::AbstractMatrix; coef, rpi_src::Integer, rpi_dst::Integ
 end
 
 function subtract!(Vs::AbstractVector{<:Number}; coef, rpi_src::Integer, rpi_dst::Integer)
-    # if iszero(Vs[rpi]) return Vs[rpj] end # nothing more to do
     Vs[rpi_dst] -= coef*Vs[rpi_src]
     return
 end
@@ -317,20 +297,7 @@ function subtract!(d::Decoder, Vs; rpi_src::Integer, rpi_dst::Integer, coef_src:
     if !iszero(coef)
         subtract!(d.dense; coef, rpi_src, rpi_dst) # dense submatrix is stored explicitly
         subtract!(Vs; coef, rpi_src, rpi_dst) # subtract the values
-    end
-    # if !isnothing(d.metrics) update_metrics!(d, rpi, coefi) end
-    return
-end
-
-"""track performance metrics"""
-function update_metrics!(d::Decoder, rpi::Int, coef)
-    if iszero(coef) return end # no-op
-    weight = d.num_inactivated
-    push!(d.metrics, string(d.phase, "_", "decoding_additions"), weight)
-    push!(d.metrics, string(d.phase, "_", "rowadds"), 1)
-    if coef != one(coef) # multiplication was required
-        push!(d.metrics, string(d.phase, "_", "decoding_multiplications"), weight)
-        push!(d.metrics, string(d.phase, "_", "rowmuls"), 1)
+        d.num_rowops += 1
     end
     return
 end
@@ -379,7 +346,6 @@ function mark_inactive!(d::Decoder, A::SparseArrays.AbstractSparseMatrixCSC, cpi
     rightmost_active_col = d.num_symbols - d.num_inactivated        
     swap_cols!(d, ci, rightmost_active_col)
     d.num_inactivated += 1
-    if !isnothing(d.metrics) push!(d.metrics, "inactivations", 1) end
 
     # extend the dense matrix permutation vectors when necessary
     @assert length(d.uperm) == length(d.uperminv)
@@ -651,7 +617,6 @@ function solve_dense!(d::Decoder, A::SparseArrays.AbstractSparseMatrixCSC, Vs)
             rj += 1
         end
         if iszero(ri)
-            if !isnothing(d.metrics) push!(d.metrics, "status", -4) end
             error("Decoding failed due to rank deficiency.")
         end
         swap_rows!(d, d.num_decoded+1, ri)
@@ -750,12 +715,8 @@ function decode(A::SparseArrays.AbstractSparseMatrixCSC{Tv,Ti}, Vs::AbstractVect
     k, n = size(A)
     length(Vs) == n || throw(DimensionMismatch("A has dimensions $(size(A)), but Vs has dimension $(length(Vs))"))
     check_cover(decoder)
-    decoder.phase = "diagonalize"
     diagonalize!(decoder, A, Vs)
-    decoder.phase = "solve_dense"
     solve_dense!(decoder, A, Vs)
-    decoder.phase = "backsolve"
     backsolve!(decoder, Vs)
-    if !isnothing(decoder.metrics) decoder.metrics["success"] = 1 end
     get_source(decoder, A, Vs)
 end

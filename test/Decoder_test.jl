@@ -4,22 +4,16 @@ using FountainCodes, LinearAlgebra, SparseArrays, Test
 
 function test_decoder(A, b; expected_inactivations=nothing)
     x = transpose(A)*b
-    # println("Input source: $(Int.(b))")
-    # println("Input symbols: $(Int.(x))")
     tc = TestConstraints(A, x)
     decoder = Decoder(A)
     dec = decode(A, tc; decoder)
-    # @show Int.(tc.A')
-    # println("Input source: $(Int.(b))")
-    # println("Input symbols: $(Int.(x))")
-    # println("Decoded symbols: $(Int.(dec))")    
     if eltype(A) <: AbstractFloat
         @test dec ≈ b
     else
         @test dec == b
     end
     if !isnothing(expected_inactivations)
-        @test decoder.metrics["inactivations"] == expected_inactivations
+        @test decoder.num_inactivated == expected_inactivations
     end
     true
 end
@@ -87,15 +81,6 @@ end
 for K in [10, 100, 200, 250, 254]
     test_dense(K)
 end
-
-# """Test decoding with each value consisting of an array"""
-# function test_vector_values(m::Integer, n::Integer=m, dims=(1,); Tv=GF256)
-#     rng = MersenneTwister(123)    
-#     A = sparse(rand_nonzero(rng, Tv, m, n))
-#     b = [rand(rng, Tv, dims...) for _ in 1:m]
-#     test_decoder(A, b, expected_inactivations=m-1)
-# end
-# test_vector_values(10)
 
 """Test that connected components are selected correctly."""
 function test_inactivations_1(Tv=GF256)
