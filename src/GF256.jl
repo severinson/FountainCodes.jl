@@ -91,7 +91,7 @@ Base.:+(a::GF256, b::GF256) = GF256(xor(a.x, b.x))
 Base.:-(a::GF256, b::GF256) = a + b
 function Base.:/(a::GF256, b::GF256)
     !iszero(b) || throw(DivideError())
-    iszero(a) ? a : RQ_OCT_EXP[RQ_OCT_LOG[a.x] - RQ_OCT_LOG[b.x] + 255 + 1]
+    iszero(a) ? a : RQ_OCT_EXP[RQ_OCT_LOG[a.x] + 255 - RQ_OCT_LOG[b.x] + 1]
 end
 Base.:*(a::GF256, b::GF256) = iszero(a) || iszero(b) ? zero(GF256) : RQ_OCT_EXP[RQ_OCT_LOG[a.x] + RQ_OCT_LOG[b.x] + 1]
 Base.sub_with_overflow(a::GF256, b::GF256) = (a-b, false)
@@ -151,7 +151,7 @@ const RQ_OCT_EXP = Vector{GF256}([
 
 GF256 logarithm lookup table (table 5.7.4 of rfc6330). The table is one-indexed.
 """
-const RQ_OCT_LOG = Vector{Int}([
+const RQ_OCT_LOG = Vector{Int16}([
     0, 1, 25, 2, 50, 26, 198, 3, 223, 51, 238, 27, 104, 199, 75, 4, 100,
     224, 14, 52, 141, 239, 129, 28, 193, 105, 248, 200, 8, 76, 113, 5,
     138, 101, 47, 225, 36, 15, 33, 53, 147, 142, 218, 240, 18, 130, 69,
