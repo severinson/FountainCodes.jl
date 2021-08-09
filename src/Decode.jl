@@ -271,12 +271,6 @@ end
 
 ## functions for subtracting one row from another ##
 
-"""subtract the rpi-th dense row multiplied by coef from the rpj-th row."""
-function subtract!(dense::AbstractMatrix; coef, rpi_src::Integer, rpi_dst::Integer)
-    dense[:, rpi_dst] .-= coef .* view(dense, :, rpi_src)
-    return
-end
-
 function subtract!(Vs::AbstractVector{<:Number}; coef, rpi_src::Integer, rpi_dst::Integer)
     Vs[rpi_dst] -= coef*Vs[rpi_src]
     return
@@ -292,13 +286,22 @@ end
 Subtract `coef_dst / coef_src` multiplied by the `rpi_src`-th constraint from the `rpi_dst`-th 
 constraint. Updates `Vs` and the dense sub-matrix in-place.
 """
-function subtract!(d::Decoder, Vs; rpi_src::Integer, rpi_dst::Integer, coef_src::Tv, coef_dst::Tv) where Tv
+function subtract!(d::Decoder, Vs; rpi_src::Integer, rpi_dst::Integer, coef_src::Tv, coef_dst::Tv, compute_dense::Bool=true) where Tv
     coef::Tv = coef_dst / coef_src
-    if !iszero(coef)
-        subtract!(d.dense; coef, rpi_src, rpi_dst) # dense submatrix is stored explicitly
-        subtract!(Vs; coef, rpi_src, rpi_dst) # subtract the values
-        d.num_rowops += 1
+    if iszero(coef)
+        return
     end
+
+    # dense submatrix is stored explicitly
+    if compute_dense
+        @simd for ui in 1:d.num_inactivated
+            @inbounds d.dense[ui, rpi_dst] -= coef * d.dense[ui, rpi_src]
+        end        
+    end
+
+    # subtract the values
+    subtract!(Vs; coef, rpi_src, rpi_dst)
+    d.num_rowops += 1
     return
 end
 
@@ -597,14 +600,6 @@ function solve_dense!(d::Decoder, A::SparseArrays.AbstractSparseMatrixCSC, Vs)
             peel_row!(d, A, Vs, rpj)
             peel_dense_left!(d, Vs, rpj)
 
-            # # check if there are any non-zero elements left
-            # i = findfirst(!iszero, view(d.dense, :, rpj))
-            # if !isnothing(i)
-            #     ri = rj
-            #     rpi = rpj
-            #     upi::Int = i
-            # end
-
             # check if there are any non-zero elements left
             for upj in 1:d.num_inactivated
                 if !iszero(d.dense[upj, rpj])
@@ -660,7 +655,7 @@ function backsolve!(d::Decoder, Vs)
             rpi_src = rpj
             coef_dst = coef
             coef_src = getdense(d, rpi_src, cpi)
-            subtract!(d, Vs; rpi_src, rpi_dst, coef_src, coef_dst)
+            subtract!(d, Vs; rpi_src, rpi_dst, coef_src, coef_dst, compute_dense=false)
         end
     end
     return d
