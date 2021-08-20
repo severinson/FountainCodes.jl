@@ -123,16 +123,68 @@ function test_precode(K::Integer)
     A = constraint_matrix(code, 0:K-1)
     pre = zeros(GF256, size(A, 2))
     pre[end-K+1:end] .= src
-    int = decode(A, pre)
+    decoder = Decoder(A)    
 
-    # test that the first K coded symbols are equal to the src symbols, i.e., that the code is 
-    # systematic
+    # permanent inactivations
+    for cpi in (code.L-code.P+1):code.L
+        FountainCodes.mark_inactive!(decoder, A, cpi)
+    end
+
+    # decode
+    int = decode(A, pre; decoder)
+
+    # test that the first K coded symbols are equal to the src symbols, 
+    # i.e., that the code is systematic
     G = generator_matrix(code, 0:K-1)
     enc = G'*int
-    @test enc[1:K] == src    
+    @test enc[1:K] == src
 end
 for K in 4:100
     test_precode(K)
 end
 test_precode(7000)
 test_precode(8192)
+
+function test_decoding(K::Integer)
+    rng = MersenneTwister(123)    
+    code = RQ(K)
+    K = code.Kp # padding to the closest supported number of source symbols    
+    src = rand_nonzero(rng, GF256, K)
+    Xs = code.Kp:(2*code.Kp-1)
+
+    # compute the intermediate symbols
+    A = constraint_matrix(code, 0:K-1)    
+    pre = zeros(GF256, size(A, 2))
+    pre[end-K+1:end] .= src
+
+    ## permanent inactivations
+    decoder = Decoder(A)
+    for cpi in (code.L-code.P+1):code.L
+        FountainCodes.mark_inactive!(decoder, A, cpi)
+    end
+    int = decode(A, pre; decoder)
+
+    # compute the encoded symbols    
+    G = generator_matrix(code, Xs)
+    enc = G'*int    
+
+    # decode the intermediate symbols from the encoded symbols
+    A = constraint_matrix(code, Xs)
+    pre = zeros(GF256, size(A, 2))
+    pre[end-length(enc)+1:end] .= enc
+
+    ## permanent inactivations
+    decoder = Decoder(A)
+    for cpi in (code.L-code.P+1):code.L
+        FountainCodes.mark_inactive!(decoder, A, cpi)
+    end
+    dec_int = decode(A, pre)
+
+    # generate the source symbols from the decoded intermediate symbols    
+    G = generator_matrix(code, 0:K-1)
+    dec_src = G'*dec_int
+    @test dec_src == src
+end
+for K in 4:100
+    test_decoding(K)
+end
