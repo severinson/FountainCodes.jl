@@ -583,39 +583,45 @@ columns using Gaussian Elimination.
 """
 function solve_dense!(d::Decoder, A::SparseArrays.AbstractSparseMatrixCSC, Vs)    
     nconstraints = size(A, 2)
-    for _ in 1:d.num_inactivated
 
-        # select the first constraint with at least 1 non-zero entry in the section of the matrix
+    # prioritize the remaining constraints by number of non-zero entries
+    for ri in (d.num_decoded+1):nconstraints
+        rpi = d.rowperm[ri]
+        if !haskey(d.rowpq, rpi)
+            enqueue!(d.rowpq, rpi, (0, length(nzrange(A, rpi))))
+        end
+    end
+
+    while length(d.rowpq) > 0 && d.num_decoded < d.num_symbols
+
+        # select a constraint with at least 1 non-zero entry in the section of the matrix
         # consisting of inactivated symbols
-        ci = d.num_decoded+1
         upi = 0
         rpi = 0        
-        ri = 0        
-        rj = d.num_decoded + 1
-        while rj <= nconstraints && iszero(ri)
+        while length(d.rowpq) > 0 && iszero(rpi)
+            rpj = dequeue!(d.rowpq)
 
             # zero out elements below the diagonal
-            rpj = d.rowperm[rj]
             peel_row!(d, A, Vs, rpj)
             peel_dense_left!(d, Vs, rpj)
 
-            # check if there are any non-zero elements left
+            # check if there are any non-zero elements remaining
             for upj in 1:d.num_inactivated
                 if !iszero(d.dense[upj, rpj])
-                    ri = rj
                     rpi = rpj
                     upi = upj
                     break
                 end
             end
-            rj += 1
         end
-        if iszero(ri)
+        if iszero(rpi)
             error("Decoding failed due to rank deficiency.")
         end
+        ri = d.rowperminv[rpi]
         swap_rows!(d, d.num_decoded+1, ri)
 
         # swap columns such that the non-zero entry found is on the diagonal
+        ci = d.num_decoded + 1
         ui = d.uperminv[upi]
         cj = _ui2ci(d, ui)
         uj = _ci2ui(d, ci)
