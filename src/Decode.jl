@@ -35,7 +35,6 @@ Create a decoder object from a matrix `A`, where each column of `A` corresponds 
 """
 function Decoder(A::SparseArrays.AbstractSparseMatrixCSC{Tv,Ti}; initial_inactivation_storage::Integer=2) where {Tv,Ti}
     k, n = size(A)
-    n >= k || error("Matrix is rank deficit")
     count(iszero, nonzeros(A)) == 0 || throw(ArgumentError("Structural zeros are not supported, i.e., there may be no explicitly stored zeros in A"))
 
     # permutation vectors
