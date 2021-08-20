@@ -583,7 +583,7 @@ end
 Solve for the inactivated symbols from the system of equations consisting of the inactivated 
 columns using Gaussian Elimination.
 """
-function solve_dense!(d::Decoder, A::SparseArrays.AbstractSparseMatrixCSC, Vs)    
+function solve_dense!(d::Decoder, A::SparseArrays.AbstractSparseMatrixCSC, Vs)
     nconstraints = size(A, 2)
 
     # prioritize the remaining constraints by number of non-zero entries
@@ -609,7 +609,14 @@ function solve_dense!(d::Decoder, A::SparseArrays.AbstractSparseMatrixCSC, Vs)
 
             # check if there are any non-zero elements remaining
             for upj in 1:d.num_inactivated
-                if !iszero(d.dense[upj, rpj])
+                isnonzero = false
+                v = d.dense[upj, rpj]
+                if typeof(v) <: AbstractFloat
+                    isnonzero = abs(v) > sqrt(eps(typeof(v)))
+                else
+                    isnonzero = !iszero(v)
+                end
+                if isnonzero
                     rpi = rpj
                     upi = upj
                     break
