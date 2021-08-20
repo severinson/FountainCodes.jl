@@ -1,4 +1,4 @@
-export Decoder, add!, decode, decode!, get_source, get_source!
+export Decoder, add!, decode, decode!, get_source, get_source!, RankDeficiencyException
 
 """
     Decoder{CT,DMT<:AbstractMatrix{CT}}
@@ -88,6 +88,8 @@ function Decoder(A::SparseArrays.AbstractSparseMatrixCSC{Tv,Ti}; initial_inactiv
         rowpq, componentpq, components
     )
 end
+
+struct RankDeficiencyException <: Exception end
 
 """
 
@@ -615,7 +617,7 @@ function solve_dense!(d::Decoder, A::SparseArrays.AbstractSparseMatrixCSC, Vs)
             end
         end
         if iszero(rpi)
-            error("Decoding failed due to rank deficiency.")
+            break
         end
         ri = d.rowperminv[rpi]
         swap_rows!(d, d.num_decoded+1, ri)
@@ -631,6 +633,9 @@ function solve_dense!(d::Decoder, A::SparseArrays.AbstractSparseMatrixCSC, Vs)
         # zero out elements above the entry just swapped onto the diagonal
         peel_dense_above!(d, Vs)        
         d.num_decoded += 1
+    end
+    if d.num_decoded < d.num_symbols
+        throw(RankDeficiencyException())
     end
     return d
 end
