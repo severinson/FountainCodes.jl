@@ -33,7 +33,7 @@ end
 
 Create a decoder object from a matrix `A`, where each column of `A` corresponds to a constraint.
 """
-function Decoder(A::SparseArrays.AbstractSparseMatrixCSC{Tv,Ti}; initial_inactivation_storage::Integer=2) where {Tv,Ti}
+function Decoder(A::SparseArrays.AbstractSparseMatrixCSC{Tv,Ti}; initial_inactivation_storage::Integer=32) where {Tv,Ti}
     k, n = size(A)
     count(iszero, nonzeros(A)) == 0 || throw(ArgumentError("Structural zeros are not supported, i.e., there may be no explicitly stored zeros in A"))
 
@@ -197,9 +197,6 @@ function getdense(d::Decoder, rpi::Integer, cpi::Integer)
     d.dense[upi, rpi]
 end
 
-# The point here is to make sure the dense matrix is large enough to fit all inactivated symbols
-# I may need to increase the number of columns
-
 """
 
 Expand the matrix storing inactivated symbols.
@@ -239,15 +236,6 @@ end
     return length(d.columns[i]) > 0
 end
 
-"""check if all intermediate symbols are covered."""
-function check_cover(d::Decoder)
-    for i in 1:d.num_symbols
-        if !iscovered(d, i)
-            error("intermediate symbol with index $i not covered.")
-        end
-    end
-end
-
 ## column/row permutation functions ###
 """swap columns `ci` and `cj` of the constraint matrix."""
 @inline function swap_cols!(d::Decoder, ci::Integer, cj::Integer)
@@ -272,6 +260,9 @@ end
 
 ## functions for subtracting one row from another ##
 
+# isnonzero(v::AbstractFloat) = abs(v) > eps(typeof(v))
+isnonzero(v::Real) = !iszero(v)
+
 function subtract!(Vs::AbstractVector{<:Number}; coef, rpi_src::Integer, rpi_dst::Integer)
     Vs[rpi_dst] -= coef*Vs[rpi_src]
     return
@@ -288,15 +279,18 @@ Subtract `coef_dst / coef_src` multiplied by the `rpi_src`-th constraint from th
 constraint. Updates `Vs` and the dense sub-matrix in-place.
 """
 function subtract!(d::Decoder, Vs; rpi_src::Integer, rpi_dst::Integer, coef_src::Tv, coef_dst::Tv, compute_dense::Bool=true) where Tv
+    if !isnonzero(coef_dst)
+        return
+    end
     coef::Tv = coef_dst / coef_src
-    if iszero(coef)
+    if !isnonzero(coef)
         return
     end
 
     # dense submatrix is stored explicitly
     if compute_dense
-        @simd for ui in 1:d.num_inactivated
-            @inbounds d.dense[ui, rpi_dst] -= coef * d.dense[ui, rpi_src]
+        for ui in 1:d.num_inactivated
+            d.dense[ui, rpi_dst] -= coef * d.dense[ui, rpi_src]
         end        
     end
 
@@ -447,16 +441,16 @@ cpi_is_active(d::Decoder, cpi::Integer) = ci_is_active(d, d.colperminv[cpi])
 
 Select the next row to process in the diagonalization phase.
 """
-function select_row(d::Decoder, A::SparseArrays.AbstractSparseMatrixCSC)
+function select_row(d::Decoder, A::SparseArrays.AbstractSparseMatrixCSC)    
 
     # Drop rows without elements in V, i.e., that don't have non-zero elements in columns 
     # corresponding to symbols that aren't decoded or inactivated
-    while iszero(peek(d.rowpq)[2][1])
+    while length(d.rowpq) > 0 && iszero(peek(d.rowpq)[2][1])
         dequeue!(d.rowpq)
     end
 
     # If the minimum vdegree is 2, inactivate a column part of the largest component
-    while peek(d.rowpq)[2][1] == 2
+    while length(d.rowpq) > 0 && peek(d.rowpq)[2][1] == 2
 
         # Drop components corresponding to already decoded/inactivated columns
         while length(d.componentpq) > 0 && !cpi_is_active(d, peek(d.componentpq)[1])
@@ -468,7 +462,12 @@ function select_row(d::Decoder, A::SparseArrays.AbstractSparseMatrixCSC)
         mark_inactive!(d, A, cpi)
     end
 
-    # Return the row with lowest original degree out of the rows with minimal vdegree.
+    # The matrix is rank deficit if there are no remaining rows
+    if length(d.rowpq) == 0
+        throw(RankDeficiencyException())
+    end
+
+    # Return the row with lowest original degree out of the rows with minimal vdegree.    
     rpi = dequeue!(d.rowpq)
     return rpi
 end
@@ -557,7 +556,7 @@ function peel_dense_left!(d::Decoder, Vs, rpj::Integer)
         coef = getdense(d, rpj, cpj)
         rpk = d.rowperm[cj]
         coef_src = getdense(d, rpk, cpj)
-        subtract!(d, Vs; rpi_src=rpk, rpi_dst=rpj, coef_src, coef_dst=coef)        
+        subtract!(d, Vs; rpi_src=rpk, rpi_dst=rpj, coef_src, coef_dst=coef)
     end
     return
 end
@@ -609,14 +608,11 @@ function solve_dense!(d::Decoder, A::SparseArrays.AbstractSparseMatrixCSC, Vs)
 
             # check if there are any non-zero elements remaining
             for upj in 1:d.num_inactivated
-                isnonzero = false
                 v = d.dense[upj, rpj]
-                if typeof(v) <: AbstractFloat
-                    isnonzero = abs(v) > sqrt(eps(typeof(v)))
-                else
-                    isnonzero = !iszero(v)
-                end
-                if isnonzero
+                uj = d.uperminv[upj]
+                cj = _ui2ci(d, uj)
+                isdecoded = cj <= d.num_decoded # necessary when operating over floating-point coefficients due to inexact arithmetic
+                if !isdecoded && isnonzero(v)
                     rpi = rpj
                     upi = upj
                     break
@@ -638,8 +634,8 @@ function solve_dense!(d::Decoder, A::SparseArrays.AbstractSparseMatrixCSC, Vs)
         swap_cols!(d, ci, cj)
 
         # zero out elements above the entry just swapped onto the diagonal
-        peel_dense_above!(d, Vs)        
-        d.num_decoded += 1
+        peel_dense_above!(d, Vs)
+        d.num_decoded += 1 
     end
     if d.num_decoded < d.num_symbols
         throw(RankDeficiencyException())
@@ -660,19 +656,19 @@ function backsolve!(d::Decoder, Vs)
         rpi = d.rowperm[ri]
         for upi in 1:d.num_inactivated
             coef = d.dense[upi, rpi]
-            if iszero(coef)
-                continue
+            @assert !isnan(coef)
+            if isnonzero(coef)
+                ui = d.uperminv[upi]
+                ci = _ui2ci(d, ui)
+                cpi = d.colperm[ci]
+                rpj = d.rowperm[ci]
+    
+                rpi_dst = rpi
+                rpi_src = rpj
+                coef_dst = coef
+                coef_src = getdense(d, rpi_src, cpi)
+                subtract!(d, Vs; rpi_src, rpi_dst, coef_src, coef_dst, compute_dense=false)
             end
-            ui = d.uperminv[upi]
-            ci = _ui2ci(d, ui)
-            cpi = d.colperm[ci]
-            rpj = d.rowperm[ci]
-
-            rpi_dst = rpi
-            rpi_src = rpj
-            coef_dst = coef
-            coef_src = getdense(d, rpi_src, cpi)
-            subtract!(d, Vs; rpi_src, rpi_dst, coef_src, coef_dst, compute_dense=false)
         end
     end
     return d
@@ -707,7 +703,9 @@ function get_source!(dec::AbstractVector, d::Decoder, A::SparseArrays.AbstractSp
         rpi = d.rowperm[ri]
         cpi = d.colperm[ri]
         coef = getdense(d, rpi, cpi)
-        dec[cpi] = isone(coef) ? Vs[rpi] : Vs[rpi] / coef
+        if isnonzero(coef)
+            dec[cpi] = isone(coef) ? Vs[rpi] : Vs[rpi] / coef
+        end
     end
     dec
 end
@@ -726,7 +724,6 @@ end
 function decode(A::SparseArrays.AbstractSparseMatrixCSC{Tv,Ti}, Vs::AbstractVector; decoder=Decoder(A)) where {Tv,Ti<:Integer}
     k, n = size(A)
     length(Vs) == n || throw(DimensionMismatch("A has dimensions $(size(A)), but Vs has dimension $(length(Vs))"))
-    check_cover(decoder)
     diagonalize!(decoder, A, Vs)
     solve_dense!(decoder, A, Vs)
     backsolve!(decoder, Vs)
