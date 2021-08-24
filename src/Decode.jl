@@ -699,6 +699,19 @@ function get_source!(dec::AbstractVector, d::Decoder, A::SparseArrays.AbstractSp
 end
 
 """
+
+Return `true` if each source symbols is part of at least one constraint, and `false` otherwise.
+"""
+function all_symbols_covered(d::Decoder)
+    for v in d.columns
+        if length(v) == 0
+            return false
+        end
+    end
+    return true
+end
+
+"""
     decode(A::SparseArrays.AbstractSparseMatrixCSC{Tv,Ti}, Vs::AbstractVector; decoder::Decoder{Tv,Ti}=Decoder(A)) where {Tv,Ti}
 
 Solve the system of equations `transpose(A)*x = Vs` for `x` using the inactivation decoding 
@@ -707,7 +720,9 @@ mutated.
 """
 function decode(A::SparseArrays.AbstractSparseMatrixCSC{Tv,Ti}, Vs::AbstractVector; decoder::Decoder{Tv,Ti}=Decoder(A)) where {Tv,Ti}
     k, n = size(A)
-    length(Vs) == n || throw(DimensionMismatch("A has dimensions $(size(A)), but Vs has dimension $(length(Vs))"))
+    length(Vs) == n || throw(DimensionMismatch("A has dimensions $(size(A)), but Vs has dimension $(length(Vs))"))    
+    n >= k || throw(RankDeficiencyException())
+    all_symbols_covered(decoder) || throw(RankDeficiencyException())
     diagonalize!(decoder, A, Vs)
     solve_dense!(decoder, A, Vs)
     backsolve!(decoder, Vs)
