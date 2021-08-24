@@ -678,9 +678,6 @@ end
     get_source(d::Decoder{RT,VT})
 
 Return the decoded intermediate symbols.
-
-# TODO: intermediate() would be a better name. for systematic codes the source
-symbols are the first K LT symbols.
 """
 function get_source(d::Decoder, A::SparseArrays.AbstractSparseMatrixCSC, Vs::AbstractVector{Tv}) where {Tv}
     get_source!(Vector{Tv}(undef, d.num_symbols), d, A, Vs)
@@ -721,7 +718,7 @@ end
 * Vs Values corresponding to each constraint.
 
 """
-function decode(A::SparseArrays.AbstractSparseMatrixCSC{Tv,Ti}, Vs::AbstractVector; decoder=Decoder(A)) where {Tv,Ti<:Integer}
+function decode(A::SparseArrays.AbstractSparseMatrixCSC{Tv,Ti}, Vs::AbstractVector; decoder::Decoder{Tv,Ti}=Decoder(A)) where {Tv,Ti}
     k, n = size(A)
     length(Vs) == n || throw(DimensionMismatch("A has dimensions $(size(A)), but Vs has dimension $(length(Vs))"))
     diagonalize!(decoder, A, Vs)
