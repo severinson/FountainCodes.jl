@@ -7,3 +7,4 @@ println("Starting tests")
 @time @testset "R10" begin include("R10_test.jl") end
 @time @testset "RQ" begin include("RQ_test.jl") end
 @time @testset "LT" begin include("LT_test.jl") end
+@time @testset "Floating-point" begin include("Float_test.jl") end
