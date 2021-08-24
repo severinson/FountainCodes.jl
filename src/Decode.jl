@@ -1,11 +1,9 @@
 export Decoder, add!, decode, decode!, get_source, get_source!, RankDeficiencyException
 
 """
-    Decoder{CT,DMT<:AbstractMatrix{CT}}
+    Decoder{Tv,Ti<:Integer,Tm<:AbstractMatrix{Tv}}
 
-Inactivation decoder compatible with Raptor10 (rfc5053) and RaptorQ
-(rfc6330) codes.
-
+Inactivation decoder compatible with Raptor10 (rfc5053) and RaptorQ (rfc6330) codes.
 """
 mutable struct Decoder{Tv,Ti<:Integer,Tm<:AbstractMatrix{Tv}}
     # Constraint matrix
@@ -317,11 +315,9 @@ function setinactive!(d::Decoder, A::SparseArrays.AbstractSparseMatrixCSC, rpi::
 end
 
 """
-    mark_decoded!(d::Decoder, cpi::Int)
 
 Mark the column with permuted index cpi as decoded. Permutes the
 columns such that the decoded column is the rightmost column in I.
-
 """
 function mark_decoded!(d::Decoder, A::SparseArrays.AbstractSparseMatrixCSC, cpi::Integer)
     ci = d.colperminv[cpi]
@@ -472,7 +468,10 @@ function select_row(d::Decoder, A::SparseArrays.AbstractSparseMatrixCSC)
     return rpi
 end
 
-"""Zero out any elements of the `rpi`-th constraint below the diagonal."""
+"""
+
+Zero out any elements of the `rpi`-th constraint below the diagonal.
+"""
 function zerodiag!(d::Decoder, A::SparseArrays.AbstractSparseMatrixCSC, Vs, rpi::Integer)
     rows = rowvals(A)
     vals = nonzeros(A)
@@ -490,11 +489,9 @@ function zerodiag!(d::Decoder, A::SparseArrays.AbstractSparseMatrixCSC, Vs, rpi:
 end
 
 """
-    peel_row(d::Decoder, rpi::Int)
 
 Peel away previously decoded symbols from a row. Has to be carried out each time
 a row is selected.
-
 """
 function peel_row!(d::Decoder, A::SparseArrays.AbstractSparseMatrixCSC, Vs, rpi::Integer)
     expand_dense!(d)
@@ -645,11 +642,7 @@ end
 
 """
 
-Subtract the symbols decoded in solve_dense from the above rows of the
-constraint matrix.
-
-TODO: consider the table lookup approach.
-
+Subtract the symbols decoded in solve_dense from the above rows of the constraint matrix.
 """
 function backsolve!(d::Decoder, Vs)
     for ri in 1:(d.num_symbols-d.num_inactivated)
@@ -675,16 +668,14 @@ function backsolve!(d::Decoder, Vs)
 end
 
 """
-    get_source(d::Decoder{RT,VT})
 
-Return the decoded intermediate symbols.
+Return the vector of decoded symbols.
 """
 function get_source(d::Decoder, A::SparseArrays.AbstractSparseMatrixCSC, Vs::AbstractVector{Tv}) where {Tv}
     get_source!(Vector{Tv}(undef, d.num_symbols), d, A, Vs)
 end
 
 """
-    get_source!(C::Vector, d::Decoder{RT,VT})
 
 In-place version of get_source()
 """
@@ -708,15 +699,11 @@ function get_source!(dec::AbstractVector, d::Decoder, A::SparseArrays.AbstractSp
 end
 
 """
-    decode(code{CT}, constraints::Vector{SparseVector{CT}}, Vs) where CT
+    decode(A::SparseArrays.AbstractSparseMatrixCSC{Tv,Ti}, Vs::AbstractVector; decoder::Decoder{Tv,Ti}=Decoder(A)) where {Tv,Ti}
 
-* code Code object.
-
-* constraints Rows of the constraint matrix to perform Gaussian
-  Elimination over.
-
-* Vs Values corresponding to each constraint.
-
+Solve the system of equations `transpose(A)*x = Vs` for `x` using the inactivation decoding 
+algorithm. All algorithm state is stored in the `Decoder` struct, i.e., neither `A` or `Vs` is 
+mutated.
 """
 function decode(A::SparseArrays.AbstractSparseMatrixCSC{Tv,Ti}, Vs::AbstractVector; decoder::Decoder{Tv,Ti}=Decoder(A)) where {Tv,Ti}
     k, n = size(A)
