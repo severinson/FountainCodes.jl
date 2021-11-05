@@ -3,7 +3,7 @@ using SparseArrays
 using DelimitedFiles
 using Random, StatsBase, Distributions
 
-function load_matrix(filename="./gianluigi/H0.txt")
+function load_matrix(filename="./examples/H0.txt")
     M = readdlm(filename)
     Is = M[:, 2] .+ 1    
     Js = M[:, 1] .+ 1
