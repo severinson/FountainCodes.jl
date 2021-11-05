@@ -2,7 +2,6 @@ using FountainCodes
 using SparseArrays
 using DelimitedFiles
 using Random, StatsBase, Distributions
-using PyPlot, DataFrames
 
 function load_matrix(filename="./gianluigi/H0.txt")
     M = readdlm(filename)
